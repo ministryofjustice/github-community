@@ -1,0 +1,50 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+    Home
+{% endblock %}
+
+{% block content %}
+  <a href="/owner/{{owner}}" class="govuk-back-link">Back</a>
+
+  <h1 class="govuk-heading-xl">{{ owner }} - Full Report</h1>
+  <section>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Repository
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Compliance Status
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Access Level
+          </th>
+          <th scope="col" class="govuk-table__header"></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for repository in repositories %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">
+            <a href="/repository/{{ repository.name }}" rel="noreferrer noopener" class="govuk-link">{{ repository.name }}</a>
+          </td>
+          <td class="govuk-table__cell">{{ repositories_compliance_map[repository.name] }}</td>
+          <td class="govuk-table__cell">
+            {% if owner in repository.admin_owner_names %}
+            Admin Access
+            {% elif owner in repository.owner_names %}
+            Other Access
+            {% else %}
+            Unknown
+            {% endif %}
+          </td>
+          <td class="govuk-table__cell"><a href="https://operations-engineering-reports.cloud-platform.service.justice.gov.uk/public-report/{{ repository["name"] }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View Compliace Report</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+{% endblock %}

@@ -19,7 +19,7 @@ spec:
           - name: map-github-repositories-to-owners-job
             image: "{{ .Values.app.deployment.image.repository }}:{{ .Values.app.deployment.image.tag | default .Chart.AppVersion }}"
             command: ["python3", "-m"]
-            args: ["app.jobs.map_github_repositories_to_owners"]
+            args: ["app.projects.repository_standards.jobs.map_github_repositories_to_owners"]
             env:
              - name: POSTGRES_USER
                value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}

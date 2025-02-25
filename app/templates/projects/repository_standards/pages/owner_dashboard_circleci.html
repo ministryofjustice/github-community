@@ -1,0 +1,31 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  {{ owner }} CircleCI Report
+{% endblock %}
+
+{% block content %}
+<a href="/owner/{{owner}}" class="govuk-back-link">Back</a>
+
+  <h1 class="govuk-heading-xl">{{ owner }} - CircleCI Projects Report</h1>
+
+  <section>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header">Repository</th>
+          <th scope="col" class="govuk-table__header">Approximate Cost (Last 30 Days)</th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+      {% for project in circleci_projects | sort(attribute="approximate_cost", reverse=true) %}
+      <tr class="govuk-table__row">
+        <td class="govuk-table__cell"><a href="https://app.circleci.com/pipelines/github/ministryofjustice/{{ project.project_name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">{{ project.project_name }}</a></td>
+        <td class="govuk-table__cell">{{ "£{:,.2f}".format(project.approximate_cost) }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+{% endblock %}

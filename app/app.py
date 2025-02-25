@@ -2,16 +2,18 @@ import logging
 
 from flask import Flask
 
-from app.main.config.app_config import app_config
-from app.main.config.cors_config import configure_cors
-from app.main.config.error_handlers_config import configure_error_handlers
-from app.main.config.jinja_config import configure_jinja
-from app.main.config.limiter_config import configure_limiter
-from app.main.config.logging_config import configure_logging
-from app.main.config.routes_config import configure_routes
-from app.main.models import db
-from app.main.repositories.owner_repository import get_owner_repository
-from app.main.services.asset_service import get_asset_service
+from app.shared.config.app_config import app_config
+from app.shared.config.cors_config import configure_cors
+from app.shared.config.error_handlers_config import configure_error_handlers
+from app.shared.config.jinja_config import configure_jinja
+from app.shared.config.limiter_config import configure_limiter
+from app.shared.config.logging_config import configure_logging
+from app.shared.config.routes_config import configure_routes
+from app.projects.repository_standards.models import db
+from app.projects.repository_standards.repositories.owner_repository import (
+    get_owner_repository,
+)
+from app.projects.repository_standards.services.asset_service import get_asset_service
 
 logger = logging.getLogger(__name__)
 

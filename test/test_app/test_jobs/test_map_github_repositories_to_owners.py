@@ -1,15 +1,17 @@
 import unittest
 from unittest.mock import MagicMock, call, patch
-from app.jobs.map_github_repositories_to_owners import main
+from app.projects.repository_standards.jobs.map_github_repositories_to_owners import (
+    main,
+)
 from flask import Flask
-from app.main.models import db
+from app.projects.repository_standards.models import db
 
 test_owner_id = 1
 
 
-@patch("app.main.services.github_service.GithubService.__new__")
-@patch("app.main.services.asset_service.AssetService.__new__")
-@patch("app.main.repositories.owner_repository.OwnerRepository.__new__")
+@patch("app.projects.repository_standards.services.github_service.GithubService.__new__")
+@patch("app.projects.repository_standards.services.asset_service.AssetService.__new__")
+@patch("app.projects.repository_standards.repositories.owner_repository.OwnerRepository.__new__")
 class TestMain(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
