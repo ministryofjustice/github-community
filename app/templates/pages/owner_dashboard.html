@@ -1,0 +1,122 @@
+{% extends "components/base.html" %}
+
+{% block pageTitle %}
+    Home
+{% endblock %}
+
+{% block content %}
+<a href="/" class="govuk-back-link">Back</a>
+
+<h1 class="govuk-heading-xl">{{ owner }} - GitHub Repository Dashboard</h1>
+
+<section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-l">Summary Statistics</h2>
+
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Total Repositories</dt>
+        <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
+    </div>
+
+    {% set admin_percentage = ((repositories | length - repositories_without_admin_access | length) / (repositories | length)) * 100 %}
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Repositories with Admin Access</dt>
+        <dd class="govuk-summary-list__value">
+            <span class="
+                {% if admin_percentage < 60 %} govuk-tag govuk-tag--red
+                {% elif admin_percentage < 80 %} govuk-tag govuk-tag--yellow
+                {% elif admin_percentage < 100 %} govuk-tag govuk-tag--green
+                {% else %} govuk-tag govuk-tag--green-dark
+                {% endif %}
+            ">
+                {{ repositories | length - repositories_without_admin_access | length }}
+                ({{ admin_percentage | round | int }}%)
+            </span>
+        </dd>
+    </div>
+
+    {% set compliance_percentage = ((repositories | length - non_compliant_repositories | length) / (repositories | length)) * 100 %}
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">Compliant Repositories</dt>
+        <dd class="govuk-summary-list__value">
+            <span class="
+                {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                {% else %} govuk-tag govuk-tag--green-dark
+                {% endif %}
+            ">
+                {{ repositories | length - non_compliant_repositories | length }}
+                ({{ compliance_percentage | round | int }}%)
+            </span>
+        </dd>
+    </div>
+
+    {% if circle_cost %}
+    <div class="govuk-summary-list__row">
+        <dt class="govuk-summary-list__key">CircleCI Cost (Last 30 Days)</dt>
+        <dd class="govuk-summary-list__value">
+          {{ "£{:,.2f}".format(circle_cost) }}
+        </dd>
+        <dd class="govuk-summary-list__value">
+          <a href="/owner/{{ owner }}/circleci" class="govuk-link govuk-link--no-visited-state">View CircleCI Projects Report</a>
+        </dd>
+    </div>
+    {% endif %}
+</section>
+
+<p class="govuk-body govuk-!-margin-bottom-6">
+    <a href="/owner/{{ owner }}/all-repositories" class="govuk-link govuk-link--no-visited-state">
+        View full report of all repositories
+    </a>
+</p>
+
+{% if repositories_without_admin_access | length > 0 %}
+<section class="govuk-warning-text govuk-!-margin-bottom-6">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+        <span class="govuk-warning-text__assistive">Warning</span>
+        You lack admin access to <strong>{{ repositories_without_admin_access | length }}</strong> repositories.
+        Full admin access is recommended for oversight and control of your repository estate.
+    </strong>
+    <p>
+        <a href="/owner/{{ owner }}/repositories-without-admin-access" class="govuk-button govuk-button--secondary">View Repositories without Admin Access</a>
+    </p>
+</section>
+{% endif %}
+
+{% if non_compliant_repositories | length > 0 %}
+<section class="govuk-warning-text govuk-!-margin-bottom-6">
+    <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
+    <strong class="govuk-warning-text__text">
+        <span class="govuk-warning-text__assistive">Warning</span>
+        There are <strong>{{ non_compliant_repositories | length }}</strong> repositories that do not meet compliance standards.
+        Regularly reviewing these can help maintain security and consistency across your repository estate.
+    </strong>
+    <p>
+        <a href="/owner/{{ owner }}/non-compliant-repositories" class="govuk-button govuk-button--secondary">View Non-Compliant Repositories</a>
+    </p>
+</section>
+{% endif %}
+
+<details class="govuk-details" data-module="govuk-details">
+    <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">
+            How are repositories assigned?
+        </span>
+    </summary>
+    <div class="govuk-details__text">
+        <p class="govuk-body">
+            Repositories are assigned to you based on the following criteria:
+        </p>
+        <ul class="govuk-list govuk-list--bullet">
+            <li>Admin access granted to specific GitHub Teams associated with you.</li>
+            <li>Other types of access by those GitHub Teams also establish a relationship.</li>
+            <li>Repository names that match certain prefixes predefined for your role or organization.</li>
+        </ul>
+        <p class="govuk-body">
+            If any of these criteria need updating, contact your GitHub administrator.
+        </p>
+    </div>
+</details>
+
+{% endblock %}

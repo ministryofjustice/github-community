@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.app.deployment.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+    spec:
+      # serviceAccountName created by the Cloud Platform environment
+      serviceAccountName: cd-serviceaccount
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.app.deployment.image.repository }}:{{ .Values.app.deployment.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: AUTH0_DOMAIN
+              value: {{ .Values.app.deployment.env.AUTH0_DOMAIN | quote }}
+            - name: AUTH0_CLIENT_ID
+              value: {{ .Values.app.deployment.env.AUTH0_CLIENT_ID | quote }}
+            - name: AUTH0_CLIENT_SECRET
+              value: {{ .Values.app.deployment.env.AUTH0_CLIENT_SECRET | quote }}
+            - name: APP_SECRET_KEY
+              value: {{ .Values.app.deployment.env.APP_SECRET_KEY | quote }}
+            - name: FLASK_DEBUG
+              value: {{ .Values.app.deployment.env.FLASK_DEBUG | quote }}
+            - name: PHASE_BANNER_TEXT
+              value: {{ .Values.app.deployment.env.PHASE_BANNER_TEXT }}
+            - name: POSTGRES_USER
+              value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
+            - name: POSTGRES_PASSWORD
+              value:
+                {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.app.deployment.env.POSTGRES_DB | quote }}
+            - name: POSTGRES_HOST
+              value: {{ .Values.app.deployment.env.POSTGRES_HOST | quote }}
+            - name: POSTGRES_PORT
+              value: {{ .Values.app.deployment.env.POSTGRES_PORT | quote }}
+            - name: CIRCLECI_COST_PER_CREDIT
+              value: {{ .Values.app.deployment.env.CIRCLECI_COST_PER_CREDIT | quote }}
+            - name: CIRCLECI_TOKEN
+              value: {{ .Values.app.deployment.env.CIRCLECI_TOKEN | quote }}
+
+          ports:
+            - name: http
+              containerPort: 80

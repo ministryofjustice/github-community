@@ -1,0 +1,33 @@
+{% extends "components/base.html" %}
+
+{% block pageTitle %}
+    Find a GitHub Repository Owner
+{% endblock %}
+
+{% block content %}
+  <h1 class="govuk-heading-xl">Find a GitHub Repository Owner</h1>
+  <p class="govuk-body">Choose from the available views below to manage your GitHub repository data effectively.</p>
+
+  <section class="govuk-section">
+    <h2 class="govuk-heading-l">User Dashboards</h2>
+    <p class="govuk-body">Access a personalized dashboard to view and manage your assigned repositories.</p>
+    
+    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-6">
+      {% for owner in owners %}
+        <li>
+          <a href="/owner/{{ owner }}" class="govuk-link">{{ owner }} Dashboard</a>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="govuk-section">
+    <h2 class="govuk-heading-l">Other Views</h2>
+    <p class="govuk-body">Access broader insights and organization-wide data for a comprehensive view.</p>
+    
+    <ul class="govuk-list govuk-!-margin-bottom-6">
+      <li><a class="govuk-link" href="/owner">Owner View</a></li>
+    </ul>
+  </section>
+
+{% endblock %}

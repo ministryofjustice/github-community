@@ -1,0 +1,60 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    image: "github-community"
+    container_name: "github-community"
+    environment:
+      # Flask
+      - APP_SECRET_KEY=dev
+      - FLASK_DEBUG=false
+
+      # Postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=admin
+      - POSTGRES_HOST=localhost
+      - POSTGRES_PORT=5432
+
+      # Auth0
+      - AUTH0_CLIENT_ID=dev
+      - AUTH0_CLIENT_SECRET=dev
+      - AUTH0_DOMAIN=operations-engineering.eu.auth0.com
+
+      # App
+      - PHASE_BANNER_TEXT=LOCAL DEV
+
+      # CircleCI
+      - CIRCLECI_TOKEN=test
+      - CIRCLECI_COST_PER_CREDIT=0.0005
+
+      # GitHub
+      - ADMIN_GITHUB_TOKEN=test
+
+      # Local
+      - LOGGING_LEVEL=DEBUG
+      - AUTH_ENABLED=false
+      - ADD_STUB_VALUES_TO_DATABASE=true
+    ports:
+      - "4567:4567"
+    depends_on:
+      postgres:
+        condition: service_started
+        restart: true
+    networks:
+      - github-community
+
+  postgres:
+    image: postgres:14-alpine
+    container_name: "postgres"
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=admin
+    networks:
+      - github-community
+
+networks:
+  github-community:
