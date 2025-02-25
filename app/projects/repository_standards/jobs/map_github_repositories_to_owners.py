@@ -1,8 +1,12 @@
-from app.projects.repository_standards.repositories.asset_repository import AssetRepository
-from app.projects.repository_standards.repositories.owner_repository import OwnerRepository
+from app.projects.repository_standards.repositories.asset_repository import (
+    AssetRepository,
+)
+from app.projects.repository_standards.repositories.owner_repository import (
+    OwnerRepository,
+)
 import logging
 from app.shared.config.app_config import app_config
-from app.projects.repository_standards.config.logging_config import configure_logging
+from app.shared.config.logging_config import configure_logging
 from app.projects.repository_standards.services.github_service import GithubService
 from app.projects.repository_standards.services.asset_service import AssetService
 from app.app import create_app
