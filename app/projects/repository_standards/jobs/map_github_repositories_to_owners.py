@@ -108,7 +108,11 @@ def main(
 
     asset_service = AssetService(AssetRepository())
     owner_repository = OwnerRepository()
-    github_service = GithubService(app_config.github.token)
+    github_service = GithubService(
+        app_config.github.app.client_id,
+        app_config.github.app.private_key,
+        app_config.github.app.installation_id,
+    )
 
     repositories = github_service.get_all_repositories()
 

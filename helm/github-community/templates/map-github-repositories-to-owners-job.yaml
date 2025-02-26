@@ -31,8 +31,12 @@ spec:
                value: {{ .Values.app.deployment.env.POSTGRES_HOST | quote }}
              - name: POSTGRES_PORT
                value: {{ .Values.app.deployment.env.POSTGRES_PORT | quote }}
-             - name: ADMIN_GITHUB_TOKEN 
-               value: {{ .Values.app.deployment.env.ADMIN_GITHUB_TOKEN | quote }}
+             - name: GITHUB_APP_CLIENT_ID
+               value: {{ .Values.app.deployment.env.GITHUB_APP_CLIENT_ID | quote }}
+             - name: GITHUB_APP_PRIVATE_KEY
+               value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
+             - name: GITHUB_APP_INSTALLATION_ID
+               value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
 
           restartPolicy: Never
           activeDeadlineSeconds: 7200

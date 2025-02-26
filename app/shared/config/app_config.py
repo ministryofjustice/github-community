@@ -55,5 +55,12 @@ app_config = SimpleNamespace(
             f"{__get_env_var('POSTGRES_HOST')}:{__get_env_var('POSTGRES_PORT')}/{__get_env_var('POSTGRES_DB')}"
         ),
     ),
-    github=SimpleNamespace(token=__get_env_var("ADMIN_GITHUB_TOKEN")),
+    github=SimpleNamespace(
+        app=SimpleNamespace(
+            client_id=__get_env_var("GITHUB_APP_CLIENT_ID"),
+            installation_id=int(__get_env_var("GITHUB_APP_INSTALLATION_ID") or ""),
+            private_key=__get_env_var("GITHUB_APP_PRIVATE_KEY"),
+        ),
+        token=__get_env_var("ADMIN_GITHUB_TOKEN"),
+    ),
 )

@@ -23,11 +23,13 @@ env:
   POSTGRES_DB: ${{ secrets.PROD_POSTGRES_DB }}
   POSTGRES_HOST: ${{ secrets.PROD_POSTGRES_HOST }}
   POSTGRES_PORT: ${{ secrets.PROD_POSTGRES_PORT }}
-  ADMIN_GITHUB_TOKEN: ${{ secrets.MOJ_GITHUB_COMMUNITY_APP_TOKEN }}
   AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
   AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
   CIRCLECI_COST_PER_CREDIT: ${{ secrets.CIRCLECI_COST_PER_CREDIT }}
   CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_ADMIN_CONNOR_PAT }}
+  GITHUB_APP_CLIENT_ID: ${{ vars.GH_APP_CLIENT_ID }}
+  GITHUB_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+  GITHUB_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
 
 jobs:
   build-push:
@@ -76,16 +78,19 @@ jobs:
             --timeout 10m \
             --namespace ${KUBE_NAMESPACE} \
             --values=helm/github-community/values-prod.yaml \
-            --set app.deployment.env.AUTH0_CLIENT_ID=${AUTH0_CLIENT_ID} \
-            --set app.deployment.env.AUTH0_CLIENT_SECRET=${AUTH0_CLIENT_SECRET} \
-            --set app.deployment.env.APP_SECRET_KEY=${FLASK_APP_SECRET} \
-            --set app.deployment.env.POSTGRES_USER=${POSTGRES_USER} \
-            --set app.deployment.env.POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-            --set app.deployment.env.POSTGRES_DB=${POSTGRES_DB} \
-            --set app.deployment.env.POSTGRES_HOST=${POSTGRES_HOST} \
-            --set app.deployment.env.POSTGRES_PORT=${POSTGRES_PORT} \
-            --set app.deployment.env.ADMIN_GITHUB_TOKEN=${ADMIN_GITHUB_TOKEN} \
-            --set app.deployment.env.CIRCLECI_COST_PER_CREDIT=${CIRCLECI_COST_PER_CREDIT} \
-            --set app.deployment.env.CIRCLECI_TOKEN=${CIRCLECI_TOKEN} \
-            --set app.deployment.image.repository=${ECR_REGISTRY}/${ECR_REPOSITORY} \
-            --set app.deployment.image.tag=${IMAGE_TAG}
+            --set app.deployment.env.AUTH0_CLIENT_ID="${AUTH0_CLIENT_ID}" \
+            --set app.deployment.env.AUTH0_CLIENT_SECRET="${AUTH0_CLIENT_SECRET}" \
+            --set app.deployment.env.APP_SECRET_KEY="${FLASK_APP_SECRET}" \
+            --set app.deployment.env.POSTGRES_USER="${POSTGRES_USER}" \
+            --set app.deployment.env.POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+            --set app.deployment.env.POSTGRES_DB="${POSTGRES_DB}" \
+            --set app.deployment.env.POSTGRES_HOST="${POSTGRES_HOST}" \
+            --set app.deployment.env.POSTGRES_PORT="${POSTGRES_PORT}" \
+            --set app.deployment.env.ADMIN_GITHUB_TOKEN="${ADMIN_GITHUB_TOKEN}" \
+            --set app.deployment.env.CIRCLECI_COST_PER_CREDIT="${CIRCLECI_COST_PER_CREDIT}" \
+            --set app.deployment.env.CIRCLECI_TOKEN="${CIRCLECI_TOKEN}" \
+            --set app.deployment.env.GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
+            --set app.deployment.env.GITHUB_APP_PRIVATE_KEY="${GITHUB_APP_PRIVATE_KEY}" \
+            --set app.deployment.env.GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}" \
+            --set app.deployment.image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
+            --set app.deployment.image.tag="${IMAGE_TAG}"

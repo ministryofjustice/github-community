@@ -48,6 +48,12 @@ spec:
               value: {{ .Values.app.deployment.env.CIRCLECI_COST_PER_CREDIT | quote }}
             - name: CIRCLECI_TOKEN
               value: {{ .Values.app.deployment.env.CIRCLECI_TOKEN | quote }}
+            - name: GITHUB_APP_CLIENT_ID
+              value: {{ .Values.app.deployment.env.GITHUB_APP_CLIENT_ID | quote }}
+            - name: GITHUB_APP_PRIVATE_KEY
+              value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
+            - name: GITHUB_APP_INSTALLATION_ID
+              value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
 
           ports:
             - name: http

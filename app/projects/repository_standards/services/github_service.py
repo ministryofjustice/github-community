@@ -2,10 +2,7 @@ from calendar import timegm
 from time import gmtime, sleep
 from typing import Callable, List
 
-from github import (
-    Github,
-    RateLimitExceededException,
-)
+from github import Github, RateLimitExceededException, Auth
 from github.Repository import Repository
 from github.Team import Team
 import logging
@@ -60,9 +57,18 @@ def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Ca
 
 
 class GithubService:
-    def __init__(self, org_token: str) -> None:
+    def __init__(
+        self,
+        app_client_id: str,
+        app_private_key: str,
+        app_installation_id: int,
+    ) -> None:
         self.organisation_name: str = "ministryofjustice"
-        self.github_client_core_api: Github = Github(org_token)
+        app_auth = Auth.AppAuth(app_client_id, app_private_key)
+        app_installation_auth = app_auth.get_installation_auth(app_installation_id)
+        logger.info(f"App Auth: {app_auth}")
+        logger.info(f"App Installation Auth: {app_installation_auth}")
+        self.github_client_core_api: Github = Github(auth=app_installation_auth)
 
     @retries_github_rate_limit_exception_at_next_reset_once
     def __get_all_parents_team_names_of_team(
