@@ -125,6 +125,27 @@ class AssetRepository:
 
         return relationship
 
+    def update_by_name(self, name: str, data: dict) -> Asset:
+        assets = self.find_by_name(name)
+
+        if len(assets) > 1:
+            raise ValueError(
+                f"Multiple Repositories Named [ {name} ] - Remove The Duplicates"
+            )
+
+        if len(assets) == 0:
+            logging.info(f"No repository found [ {name} ] - creating a new asset...")
+            return self.add_asset(name, "REPOSITORY", data)
+
+        asset = assets[0]
+        logging.info(
+            f"Found existing respoistory with ID [ {asset.id} ] - updating existing assets data..."
+        )
+        asset.data = data
+        self.db_session.commit()
+
+        return assets[0]
+
 
 def get_asset_repository() -> AssetRepository:
     if "asset_repository" not in g:

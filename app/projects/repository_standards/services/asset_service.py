@@ -57,8 +57,8 @@ class AssetService:
 
         return has_authorative_ownership
 
-    def add_asset(self, name: str, type: str):
-        asset = self.__asset_repository.add_asset(name=name, type=type)
+    def add_asset(self, name: str, type: str, data: dict):
+        asset = self.__asset_repository.add_asset(name=name, type=type, data=data)
         return asset
 
     def create_relationship(self, asset: Asset, owner: Owner, relationship_type: str):
@@ -91,6 +91,9 @@ class AssetService:
 
         logging.info(f"No repository found [ {name} ] - creating a new asset...")
         return self.__asset_repository.add_asset(name, "REPOSITORY", data)
+
+    def update_asset_by_name(self, name: str, data: dict) -> Asset:
+        return self.__asset_repository.update_by_name(name, data)
 
     def get_repository_by_name(self, name: str) -> AssetView:
         asset = self.__asset_repository.find_by_name(name)

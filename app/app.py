@@ -61,12 +61,12 @@ def create_stub_data(app):
         laa = owner_repository.add_owner("STUBBED - LAA")
 
         operations_engineering = asset_service.add_asset(
-            "operations-engineering", asset_type
+            "operations-engineering", asset_type, data={}
         )
         asset_service.create_relationship(operations_engineering, hmpps, admin_access)
 
-        opg_data = asset_service.add_asset("opg-data", asset_type)
+        opg_data = asset_service.add_asset("opg-data", asset_type, data={})
         asset_service.create_relationship(opg_data, opg, admin_access)
 
-        cla_public = asset_service.add_asset("cla_public", asset_type)
+        cla_public = asset_service.add_asset("cla_public", asset_type, data={})
         asset_service.create_relationship(cla_public, laa, admin_access)

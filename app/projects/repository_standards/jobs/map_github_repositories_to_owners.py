@@ -138,9 +138,7 @@ def main(
             )
 
             owner = owner_repository.find_by_name(name)[0]
-            asset = asset_service.add_if_name_does_not_exist(
-                repository_name, repository
-            )
+            asset = asset_service.update_asset_by_name(repository_name, repository)
 
             if contains_one_or_more(teams, teams_with_admin_access):
                 asset_service.update_relationships_with_owner(
