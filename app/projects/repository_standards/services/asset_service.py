@@ -77,7 +77,7 @@ class AssetService:
             asset, owner, relationship_type
         )
 
-    def add_if_name_does_not_exist(self, name: str) -> Asset:
+    def add_if_name_does_not_exist(self, name: str, data: dict) -> Asset:
         assets = self.__asset_repository.find_by_name(name)
 
         if len(assets) > 1:
@@ -90,7 +90,7 @@ class AssetService:
             return assets[0]
 
         logging.info(f"No repository found [ {name} ] - creating a new asset...")
-        return self.__asset_repository.add_asset(name, "REPOSITORY")
+        return self.__asset_repository.add_asset(name, "REPOSITORY", data)
 
     def get_repository_by_name(self, name: str) -> AssetView:
         asset = self.__asset_repository.find_by_name(name)

@@ -1,10 +1,11 @@
+from datetime import datetime
 import logging
+from typing import List
 
-from sqlalchemy.engine import create
-from app.projects.repository_standards.models import Asset, Relationship, db, Owner
 from flask import g
 from sqlalchemy.orm import scoped_session
-from typing import List
+
+from app.projects.repository_standards.models import Asset, Owner, Relationship, db
 
 
 class AssetView:
@@ -58,10 +59,12 @@ class AssetRepository:
 
         return [AssetView.from_asset(asset) for asset in assets]
 
-    def add_asset(self, name: str, type: str) -> Asset:
+    def add_asset(self, name: str, type: str, data: dict) -> Asset:
         asset = Asset()
         asset.name = name
         asset.type = type
+        asset.last_updated = datetime.now()
+        asset.data = data
         self.db_session.add(asset)
         self.db_session.commit()
         return asset
