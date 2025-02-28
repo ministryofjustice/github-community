@@ -9,10 +9,17 @@ from app.projects.repository_standards.models import Asset, Owner, Relationship,
 
 
 class AssetView:
-    def __init__(self, name: str, owner_names: List[str], admin_owner_names: List[str]):
+    def __init__(
+        self,
+        name: str,
+        owner_names: List[str],
+        admin_owner_names: List[str],
+        data: dict,
+    ):
         self.name = name
         self.admin_owner_names = admin_owner_names
         self.owner_names = owner_names
+        self.data = data
 
     @classmethod
     def from_asset(cls, asset: Asset):
@@ -26,6 +33,7 @@ class AssetView:
             name=asset.name,
             owner_names=owner_names,
             admin_owner_names=admin_owner_names,
+            data=asset.data,
         )
 
 

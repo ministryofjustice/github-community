@@ -95,9 +95,9 @@ class AssetService:
     def update_asset_by_name(self, name: str, data: dict) -> Asset:
         return self.__asset_repository.update_by_name(name, data)
 
-    def get_repository_by_name(self, name: str) -> AssetView:
+    def get_repository_by_name(self, name: str) -> AssetView | None:
         asset = self.__asset_repository.find_by_name(name)
-        return AssetView.from_asset(asset[0])
+        return AssetView.from_asset(asset[0]) if len(asset) > 0 else None
 
 
 def get_asset_service() -> AssetService:

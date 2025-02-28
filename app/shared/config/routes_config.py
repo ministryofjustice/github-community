@@ -6,6 +6,7 @@ from app.shared.routes.robots import robot_route
 from app.projects.repository_standards.routes.owner import owner_route
 from app.projects.repository_standards.routes.repository import repository_route
 from app.projects.repository_standards.routes.main import repository_standards_main
+from app.projects.repository_standards.routes.api import repository_standards_api
 
 
 def configure_routes(app: Flask) -> None:
@@ -19,4 +20,7 @@ def configure_routes(app: Flask) -> None:
     app.register_blueprint(owner_route, url_prefix="/repository-standards/owner")
     app.register_blueprint(
         repository_route, url_prefix="/repository-standards/repository"
+    )
+    app.register_blueprint(
+        repository_standards_api, url_prefix="/repository-standards/api"
     )
