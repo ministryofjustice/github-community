@@ -61,11 +61,43 @@ def create_stub_data(app):
         laa = owner_repository.add_owner("STUBBED - LAA")
 
         operations_engineering = asset_service.add_asset(
-            "operations-engineering", asset_type, data={}
+            "operations-engineering",
+            asset_type,
+            data={
+                "name": "operations-engineering",
+                "license": "mit",
+                "description": "Operations Engineerings general purpose repository",
+                "default_branch_name": "master",
+                "github_teams_with_any_access": [
+                    "all",
+                ],
+                "github_teams_with_admin_access": [
+                    "admins",
+                ],
+                "github_teams_with_any_access_parents": ["all"],
+                "github_teams_with_admin_access_parents": ["admins"],
+            },
         )
         asset_service.create_relationship(operations_engineering, hmpps, admin_access)
 
-        opg_data = asset_service.add_asset("opg-data", asset_type, data={})
+        opg_data = asset_service.add_asset(
+            "opg-data",
+            asset_type,
+            data={
+                "name": "opg-data",
+                "license": "mit",
+                "description": "OPG Data repository",
+                "default_branch_name": "main",
+                "github_teams_with_any_access": [
+                    "all",
+                ],
+                "github_teams_with_admin_access": [
+                    "admins",
+                ],
+                "github_teams_with_any_access_parents": ["all"],
+                "github_teams_with_admin_access_parents": ["admins"],
+            },
+        )
         asset_service.create_relationship(opg_data, opg, admin_access)
 
         cla_public = asset_service.add_asset("cla_public", asset_type, data={})

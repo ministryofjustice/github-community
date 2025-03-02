@@ -104,7 +104,7 @@ def main(
         app_config.github.app.installation_id,
     )
 
-    repositories = github_service.get_all_repositories(limit=10)
+    repositories = github_service.get_all_repositories()
 
     for owner in owners:
         logger.info(f"Mapping Repositories for Owner [ {owner} ]")

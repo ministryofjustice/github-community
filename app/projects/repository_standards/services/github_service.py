@@ -170,7 +170,7 @@ class GithubService:
                     "github_teams_with_any_access_parents": teams_with_any_access_parents,
                     "default_branch_name": repo.default_branch,
                     "description": repo.description,
-                    "licence": repo.license.key if repo.license else None,
+                    "license": repo.license.key if repo.license else None,
                 },
             )
             counter += 1
