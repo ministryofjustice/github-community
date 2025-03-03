@@ -1,54 +1,47 @@
 import logging
 
 from flask import Blueprint, render_template
-from typing import List
-from app.projects.repository_standards.repositories.asset_repository import AssetView
-from app.projects.repository_standards.services.asset_service import AssetService
-from app.projects.repository_standards.services.asset_service import get_asset_service
+from app.projects.repository_standards.services.repository_compliance_service import (
+    get_repository_compliance_service,
+)
+
+
 from app.shared.middleware.auth import requires_auth
-from app.projects.repository_standards.routes.api import get_compliance_status
 
 logger = logging.getLogger(__name__)
 
 repository_standards_main = Blueprint("repository_standards_main", __name__)
 
 
-def decorate_with_compliance_status_and_authorative_owner(
-    asset_service: AssetService,
-    repositories: List[AssetView],
-):
-    for repository in repositories:
-        repository.__setattr__("compliance_status", get_compliance_status(repository))
-
-        authorative_owner = [
-            owner
-            for owner in repository.owner_names
-            if asset_service.is_owner_authoritative_for_repository(repository, owner)
-        ]
-        repository.__setattr__(
-            "authorative_owner",
-            authorative_owner[0] if len(authorative_owner) > 0 else None,
-        )
-
-    return repositories
-
-
 @repository_standards_main.route("/", methods=["GET"])
 @requires_auth
 def index():
-    asset_service = get_asset_service()
-    repositories_raw = asset_service.get_all_repositories()
+    repository_compliance_service = get_repository_compliance_service()
 
-    repositories = decorate_with_compliance_status_and_authorative_owner(
-        asset_service, repositories_raw
-    )
+    repositories = repository_compliance_service.get_all_repositories()
 
     return render_template(
         "projects/repository_standards/pages/home.html",
         repositories=repositories,
         non_compliant_repositories=[
-            repo
-            for repo in repositories
-            if repo.__getattribute__("compliance_status") == "fail"
+            repo for repo in repositories if repo.compliance_status == "fail"
         ],
+    )
+
+
+@repository_standards_main.route(
+    "/<repository_name>/compliance-report", methods=["GET"]
+)
+@requires_auth
+def repository_compliance_report(repository_name: str):
+    repository_compliance_service = get_repository_compliance_service()
+
+    repository = repository_compliance_service.get_repository_by_name(repository_name)
+
+    if repository is None:
+        return "Repository not found", 404
+
+    return render_template(
+        "projects/repository_standards/pages/repository_compliance_report.html",
+        repository=repository,
     )

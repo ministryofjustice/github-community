@@ -12,8 +12,7 @@
         "href": "/"
       },
       {
-        "text": "Repository Standards",
-        "href": "/repository-standards"
+        "text": "Repository Standards"
       }
     ]
   }) }}
@@ -62,6 +61,7 @@
             Owner
           </th>
           <th scope="col" class="govuk-table__header"></th>
+          <th scope="col" class="govuk-table__header"></th>
         </tr>
       </thead>
       <tbody class="govuk-table__body">
@@ -69,10 +69,11 @@
         <tr class="govuk-table__row">
           <td class="govuk-table__cell"><a href="https://github.com/ministryofjustice/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">{{ repository.name }}</a></td>
           <td class="govuk-table__cell">
-            <img src="/assets/images/{{ repository["compliance_status"] }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
+            <img src="/assets/images/{{ repository.compliance_status }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
           </td>
-          <td class="govuk-table__cell">{{ repository["authorative_owner"] }}</td>
+          <td class="govuk-table__cell">{{ repository.authorative_owner }}</td>
           <td class="govuk-table__cell"><a href="https://operations-engineering-reports.cloud-platform.service.justice.gov.uk/public-report/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View Compliace Report</a></td>
+          <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}/compliance-report" rel="noreferrer noopener" class="govuk-link">View New Compliace Report</a></td>
         </tr>
         {% endfor %}
       </tbody>
