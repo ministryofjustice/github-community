@@ -171,6 +171,11 @@ class GithubService:
                     "default_branch_name": repo.default_branch,
                     "description": repo.description,
                     "license": repo.license.key if repo.license else None,
+                    "security_and_analysis_push_protection": repo.security_and_analysis.secret_scanning_push_protection.status,
+                    "security_and_analysis_advanced_security": repo.security_and_analysis.advanced_security.status
+                    if repo.security_and_analysis.advanced_security
+                    else None,
+                    "security_and_analysis_secret_scanning": repo.security_and_analysis.secret_scanning.status,
                 },
             )
             counter += 1
