@@ -1,0 +1,60 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Compliance Report - {{ repository.name }}
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {
+        "text": "Home",
+        "href": "/"
+      },
+      {
+        "text": "Repository Standards",
+        "href": "/repository-standards"
+      },
+      {
+        "text": "Compliance Report"
+      }
+    ]
+  }) }}
+
+
+  <h1 class="govuk-heading-xl">Compliance Report - {{ repository.name }}</h1>
+  <img src="/repository-standards/api/{{ repository.name }}/badge"  alt="{{ repository.compliance_status }}" />
+
+  <section>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Check
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Compliance Status
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for check in repository.checks %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">{{ check.name }}</td>
+          <td class="govuk-table__cell">
+            <span class="
+                        {% if check.status == "fail" %} govuk-tag govuk-tag--red
+                        {% elif check.status == "pass" %} govuk-tag govuk-tag--green
+                        {% else %} govuk-tag govuk-tag--grey
+                        {% endif %}"
+            >
+            {{ check.status.capitalize() }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+{% endblock %}

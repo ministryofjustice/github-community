@@ -1,0 +1,27 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   GitHub Community 
+{% endblock %}
+
+{% block content %}
+  <h1 class="govuk-heading-xl">GitHub Community</h1>
+  <p class="govuk-body">
+    Welcome to the community! This space is built by passionate engineers for passionate engineers. Whether you're exploring new ideas, testing proof of concepts, or maintaining live projects, this is your space to collaborate, innovate, and create solutions that matter.
+  </p>
+
+  <section class="govuk-section">
+    <h2 class="govuk-heading-l">Projects</h2>
+    <p class="govuk-body">Live projects are established tools and resources that help teams manage and improve their GitHub workflows.</p>
+    
+    <ul class="govuk-list govuk-list--bullet govuk-!-margin-bottom-6">
+        <li>
+          <a href="/repository-standards/" class="govuk-link" rel="noreferrer noopener">GitHub Repository Standards</a> - View insights and compliance information for MOJ repositories
+        </li>
+        <li>
+          <a href="https://github.com/ministryofjustice/github-actions" class="govuk-link" rel="noreferrer noopener" target="_blank">Shared GitHub Actions (opens in new tab)</a></a> - Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice
+        </li>
+    </ul>
+  </section>
+
+  {% endblock %}

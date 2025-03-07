@@ -1,0 +1,83 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+    Repository Standards
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {
+        "text": "Home",
+        "href": "/"
+      },
+      {
+        "text": "Repository Standards"
+      }
+    ]
+  }) }}
+
+
+  <h1 class="govuk-heading-xl">Repository Standards</h1>
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-l">Summary Statistics</h2>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Repositories</dt>
+      <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
+    </div>
+
+    {% set compliance_percentage = ((repositories | length - non_compliant_repositories | length) / (repositories | length)) * 100 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Compliant Repositories</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ repositories | length - non_compliant_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="govuk-heading-l">Repositories</h2>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Repository
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Compliance Status
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Owner
+          </th>
+          <th scope="col" class="govuk-table__header"></th>
+          <th scope="col" class="govuk-table__header"></th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for repository in repositories %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell"><a href="https://github.com/ministryofjustice/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">{{ repository.name }}</a></td>
+          <td class="govuk-table__cell">
+            <img src="/assets/images/{{ repository.compliance_status }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
+          </td>
+          <td class="govuk-table__cell">{{ repository.authorative_owner }}</td>
+          <td class="govuk-table__cell"><a href="https://operations-engineering-reports.cloud-platform.service.justice.gov.uk/public-report/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View Compliace Report</a></td>
+          <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}/compliance-report" rel="noreferrer noopener" class="govuk-link">View New Compliace Report</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+{% endblock %}
