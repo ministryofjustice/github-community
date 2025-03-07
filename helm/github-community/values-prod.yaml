@@ -1,6 +1,6 @@
 app:
   ingress:
-    host: "github-community.cloud-platform.service.justice.gov.uk"
+    host: "github-community.service.justice.gov.uk"
 
   deployment:
     replicaCount: 1
