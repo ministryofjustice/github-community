@@ -161,6 +161,18 @@ class GithubService:
                 teams_with_any_access,
                 teams_with_any_access_parents,
             ) = self.__get_teams_with_access(repo, teams_to_ignore, team_parent_cache)
+            try:
+                default_branch_protection = repo.get_branch(
+                    repo.default_branch
+                ).get_protection()
+            except Exception:
+                default_branch_protection = None
+            pr = (
+                default_branch_protection.required_pull_request_reviews
+                if default_branch_protection
+                else None
+            )
+
             response.append(
                 {
                     "name": repo.name,
@@ -168,14 +180,35 @@ class GithubService:
                     "github_teams_with_admin_access_parents": teams_with_admin_access_parents,
                     "github_teams_with_any_access": teams_with_any_access,
                     "github_teams_with_any_access_parents": teams_with_any_access_parents,
-                    "default_branch_name": repo.default_branch,
                     "description": repo.description,
                     "license": repo.license.key if repo.license else None,
-                    "security_and_analysis_push_protection": repo.security_and_analysis.secret_scanning_push_protection.status,
-                    "security_and_analysis_advanced_security": repo.security_and_analysis.advanced_security.status
-                    if repo.security_and_analysis.advanced_security
+                    "security_and_analysis_push_protection_status": repo.security_and_analysis.secret_scanning_push_protection.status,
+                    "security_and_analysis_secret_scanning_status": repo.security_and_analysis.secret_scanning.status,
+                    "default_branch_name": repo.default_branch,
+                    "default_branch_protection_enabled": default_branch_protection.enabled
+                    if default_branch_protection
                     else None,
-                    "security_and_analysis_secret_scanning": repo.security_and_analysis.secret_scanning.status,
+                    "default_branch_protection_allow_force_pushes": default_branch_protection.allow_force_pushes
+                    if default_branch_protection
+                    else None,
+                    "default_branch_protection_enforce_admins": default_branch_protection.enforce_admins
+                    if default_branch_protection
+                    else None,
+                    "default_branch_protection_required_signatures": default_branch_protection.required_signatures
+                    if default_branch_protection
+                    else None,
+                    "default_branch_protection_pr_dismiss_stale_reviews": pr.dismiss_stale_reviews
+                    if pr
+                    else None,
+                    "default_branch_protection_pr_require_code_owner_reviews": pr.require_code_owner_reviews
+                    if pr
+                    else None,
+                    "default_branch_protection_pr_require_last_push_approval": pr.require_last_push_approval
+                    if pr
+                    else None,
+                    "default_branch_protection_pr_required_approving_review_count": pr.required_approving_review_count
+                    if pr
+                    else None,
                 },
             )
             counter += 1
