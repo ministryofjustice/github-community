@@ -182,8 +182,8 @@ class GithubService:
                     "github_teams_with_any_access_parents": teams_with_any_access_parents,
                     "description": repo.description,
                     "license": repo.license.key if repo.license else None,
-                    "security_and_analysis_push_protection_status": repo.security_and_analysis.secret_scanning_push_protection.status,
                     "security_and_analysis_secret_scanning_status": repo.security_and_analysis.secret_scanning.status,
+                    "security_and_analysis_push_protection_status": repo.security_and_analysis.secret_scanning_push_protection.status,
                     "default_branch_name": repo.default_branch,
                     "default_branch_protection_enabled": default_branch_protection.enabled
                     if default_branch_protection
