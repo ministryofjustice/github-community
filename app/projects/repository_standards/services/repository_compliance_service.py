@@ -14,9 +14,10 @@ from app.projects.repository_standards.services.asset_service import (
 
 
 class RepositoryComplianceCheck:
-    def __init__(self, name: str, status: str):
+    def __init__(self, name: str, status: str, required: bool):
         self.name = name
         self.status = status
+        self.required = required
 
 
 class RepositoryComplianceReportView:
@@ -49,23 +50,44 @@ class RepositoryComplianceService:
 
         checks = [
             RepositoryComplianceCheck(
+                name="Secret Scanning Enabled",
+                status="pass"
+                if asset.data.get("security_and_analysis_secret_scanning_status")
+                == "enabled"
+                else "fail",
+                required=True,
+            ),
+            RepositoryComplianceCheck(
+                name="Push Proection Enabled",
+                status="pass"
+                if asset.data.get("security_and_analysis_push_protection_status")
+                == "enabled"
+                else "fail",
+                required=True,
+            ),
+            RepositoryComplianceCheck(
                 name="Has an Authorative Owner",
                 status="pass" if len(authorative_owner) > 0 else "fail",
+                required=False,
             ),
             RepositoryComplianceCheck(
                 name="License is MIT",
                 status="pass" if asset.data.get("license") == "mit" else "fail",
+                required=False,
             ),
             RepositoryComplianceCheck(
                 name="Default Branch is main",
                 status="pass"
                 if asset.data.get("default_branch_name") == "main"
                 else "fail",
+                required=False,
             ),
         ]
 
         compliance_status = (
-            "pass" if all(check.status == "pass" for check in checks) else "fail"
+            "pass"
+            if all(not check.required or check.status == "pass" for check in checks)
+            else "fail"
         )
 
         return RepositoryComplianceReportView(

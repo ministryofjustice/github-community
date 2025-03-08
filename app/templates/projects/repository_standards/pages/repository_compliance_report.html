@@ -26,6 +26,7 @@
   <img src="/repository-standards/api/{{ repository.name }}/badge"  alt="{{ repository.compliance_status }}" />
 
   <section>
+    <h2 class="govuk-heading-l">Required Checks</h1>
     <table class="govuk-table" data-module="moj-sortable-table">
       <thead class="govuk-table__head">
         <tr class="govuk-table__row">
@@ -38,7 +39,7 @@
         </tr>
       </thead>
       <tbody class="govuk-table__body">
-        {% for check in repository.checks %}
+        {% for check in repository.checks if check.required %}
         <tr class="govuk-table__row">
           <td class="govuk-table__cell">{{ check.name }}</td>
           <td class="govuk-table__cell">
@@ -57,4 +58,36 @@
     </table>
   </section>
 
+  <section>
+    <h2 class="govuk-heading-l">Optional Checks</h1>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Check
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Compliance Status
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for check in repository.checks if not check.required %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">{{ check.name }}</td>
+          <td class="govuk-table__cell">
+            <span class="
+                        {% if check.status == "fail" %} govuk-tag govuk-tag--red
+                        {% elif check.status == "pass" %} govuk-tag govuk-tag--green
+                        {% else %} govuk-tag govuk-tag--grey
+                        {% endif %}"
+            >
+            {{ check.status.capitalize() }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
 {% endblock %}
