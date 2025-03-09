@@ -66,6 +66,48 @@ class RepositoryComplianceService:
                 required=True,
             ),
             RepositoryComplianceCheck(
+                name="Default Branch Protection Enforced For Admins",
+                status="pass"
+                if asset.data.get("default_branch_protection_enforce_admins")
+                else "fail",
+                required=False,
+            ),
+            RepositoryComplianceCheck(
+                name="Default Branch Protection Requires Signed Commits",
+                status="pass"
+                if asset.data.get("default_branch_protection_required_signatures")
+                else "fail",
+                required=False,
+            ),
+            RepositoryComplianceCheck(
+                name="Default Branch Pull Request Requires Code Owner Reviews",
+                status="pass"
+                if asset.data.get(
+                    "default_branch_protection_pr_require_code_owner_reviews"
+                )
+                else "fail",
+                required=False,
+            ),
+            RepositoryComplianceCheck(
+                name="Default Branch Pull Request Requires Last Push Approval",
+                status="pass"
+                if asset.data.get(
+                    "default_branch_protection_pr_require_last_push_approval"
+                )
+                else "fail",
+                required=False,
+            ),
+            RepositoryComplianceCheck(
+                name="Default Branch Pull Request Requires Atleast One Review",
+                status="pass"
+                if asset.data.get(
+                    "default_branch_protection_pr_required_approving_review_count"
+                )
+                or 0 >= 1
+                else "fail",
+                required=False,
+            ),
+            RepositoryComplianceCheck(
                 name="Has an Authorative Owner",
                 status="pass" if len(authorative_owner) > 0 else "fail",
                 required=False,
