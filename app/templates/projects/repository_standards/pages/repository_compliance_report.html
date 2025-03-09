@@ -41,7 +41,7 @@
       <tbody class="govuk-table__body">
         {% for check in repository.checks if check.required %}
         <tr class="govuk-table__row">
-          <td class="govuk-table__cell">{{ check.name }}</td>
+          <td class="govuk-table__cell">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
           <td class="govuk-table__cell">
             <span class="
                         {% if check.status == "fail" %} govuk-tag govuk-tag--red

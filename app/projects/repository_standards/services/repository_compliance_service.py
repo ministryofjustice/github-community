@@ -95,11 +95,9 @@ class RepositoryComplianceService:
                 description="Useful for delegating reviews of parts of the codebase to specific people.",
             ),
             RepositoryComplianceCheck(
-                name="Default Branch Pull Request Requires Last Push Approval",
+                name="Default Branch Pull Request Dismiss Stale Reviews",
                 status="pass"
-                if asset.data.get(
-                    "default_branch_protection_pr_require_last_push_approval"
-                )
+                if asset.data.get("default_branch_protection_pr_dismiss_stale_reviews")
                 else "fail",
                 required=False,
                 description="Ensures that the latest changes are reviewed before merging.",
