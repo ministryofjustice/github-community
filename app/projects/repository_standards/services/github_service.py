@@ -180,10 +180,25 @@ class GithubService:
                     "github_teams_with_admin_access_parents": teams_with_admin_access_parents,
                     "github_teams_with_any_access": teams_with_any_access,
                     "github_teams_with_any_access_parents": teams_with_any_access_parents,
+                    "visibility": repo.visibility,
                     "description": repo.description,
                     "license": repo.license.key if repo.license else None,
-                    "security_and_analysis_secret_scanning_status": repo.security_and_analysis.secret_scanning.status,
-                    "security_and_analysis_push_protection_status": repo.security_and_analysis.secret_scanning_push_protection.status,
+                    "delete_branch_on_merge": repo.delete_branch_on_merge,
+                    "security_and_analysis_secret_scanning_status": repo.security_and_analysis.secret_scanning.status
+                    if repo.security_and_analysis.secret_scanning
+                    else None,
+                    "security_and_analysis_secret_scanning_validity_checks": repo.security_and_analysis.secret_scanning_validity_checks.status
+                    if repo.security_and_analysis.secret_scanning_validity_checks
+                    else None,
+                    "security_and_analysis_push_protection_status": repo.security_and_analysis.secret_scanning_push_protection.status
+                    if repo.security_and_analysis.secret_scanning_push_protection
+                    else None,
+                    "security_and_analysis_advanced_security": repo.security_and_analysis.advanced_security.status
+                    if repo.security_and_analysis.advanced_security
+                    else None,
+                    "secret_scanning_non_provider_patterns": repo.security_and_analysis.secret_scanning_non_provider_patterns.status
+                    if repo.security_and_analysis.secret_scanning_non_provider_patterns
+                    else None,
                     "default_branch_name": repo.default_branch,
                     "default_branch_protection_enabled": default_branch_protection.enabled
                     if default_branch_protection
