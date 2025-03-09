@@ -14,10 +14,11 @@ from app.projects.repository_standards.services.asset_service import (
 
 
 class RepositoryComplianceCheck:
-    def __init__(self, name: str, status: str, required: bool):
+    def __init__(self, name: str, status: str, required: bool, description: str):
         self.name = name
         self.status = status
         self.required = required
+        self.description = description
 
 
 class RepositoryComplianceReportView:
@@ -56,6 +57,7 @@ class RepositoryComplianceService:
                 == "enabled"
                 else "fail",
                 required=True,
+                description="Imporves organisational security by scanning and reporting secrets.",
             ),
             RepositoryComplianceCheck(
                 name="Push Proection Enabled",
@@ -64,6 +66,7 @@ class RepositoryComplianceService:
                 == "enabled"
                 else "fail",
                 required=True,
+                description="Prevents secrets from being pushed publicly to the repository.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch Protection Enforced For Admins",
@@ -71,6 +74,7 @@ class RepositoryComplianceService:
                 if asset.data.get("default_branch_protection_enforce_admins")
                 else "fail",
                 required=False,
+                description="Prevents admins from bypassing branch protection.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch Protection Requires Signed Commits",
@@ -78,6 +82,7 @@ class RepositoryComplianceService:
                 if asset.data.get("default_branch_protection_required_signatures")
                 else "fail",
                 required=False,
+                description="Signed commits ensure that the commit author is verified, preventing impersonations.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Requires Code Owner Reviews",
@@ -87,6 +92,7 @@ class RepositoryComplianceService:
                 )
                 else "fail",
                 required=False,
+                description="Useful for delegating reviews of parts of the codebase to specific people.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Requires Last Push Approval",
@@ -96,6 +102,7 @@ class RepositoryComplianceService:
                 )
                 else "fail",
                 required=False,
+                description="Ensures that the latest changes are reviewed before merging.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Requires Atleast One Review",
@@ -106,16 +113,19 @@ class RepositoryComplianceService:
                 or 0 >= 1
                 else "fail",
                 required=False,
+                description="Ensures that at least one person has reviewed the changes before merging.",
             ),
             RepositoryComplianceCheck(
                 name="Has an Authorative Owner",
                 status="pass" if len(authorative_owner) > 0 else "fail",
                 required=False,
+                description="Prevents orphaned repositories by having a easily identifiable owner",
             ),
             RepositoryComplianceCheck(
                 name="License is MIT",
                 status="pass" if asset.data.get("license") == "mit" else "fail",
                 required=False,
+                description="MIT License is a permissive license that allows for reuse of the codebase.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch is main",
@@ -123,6 +133,7 @@ class RepositoryComplianceService:
                 if asset.data.get("default_branch_name") == "main"
                 else "fail",
                 required=False,
+                description="main is a more inclusive and modern term for the default branch.",
             ),
         ]
 
