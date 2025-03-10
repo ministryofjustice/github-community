@@ -16,7 +16,7 @@ spec:
     {{- range .Values.app.ingress.hosts }}
     - hosts:
         - {{ . }}
-      secretName: "ssl-certificate"
+      secretName: "github-community-prod-cert"
     {{- end }}
   rules:
     {{- range .Values.app.ingress.hosts }}
