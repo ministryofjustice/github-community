@@ -23,7 +23,33 @@
 
 
   <h1 class="govuk-heading-xl">Compliance Report - {{ repository.name }}</h1>
-  <img src="/repository-standards/api/{{ repository.name }}/badge"  alt="{{ repository.compliance_status }}" />
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Owner</dt>
+      <dd class="govuk-summary-list__value">{{ repository.authorative_owner }}</dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Description</dt>
+      <dd class="govuk-summary-list__value">{{ repository.description }}</dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Compliance Badge</dt>
+      <dd class="govuk-summary-list__value"><img src="/repository-standards/api/{{ repository.name }}/badge"  alt="{{ repository.compliance_status }}" /></dd>
+    </div>
+
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">References</dt>
+      <dd class="govuk-summary-list__value">
+        <a href="https://github.com/ministryofjustice/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View Repository on GitHub</a>
+        <br />
+        <a href="https://operations-engineering-reports.cloud-platform.service.justice.gov.uk/public-report/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View Legacy Compliance Report</a>
+      </dd>
+    </div>
+  </section>
 
   <section>
     <h2 class="govuk-heading-l">Required Checks</h1>
@@ -41,7 +67,7 @@
       <tbody class="govuk-table__body">
         {% for check in repository.checks if check.required %}
         <tr class="govuk-table__row">
-          <td class="govuk-table__cell">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
+          <td class="govuk-table__cell govuk-!-font-weight-bold">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
           <td class="govuk-table__cell">
             <span class="
                         {% if check.status == "fail" %} govuk-tag govuk-tag--red
@@ -74,7 +100,7 @@
       <tbody class="govuk-table__body">
         {% for check in repository.checks if not check.required %}
         <tr class="govuk-table__row">
-          <td class="govuk-table__cell">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
+          <td class="govuk-table__cell govuk-!-font-weight-bold">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
           <td class="govuk-table__cell">
             <span class="
                         {% if check.status == "fail" %} govuk-tag govuk-tag--red
