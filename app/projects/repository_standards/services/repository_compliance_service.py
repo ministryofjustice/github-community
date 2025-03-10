@@ -28,11 +28,13 @@ class RepositoryComplianceReportView:
         compliance_status: str,
         authorative_owner: str | None,
         checks: List[RepositoryComplianceCheck],
+        description: str = "",
     ):
         self.name = name
         self.compliance_status = compliance_status
         self.authorative_owner = authorative_owner
         self.checks = checks
+        self.description = description
 
 
 class RepositoryComplianceService:
@@ -117,7 +119,7 @@ class RepositoryComplianceService:
                 name="Has an Authorative Owner",
                 status="pass" if len(authorative_owner) > 0 else "fail",
                 required=False,
-                description="Prevents orphaned repositories by having a easily identifiable owner",
+                description="Prevents orphaned repositories by having an easily identifiable owner",
             ),
             RepositoryComplianceCheck(
                 name="License is MIT",
@@ -148,6 +150,7 @@ class RepositoryComplianceService:
             if len(authorative_owner) > 0
             else None,
             checks=checks,
+            description=asset.data.get("description", ""),
         )
 
     def get_all_repositories(self) -> List[RepositoryComplianceReportView]:
