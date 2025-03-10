@@ -13,11 +13,14 @@ metadata:
 spec:
   ingressClassName: "default"
   tls:
+    {{- range .Values.app.ingress.hosts }}
     - hosts:
-        - {{ .Values.app.ingress.host }}
-      secretName: "ssl-certificate"
+        - {{ . }}
+      secretName: "github-community-prod-cert"
+    {{- end }}
   rules:
-    - host: {{ .Values.app.ingress.host }}
+    {{- range .Values.app.ingress.hosts }}
+    - host: {{ . }}
       http:
         paths:
           - path: /
@@ -27,3 +30,4 @@ spec:
                 name: {{ $fullName }}
                 port:
                   number: 80
+    {{- end }}
