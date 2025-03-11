@@ -51,6 +51,15 @@
     </div>
   </section>
 
+
+  <section>
+    {% set badgeText = "To add the compliance badge to your README file, you can use the following markdown snippet: [![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/" + repository.name + "/badge)](https://github-community.service.justice.gov.uk/repository-standards/" + repository.name + "/compliance-report)" %}
+    {{ govukDetails({
+      "summaryText": "How do I add the badge to my README file?",
+      "text": badgeText
+    }) }}
+  </section>
+
   <section>
     <h2 class="govuk-heading-l">Required Checks</h1>
     <table class="govuk-table" data-module="moj-sortable-table">
