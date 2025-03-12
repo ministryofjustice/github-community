@@ -32,7 +32,7 @@ env:
   GITHUB_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
 
 jobs:
-  build-push:
+  build-push-image:
     name: Build and Push Image
     runs-on: ubuntu-latest
     permissions:
@@ -62,8 +62,8 @@ jobs:
           push: true
           tags: ${{ steps.ecr_login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
-  deploy-to-prod:
-    needs: build-push
+  deploy-to-production:
+    needs: [build-push-image]
     name: Deploy to Production
     runs-on: ubuntu-latest
     permissions:
