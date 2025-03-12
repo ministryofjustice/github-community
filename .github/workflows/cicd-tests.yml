@@ -34,11 +34,11 @@ jobs:
         id: install_pipenv
         run: pip install pipenv
 
-      - name: Verify Pipfile.lock is in sync
+      - name: Verify Pipfile.lock
         id: pipenv_verify
         run: pipenv verify
 
-      - name: Install dependencies
+      - name: Install Dependencies
         id: install_dependencies
         run: pipenv install --dev
 
