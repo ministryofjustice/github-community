@@ -9,6 +9,11 @@ updates:
     commit-message:
       prefix: ":dependabot: github-actions"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
@@ -16,6 +21,11 @@ updates:
     commit-message:
       prefix: ":dependabot: devcontainers"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -23,3 +33,8 @@ updates:
     commit-message:
       prefix: ":dependabot: pip"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
