@@ -17,7 +17,7 @@ govuk-frontend-jinja = "==3.0.0"
 gunicorn = "==22.0.0"
 pandas = "==2.2.2"
 plotly = "==5.23.0"
-psycopg2-binary = "==2.9.9"
+psycopg2-binary = "==2.9.10"
 pygithub = "==2.6.0"
 flask-sqlalchemy = "==3.1.1"
 
