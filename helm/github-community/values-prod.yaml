@@ -11,3 +11,4 @@ app:
       SENTRY_ENV: "production"
       FLASK_DEBUG: true
       PHASE_BANNER_TEXT: "ALPHA"
+      AUTH_ENABLED: false
