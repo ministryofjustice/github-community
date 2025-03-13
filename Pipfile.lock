@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "f92ac87c8eebac2980497c2ca4f175891599868a3a7ca860292c67702f429288"
+            "sha256": "8814860d752d1dc805a7018bec565588e334e682025609600e444c4fa8f17fdd"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -550,12 +550,12 @@
         },
         "plotly": {
             "hashes": [
-                "sha256:76cbe78f75eddc10c56f5a4ee3e7ccaade7c0a57465546f02098c0caed6c2d1a",
-                "sha256:89e57d003a116303a34de6700862391367dd564222ab71f8531df70279fc0193"
+                "sha256:dbc8ac8339d248a4bcc36e08a5659bacfe1b079390b8953533f4eb22169b4bae",
+                "sha256:f67073a1e637eb0dc3e46324d9d51e2fe76e9727c892dde64ddf1e1b51f29089"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==5.23.0"
+            "version": "==5.24.1"
         },
         "psycopg2-binary": {
             "hashes": [
