@@ -89,7 +89,11 @@ def main(
         },
         {
             "name": "Technology Services",
-            "teams": ["nvvs-devops-admins", "moj-official-techops"],
+            "teams": [
+                "nvvs-devops-admins",
+                "moj-official-techops",
+                "cloud-ops-alz-admins",
+            ],
         },
     ],
 ):
