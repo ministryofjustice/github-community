@@ -7,16 +7,16 @@ Welcome to the **GitHub Community**! This repository serves as a central hub for
 
 ## 📜 Table of Contents
 
-- [📣 About GitHub Community](#about-github-community)
-- [📌 Projects](#projects)
-- [🏗️ github-community Repository](#github-community-repository)
-  - [🔑 Key Features](#key-features)
-  - [📂 Folder Structure](#folder-structure)
-  - [🌎 Hosted Services](#hosted-services)
-  - [✅ Benefits](#benefits)
-  - [❌ Challenges](#challenges)
-  - [🛠️ Development Setup](#development-setup)
-- [📄 License](#license)
+- [📣 About GitHub Community](#-about-github-community)
+- [📌 Projects](#-projects)
+- [🏗️ github-community Repository](#-github-community-repository)
+  - [🔑 Key Features](#-key-features)
+  - [📂 Folder Structure](#-folder-structure)
+  - [🌎 Hosted Services](#-hosted-services)
+  - [✅ Benefits](#-benefits)
+  - [❌ Challenges](#-challenges)
+  - [🛠️ Development Setup](#-development-setup)
+- [📄 License](#-license)
 
 ## 📣 About GitHub Community
 
