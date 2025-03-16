@@ -37,7 +37,7 @@ class Asset(db.Model):
     last_updated: Mapped[datetime] = mapped_column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-    data: Mapped[dict | RepositoryInfo] = mapped_column(JSONB)
+    data: Mapped[dict] = mapped_column(JSONB)
 
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="asset"

@@ -1,11 +1,10 @@
-from typing import List
+from typing import List, Optional
 from urllib.parse import quote
 
-import requests
 from flask import g
 
 from app.projects.repository_standards.repositories.asset_repository import (
-    AssetView,
+    RepositoryView,
 )
 from app.projects.repository_standards.services.asset_service import (
     AssetService,
@@ -28,7 +27,7 @@ class RepositoryComplianceReportView:
         compliance_status: str,
         authorative_owner: str | None,
         checks: List[RepositoryComplianceCheck],
-        description: str = "",
+        description: Optional[str] = "",
     ):
         self.name = name
         self.compliance_status = compliance_status
@@ -43,19 +42,21 @@ class RepositoryComplianceService:
 
     def get_repository_compliance_report(
         self,
-        asset: AssetView,
+        repository: RepositoryView,
     ) -> RepositoryComplianceReportView:
         authorative_owner = [
             owner
-            for owner in asset.owner_names
-            if self.__asset_service.is_owner_authoritative_for_repository(asset, owner)
+            for owner in repository.owner_names
+            if self.__asset_service.is_owner_authoritative_for_repository(
+                repository, owner
+            )
         ]
 
         checks = [
             RepositoryComplianceCheck(
                 name="Secret Scanning Enabled",
                 status="pass"
-                if asset.data.get("security_and_analysis_secret_scanning_status")
+                if repository.data.security_and_analysis.secret_scanning_status
                 == "enabled"
                 else "fail",
                 required=True,
@@ -64,7 +65,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Push Protection Enabled",
                 status="pass"
-                if asset.data.get("security_and_analysis_push_protection_status")
+                if repository.data.security_and_analysis.push_protection_status
                 == "enabled"
                 else "fail",
                 required=True,
@@ -73,7 +74,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Default Branch Protection Enforced For Admins",
                 status="pass"
-                if asset.data.get("default_branch_protection_enforce_admins")
+                if repository.data.default_branch_protection.enforce_admins
                 else "fail",
                 required=False,
                 description="Prevents admins from bypassing branch protection.",
@@ -81,7 +82,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Default Branch Protection Requires Signed Commits",
                 status="pass"
-                if asset.data.get("default_branch_protection_required_signatures")
+                if repository.data.default_branch_protection.required_signatures
                 else "fail",
                 required=False,
                 description="Signed commits ensure that the commit author is verified, preventing impersonations.",
@@ -89,9 +90,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Requires Code Owner Reviews",
                 status="pass"
-                if asset.data.get(
-                    "default_branch_protection_pr_require_code_owner_reviews"
-                )
+                if repository.data.default_branch_protection.require_code_owner_reviews
                 else "fail",
                 required=False,
                 description="Useful for delegating reviews of parts of the codebase to specific people.",
@@ -99,7 +98,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Dismiss Stale Reviews",
                 status="pass"
-                if asset.data.get("default_branch_protection_pr_dismiss_stale_reviews")
+                if repository.data.default_branch_protection.dismiss_stale_reviews
                 else "fail",
                 required=False,
                 description="Ensures that the latest changes are reviewed before merging.",
@@ -107,9 +106,7 @@ class RepositoryComplianceService:
             RepositoryComplianceCheck(
                 name="Default Branch Pull Request Requires Atleast One Review",
                 status="pass"
-                if asset.data.get(
-                    "default_branch_protection_pr_required_approving_review_count"
-                )
+                if repository.data.default_branch_protection.required_approving_review_count
                 or 0 >= 1
                 else "fail",
                 required=False,
@@ -123,14 +120,14 @@ class RepositoryComplianceService:
             ),
             RepositoryComplianceCheck(
                 name="License is MIT",
-                status="pass" if asset.data.get("license") == "mit" else "fail",
+                status="pass" if repository.data.basic.license == "mit" else "fail",
                 required=False,
                 description="MIT License is a permissive license that allows for reuse of the codebase.",
             ),
             RepositoryComplianceCheck(
                 name="Default Branch is main",
                 status="pass"
-                if asset.data.get("default_branch_name") == "main"
+                if repository.data.basic.default_branch_name == "main"
                 else "fail",
                 required=False,
                 description="main is a more inclusive and modern term for the default branch.",
@@ -144,13 +141,13 @@ class RepositoryComplianceService:
         )
 
         return RepositoryComplianceReportView(
-            name=asset.name,
+            name=repository.name,
             compliance_status=compliance_status,
             authorative_owner=authorative_owner[0]
             if len(authorative_owner) > 0
             else None,
             checks=checks,
-            description=asset.data.get("description", ""),
+            description=repository.data.basic.description,
         )
 
     def get_all_repositories(self) -> List[RepositoryComplianceReportView]:

@@ -1,5 +1,6 @@
+import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class RepositoryInfoFactory:
             name=repo.name,
             visibility=repo.visibility,
             description=repo.description,
+            default_branch_name=repo.default_branch,
             license=repo.license.key if repo.license else None,
             delete_branch_on_merge=repo.delete_branch_on_merge,
         )
@@ -89,7 +91,8 @@ class RepositoryInfoFactory:
             basic=basic_info,
             access=repository_access,
             security_and_analysis=security_analysis,
-            default_branch_protection=default_branch_protection,
+            default_branch_protection=default_branch_protection
+            or BranchProtectionInfo(),
         )
 
 
@@ -97,9 +100,10 @@ class RepositoryInfoFactory:
 class BasicRepositoryInfo:
     name: str
     visibility: str
-    description: Optional[str]
-    license: Optional[str]
     delete_branch_on_merge: bool
+    default_branch_name: str
+    description: Optional[str] = None
+    license: Optional[str] = None
 
 
 @dataclass
@@ -113,14 +117,14 @@ class SecurityAndAnalysisInfo:
 
 @dataclass
 class BranchProtectionInfo:
-    enabled: bool
-    allow_force_pushes: bool
-    enforce_admins: bool
-    required_signatures: bool
-    dismiss_stale_reviews: bool
-    require_code_owner_reviews: bool
-    require_last_push_approval: bool
-    required_approving_review_count: int
+    enabled: Optional[bool] = None
+    allow_force_pushes: Optional[bool] = None
+    enforce_admins: Optional[bool] = None
+    required_signatures: Optional[bool] = None
+    dismiss_stale_reviews: Optional[bool] = None
+    require_code_owner_reviews: Optional[bool] = None
+    require_last_push_approval: Optional[bool] = None
+    required_approving_review_count: Optional[int] = None
 
 
 @dataclass
@@ -135,5 +139,25 @@ class RepositoryAccess:
 class RepositoryInfo:
     basic: BasicRepositoryInfo
     access: RepositoryAccess
-    security_and_analysis: Optional[SecurityAndAnalysisInfo] = None
-    default_branch_protection: Optional[BranchProtectionInfo] = None
+    security_and_analysis: SecurityAndAnalysisInfo = field(
+        default_factory=SecurityAndAnalysisInfo
+    )
+    default_branch_protection: BranchProtectionInfo = field(
+        default_factory=BranchProtectionInfo
+    )
+
+    def to_dict(self):
+        return json.loads(json.dumps(self, default=lambda o: o.__dict__))
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "RepositoryInfo":
+        return cls(
+            basic=BasicRepositoryInfo(**data["basic"]),
+            access=RepositoryAccess(**data["access"]),
+            security_and_analysis=SecurityAndAnalysisInfo(
+                **data.get("security_and_analysis", {})
+            ),
+            default_branch_protection=BranchProtectionInfo(
+                **data.get("default_branch_protection", {})
+            ),
+        )

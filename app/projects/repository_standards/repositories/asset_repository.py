@@ -9,13 +9,13 @@ from app.projects.repository_standards.db_models import Asset, Owner, Relationsh
 from app.projects.repository_standards.models.repository_info import RepositoryInfo
 
 
-class AssetView:
+class RepositoryView:
     def __init__(
         self,
         name: str,
         owner_names: List[str],
         admin_owner_names: List[str],
-        data: dict,
+        data: RepositoryInfo,
     ):
         self.name = name
         self.admin_owner_names = admin_owner_names
@@ -34,7 +34,7 @@ class AssetView:
             name=asset.name,
             owner_names=owner_names,
             admin_owner_names=admin_owner_names,
-            data=asset.data,
+            data=RepositoryInfo.from_dict(asset.data),
         )
 
 
@@ -42,12 +42,12 @@ class AssetRepository:
     def __init__(self, db_session: scoped_session = db.session):
         self.db_session = db_session
 
-    def find_all(self) -> list[AssetView]:
+    def find_all(self) -> list[RepositoryView]:
         assets = self.db_session.query(Asset).all()
 
-        return [AssetView.from_asset(asset) for asset in assets]
+        return [RepositoryView.from_asset(asset) for asset in assets]
 
-    def find_all_by_owners(self, owner_names: list[str]) -> list[AssetView]:
+    def find_all_by_owners(self, owner_names: list[str]) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
             .join(Asset.owners)
@@ -56,9 +56,9 @@ class AssetRepository:
             .all()
         )
 
-        return [AssetView.from_asset(asset) for asset in assets]
+        return [RepositoryView.from_asset(asset) for asset in assets]
 
-    def find_all_by_owner(self, owner_name: str) -> list[AssetView]:
+    def find_all_by_owner(self, owner_name: str) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
             .join(Asset.owners)
@@ -66,9 +66,9 @@ class AssetRepository:
             .all()
         )
 
-        return [AssetView.from_asset(asset) for asset in assets]
+        return [RepositoryView.from_asset(asset) for asset in assets]
 
-    def add_asset(self, name: str, type: str, data: dict | RepositoryInfo) -> Asset:
+    def add_asset(self, name: str, type: str, data: dict) -> Asset:
         asset = Asset()
         asset.name = name
         asset.type = type
@@ -134,7 +134,7 @@ class AssetRepository:
 
         return relationship
 
-    def update_by_name(self, name: str, data: RepositoryInfo) -> Asset:
+    def update_by_name(self, name: str, data: dict) -> Asset:
         assets = self.find_by_name(name)
 
         if len(assets) > 1:

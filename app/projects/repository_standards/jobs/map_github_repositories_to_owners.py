@@ -130,7 +130,7 @@ def main(
 
             owner = owner_repository.find_by_name(name)[0]
             asset = asset_service.update_asset_by_name(
-                repository.basic.name, repository
+                repository.basic.name, repository.to_dict()
             )
 
             if contains_one_or_more(
