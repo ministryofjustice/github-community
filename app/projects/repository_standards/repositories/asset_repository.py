@@ -1,11 +1,12 @@
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import List
 
 from flask import g
 from sqlalchemy.orm import scoped_session
 
 from app.projects.repository_standards.models import Asset, Owner, Relationship, db
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
 
 
 class AssetView:
@@ -67,7 +68,7 @@ class AssetRepository:
 
         return [AssetView.from_asset(asset) for asset in assets]
 
-    def add_asset(self, name: str, type: str, data: dict) -> Asset:
+    def add_asset(self, name: str, type: str, data: dict | RepositoryInfo) -> Asset:
         asset = Asset()
         asset.name = name
         asset.type = type
@@ -133,7 +134,7 @@ class AssetRepository:
 
         return relationship
 
-    def update_by_name(self, name: str, data: dict) -> Asset:
+    def update_by_name(self, name: str, data: RepositoryInfo) -> Asset:
         assets = self.find_by_name(name)
 
         if len(assets) > 1:

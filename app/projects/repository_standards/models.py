@@ -1,9 +1,11 @@
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import DateTime, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List
-from app.shared.database import db
 from datetime import datetime
+from typing import List
+
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from app.shared.database import db
 
 
 class Owner(db.Model):
@@ -35,7 +37,7 @@ class Asset(db.Model):
     last_updated: Mapped[datetime] = mapped_column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-    data: Mapped[dict] = mapped_column(JSONB)
+    data: Mapped[dict | RepositoryInfo] = mapped_column(JSONB)
 
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="asset"

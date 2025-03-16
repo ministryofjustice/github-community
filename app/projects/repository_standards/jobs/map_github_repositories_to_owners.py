@@ -1,15 +1,18 @@
+import logging
+from typing import List
+
+from app.app import create_app
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
 )
 from app.projects.repository_standards.repositories.owner_repository import (
     OwnerRepository,
 )
-import logging
+from app.projects.repository_standards.services.asset_service import AssetService
+from app.projects.repository_standards.services.github_service import GithubService
 from app.shared.config.app_config import app_config
 from app.shared.config.logging_config import configure_logging
-from app.projects.repository_standards.services.github_service import GithubService
-from app.projects.repository_standards.services.asset_service import AssetService
-from app.app import create_app
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +111,7 @@ def main(
         app_config.github.app.installation_id,
     )
 
-    repositories = github_service.get_all_repositories()
+    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
 
     for owner in owners:
         logger.info(f"Mapping Repositories for Owner [ {owner} ]")
@@ -118,38 +121,36 @@ def main(
 
         for repository in repositories:
             logger.info(f"Mapping Repository [ {repository} ]")
-            github_teams_with_admin_access = repository[
-                "github_teams_with_admin_access"
-            ]
-            github_teams_with_admin_access_parents = repository[
-                "github_teams_with_admin_access_parents"
-            ]
-            github_teams_with_any_access = repository["github_teams_with_any_access"]
-            github_teams_with_any_access_parents = repository[
-                "github_teams_with_any_access_parents"
-            ]
-            repository_name = repository["name"]
-            teams_with_admin_access = [
-                github_teams_with_admin_access,
-                github_teams_with_admin_access_parents,
-            ]
-            teams_with_any_access = [
-                github_teams_with_any_access,
-                github_teams_with_any_access_parents,
-            ]
+
             repository_name_starts_with_prefix = (
-                repository_name.startswith(prefix) if prefix is not None else False
+                repository.basic.name.startswith(prefix)
+                if prefix is not None
+                else False
             )
 
             owner = owner_repository.find_by_name(name)[0]
-            asset = asset_service.update_asset_by_name(repository_name, repository)
+            asset = asset_service.update_asset_by_name(
+                repository.basic.name, repository
+            )
 
-            if contains_one_or_more(teams, teams_with_admin_access):
+            if contains_one_or_more(
+                teams,
+                [
+                    repository.access.teams_with_admin,
+                    repository.access.teams_with_admin_parents,
+                ],
+            ):
                 asset_service.update_relationships_with_owner(
                     asset, owner, "ADMIN_ACCESS"
                 )
             elif (
-                contains_one_or_more(teams, teams_with_any_access)
+                contains_one_or_more(
+                    teams,
+                    [
+                        repository.access.teams,
+                        repository.access.teams_parents,
+                    ],
+                )
                 or repository_name_starts_with_prefix
             ):
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")

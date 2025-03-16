@@ -7,6 +7,7 @@ from app.projects.repository_standards.repositories.asset_repository import (
 )
 from flask import g
 from typing import List
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
 
 
 class AssetService:
@@ -92,7 +93,7 @@ class AssetService:
         logging.info(f"No repository found [ {name} ] - creating a new asset...")
         return self.__asset_repository.add_asset(name, "REPOSITORY", data)
 
-    def update_asset_by_name(self, name: str, data: dict) -> Asset:
+    def update_asset_by_name(self, name: str, data: RepositoryInfo) -> Asset:
         return self.__asset_repository.update_by_name(name, data)
 
     def get_repository_by_name(self, name: str) -> AssetView | None:
