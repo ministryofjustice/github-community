@@ -1,5 +1,5 @@
 import logging
-from app.projects.repository_standards.models import Asset, Owner
+from app.projects.repository_standards.db_models import Asset, Owner
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
     get_asset_repository,

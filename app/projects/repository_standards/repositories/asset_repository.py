@@ -5,7 +5,7 @@ from typing import List
 from flask import g
 from sqlalchemy.orm import scoped_session
 
-from app.projects.repository_standards.models import Asset, Owner, Relationship, db
+from app.projects.repository_standards.db_models import Asset, Owner, Relationship, db
 from app.projects.repository_standards.models.repository_info import RepositoryInfo
 
 

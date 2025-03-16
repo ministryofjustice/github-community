@@ -9,7 +9,7 @@ from app.shared.config.jinja_config import configure_jinja
 from app.shared.config.limiter_config import configure_limiter
 from app.shared.config.logging_config import configure_logging
 from app.shared.config.routes_config import configure_routes
-from app.projects.repository_standards.models import db
+from app.projects.repository_standards.db_models import db
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )

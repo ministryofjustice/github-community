@@ -4,7 +4,7 @@ from app.projects.repository_standards.jobs.map_github_repositories_to_owners im
     main,
 )
 from flask import Flask
-from app.projects.repository_standards.models import db
+from app.projects.repository_standards.db_models import db
 
 test_owner_id = 1
 
