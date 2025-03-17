@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "6ac8dd19c2bd0b9087d7962393049c71dab7957bea6d39218527ef24d53a5aa5"
+            "sha256": "43fb00d5d030229b4ace8fbd16fc1702c78bdb5ecde14066fb63ab9693932e50"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -436,6 +436,14 @@
             "markers": "python_version >= '3.7'",
             "version": "==0.1.2"
         },
+        "narwhals": {
+            "hashes": [
+                "sha256:2a7b79bb5f511055c4c0142121fc0d4171ea171458e12d44dbd9c8fc6488e997",
+                "sha256:333472e2562343dfdd27407ec9b5114a07c81d0416794e4ac6b703dd925c6a1a"
+            ],
+            "markers": "python_version >= '3.8'",
+            "version": "==1.31.0"
+        },
         "numpy": {
             "hashes": [
                 "sha256:0391ea3622f5c51a2e29708877d56e3d276827ac5447d7f45e9bc4ade8923c52",
@@ -564,12 +572,12 @@
         },
         "plotly": {
             "hashes": [
-                "sha256:dbc8ac8339d248a4bcc36e08a5659bacfe1b079390b8953533f4eb22169b4bae",
-                "sha256:f67073a1e637eb0dc3e46324d9d51e2fe76e9727c892dde64ddf1e1b51f29089"
+                "sha256:4714db20fea57a435692c548a4eb4fae454f7daddf15f8d8ba7e1045681d7768",
+                "sha256:dd8400229872b6e3c964b099be699f8d00c489a974f2cfccfad5e8240873366b"
             ],
             "index": "pypi",
             "markers": "python_version >= '3.8'",
-            "version": "==5.24.1"
+            "version": "==6.0.1"
         },
         "psycopg2-binary": {
             "hashes": [
