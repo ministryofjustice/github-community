@@ -1,9 +1,11 @@
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import DateTime, JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from typing import List
-from app.shared.database import db
 from datetime import datetime
+from typing import List
+
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from app.shared.database import db
 
 
 class Owner(db.Model):

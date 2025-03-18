@@ -1,26 +1,27 @@
 import logging
-from app.projects.repository_standards.models import Asset, Owner
+from app.projects.repository_standards.db_models import Asset, Owner
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
     get_asset_repository,
-    AssetView,
+    RepositoryView,
 )
 from flask import g
 from typing import List
+from app.projects.repository_standards.models.repository_info import RepositoryInfo
 
 
 class AssetService:
     def __init__(self, asset_repository: AssetRepository):
         self.__asset_repository = asset_repository
 
-    def get_all_repositories(self) -> List[AssetView]:
+    def get_all_repositories(self) -> List[RepositoryView]:
         repositories = self.__asset_repository.find_all()
         return repositories
 
     def get_repositories_by_authoratative_owner(
         self,
         owner_to_filter_by: str,
-    ) -> List[AssetView]:
+    ) -> List[RepositoryView]:
         repositories = self.__asset_repository.find_all_by_owner(owner_to_filter_by)
         response = [
             repo
@@ -31,7 +32,7 @@ class AssetService:
 
     def get_repositories_by_authoratative_owner_filtered_by_missing_admin_access(
         self, owner_to_filter_by: str
-    ) -> list[AssetView]:
+    ) -> list[RepositoryView]:
         repositories = self.get_repositories_by_authoratative_owner(owner_to_filter_by)
 
         repositories_missing_admin_access = [
@@ -43,7 +44,7 @@ class AssetService:
         return repositories_missing_admin_access
 
     def is_owner_authoritative_for_repository(
-        self, repository: AssetView, owner_to_filter_by: str
+        self, repository: RepositoryView, owner_to_filter_by: str
     ) -> bool:
         owner_has_admin_access = bool(
             owner_to_filter_by in repository.admin_owner_names
@@ -95,9 +96,9 @@ class AssetService:
     def update_asset_by_name(self, name: str, data: dict) -> Asset:
         return self.__asset_repository.update_by_name(name, data)
 
-    def get_repository_by_name(self, name: str) -> AssetView | None:
+    def get_repository_by_name(self, name: str) -> RepositoryView | None:
         asset = self.__asset_repository.find_by_name(name)
-        return AssetView.from_asset(asset[0]) if len(asset) > 0 else None
+        return RepositoryView.from_asset(asset[0]) if len(asset) > 0 else None
 
 
 def get_asset_service() -> AssetService:

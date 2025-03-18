@@ -1,4 +1,4 @@
-from app.projects.repository_standards.models import db, Owner
+from app.projects.repository_standards.db_models import db, Owner
 from flask import g
 from sqlalchemy.orm import scoped_session
 from typing import List

@@ -9,7 +9,7 @@ from app.shared.config.jinja_config import configure_jinja
 from app.shared.config.limiter_config import configure_limiter
 from app.shared.config.logging_config import configure_logging
 from app.shared.config.routes_config import configure_routes
-from app.projects.repository_standards.models import db
+from app.projects.repository_standards.db_models import db
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )
@@ -64,18 +64,41 @@ def create_stub_data(app):
             "operations-engineering",
             asset_type,
             data={
-                "name": "operations-engineering",
-                "license": "mit",
-                "description": "Operations Engineerings general purpose repository",
-                "default_branch_name": "master",
-                "github_teams_with_any_access": [
-                    "all",
-                ],
-                "github_teams_with_admin_access": [
-                    "admins",
-                ],
-                "github_teams_with_any_access_parents": ["all"],
-                "github_teams_with_admin_access_parents": ["admins"],
+                "basic": {
+                    "name": "operations-engineering",
+                    "license": "mit",
+                    "default_branch_name": "master",
+                    "visibility": "public",
+                    "description": "Operations Engineering repository",
+                    "delete_branch_on_merge": None,
+                },
+                "access": {
+                    "teams": [
+                        "operations-engineering",
+                    ],
+                    "teams_parents": ["technical-architects"],
+                    "teams_with_admin": [
+                        "operations-engineering",
+                    ],
+                    "teams_with_admin_parents": ["technical-architects"],
+                },
+                "security_and_analysis": {
+                    "advanced_security": None,
+                    "non_provider_patterns": "enabled",
+                    "push_protection_status": "enabled",
+                    "secret_scanning_status": "enabled",
+                    "secret_scanning_validity_checks": None,
+                },
+                "default_branch_protection": {
+                    "enabled": None,
+                    "enforce_admins": True,
+                    "allow_force_pushes": False,
+                    "required_signatures": False,
+                    "dismiss_stale_reviews": True,
+                    "require_code_owner_reviews": True,
+                    "require_last_push_approval": False,
+                    "required_approving_review_count": 2,
+                },
             },
         )
         asset_service.create_relationship(operations_engineering, hmpps, admin_access)
@@ -84,21 +107,67 @@ def create_stub_data(app):
             "opg-data",
             asset_type,
             data={
-                "name": "opg-data",
-                "license": "mit",
-                "description": "OPG Data repository",
-                "default_branch_name": "main",
-                "github_teams_with_any_access": [
-                    "all",
-                ],
-                "github_teams_with_admin_access": [
-                    "admins",
-                ],
-                "github_teams_with_any_access_parents": ["all"],
-                "github_teams_with_admin_access_parents": ["admins"],
+                "basic": {
+                    "name": "opg-data",
+                    "license": "mit",
+                    "default_branch_name": "main",
+                    "visibility": "public",
+                    "description": "OPG Data repository",
+                    "delete_branch_on_merge": None,
+                },
+                "access": {
+                    "teams": [
+                        "operations-engineering",
+                    ],
+                    "teams_parents": ["technical-architects"],
+                    "teams_with_admin": [
+                        "operations-engineering",
+                    ],
+                    "teams_with_admin_parents": ["technical-architects"],
+                },
+                "security_and_analysis": {
+                    "advanced_security": None,
+                    "non_provider_patterns": "disabled",
+                    "push_protection_status": "disabled",
+                    "secret_scanning_status": "enabled",
+                    "secret_scanning_validity_checks": None,
+                },
+                "default_branch_protection": {
+                    "enabled": None,
+                    "enforce_admins": True,
+                    "allow_force_pushes": False,
+                    "required_signatures": False,
+                    "dismiss_stale_reviews": True,
+                    "require_code_owner_reviews": True,
+                    "require_last_push_approval": False,
+                    "required_approving_review_count": 2,
+                },
             },
         )
         asset_service.create_relationship(opg_data, opg, admin_access)
 
-        cla_public = asset_service.add_asset("cla_public", asset_type, data={})
+        cla_public = asset_service.add_asset(
+            "cla_public",
+            asset_type,
+            data={
+                "basic": {
+                    "name": "cla_public",
+                    "license": "mit",
+                    "default_branch_name": "main",
+                    "visibility": "public",
+                    "description": "CLA Public repository",
+                    "delete_branch_on_merge": None,
+                },
+                "access": {
+                    "teams": [
+                        "HMPPS Developers",
+                    ],
+                    "teams_parents": ["technical-architects"],
+                    "teams_with_admin": [
+                        "HMPPS Developers",
+                    ],
+                    "teams_with_admin_parents": ["technical-architects"],
+                },
+            },
+        )
         asset_service.create_relationship(cla_public, laa, admin_access)
