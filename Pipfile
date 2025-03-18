@@ -12,7 +12,7 @@ tests_report = "coverage report --omit=./test/** --sort=cover --show-missing --s
 authlib = "==1.5.1"
 flask = "==3.1.0"
 flask-cors = "==5.0.1"
-flask-limiter = "==3.11.0"
+flask-limiter = "==3.12"
 govuk-frontend-jinja = "==3.5.0"
 gunicorn = "==23.0.0"
 pandas = "==2.2.3"
@@ -22,5 +22,5 @@ pygithub = "==2.6.1"
 flask-sqlalchemy = "==3.1.1"
 
 [dev-packages]
-coverage = "==7.6.12"
+coverage = "==7.7.0"
 pytest = "==8.3.5"
