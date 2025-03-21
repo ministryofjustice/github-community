@@ -20,63 +20,32 @@
 
   <h1 class="govuk-heading-xl">Repository Standards</h1>
 
-  <section class="govuk-summary-list govuk-!-margin-bottom-6">
-    <h2 class="govuk-heading-l">Summary Statistics</h2>
-
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Total Repositories</dt>
-      <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
-    </div>
-
-    {% set compliance_percentage = ((repositories | length - non_compliant_repositories | length) / (repositories | length)) * 100 %}
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Compliant Repositories</dt>
-      <dd class="govuk-summary-list__value">
-        <span class="
-                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
-                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
-                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
-                     {% else %} govuk-tag govuk-tag--green-dark
-                     {% endif %}
-                     ">
-          {{ repositories | length - non_compliant_repositories | length }}
-          ({{ compliance_percentage | round | int }}%)
-        </span>
-      </dd>
+  <section>
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/all-repositories">View All Repository Reports</a>
+        </h3>
+        <p class="govuk-body-s">View the compliance status for all active, public repositorys in the Ministry of Justice.</p>
+      </div>
     </div>
   </section>
 
   <section>
-    <h2 class="govuk-heading-l">Repositories</h2>
-    <table class="govuk-table" data-module="moj-sortable-table">
-      <thead class="govuk-table__head">
-        <tr class="govuk-table__row">
-          <th scope="col" class="govuk-table__header" aria-sort="ascending">
-            Repository
-          </th>
-          <th scope="col" class="govuk-table__header" aria-sort="ascending">
-           Compliance Status
-          </th>
-          <th scope="col" class="govuk-table__header" aria-sort="ascending">
-            Owner
-          </th>
-          <th scope="col" class="govuk-table__header"></th>
-          <th scope="col" class="govuk-table__header"></th>
-        </tr>
-      </thead>
-      <tbody class="govuk-table__body">
-        {% for repository in repositories %}
-        <tr class="govuk-table__row">
-          <td class="govuk-table__cell">{{ repository.name }}</td>
-          <td class="govuk-table__cell">
-            <img src="/assets/images/{{ repository.compliance_status }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
-          </td>
-          <td class="govuk-table__cell">{{ repository.authorative_owner }}</td>
-          <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}/compliance-report" rel="noreferrer noopener" class="govuk-link">View Compliance Report</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+
+    <h2 class="govuk-heading-m">Business Units</h2>
+    <p class="govuk-body-s">View compliance reports for spefici Business Units within the Ministry of Justice.</p>
+
+    <div class="govuk-grid-row">
+      {% for owner in owners %}
+      <div class="govuk-grid-column-one-third">
+        <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/{{ owner }}">{{ owner }}</a>
+        </h2>
+        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ owner }}.</p>
+      </div>
+      {% endfor %}
+    </div>
   </section>
 
 {% endblock %}
