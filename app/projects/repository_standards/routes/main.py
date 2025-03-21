@@ -90,3 +90,9 @@ def repository_compliance_report(repository_name: str):
         "projects/repository_standards/pages/repository.html",
         repository=repository,
     )
+
+
+@repository_standards_main.route("/contact-us", methods=["GET"])
+@requires_auth
+def contact_us():
+    return render_template("projects/repository_standards/pages/contact_us.html")
