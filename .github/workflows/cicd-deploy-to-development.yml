@@ -1,0 +1,116 @@
+---
+name: ♻️ Deploy to Development
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  KUBE_CLUSTER: ${{ secrets.KUBE_CLUSTER }}
+  KUBE_NAMESPACE: ${{ secrets.DEV_KUBE_NAMESPACE }}
+  KUBE_CERT: ${{ secrets.DEV_KUBE_CERT }}
+  KUBE_TOKEN: ${{ secrets.DEV_KUBE_TOKEN }}
+
+  IMAGE_TAG: ${{ github.sha }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY_URL }}
+  ECR_REPOSITORY: ${{ vars.DEV_ECR_REPOSITORY }}
+  FLASK_APP_SECRET: ${{ secrets.DEV_FLASK_APP_SECRET }}
+  POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+  POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+  POSTGRES_HOST: ${{ secrets.DEV_POSTGRES_HOST }}
+  POSTGRES_PORT: ${{ secrets.DEV_POSTGRES_PORT }}
+  AUTH0_CLIENT_ID: ${{ secrets.AUTH0_CLIENT_ID }}
+  AUTH0_CLIENT_SECRET: ${{ secrets.AUTH0_CLIENT_SECRET }}
+  CIRCLECI_COST_PER_CREDIT: ${{ secrets.CIRCLECI_COST_PER_CREDIT }}
+  CIRCLECI_TOKEN: ${{ secrets.CIRCLECI_ADMIN_CONNOR_PAT }}
+  GITHUB_APP_CLIENT_ID: ${{ vars.GH_APP_CLIENT_ID }}
+  GITHUB_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+  GITHUB_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+
+jobs:
+  build-push-image:
+    name: Build and Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        id: checkout
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS Credentials
+        id: configure_aws_credentials
+        uses: aws-actions/configure-aws-credentials@ececac1a45f3b08a01d2dd070d28d111c5fe6722 # v4.1.0
+        with:
+          aws-region: ${{ vars.DEV_ECR_REGION }}
+          role-to-assume: ${{ secrets.DEV_ECR_ROLE_TO_ASSUME }}
+
+      - name: Log in to Amazon ECR
+        id: ecr_login
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Build and Push
+        id: build_and_push
+        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
+        with:
+          push: true
+          tags: ${{ steps.ecr_login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  deploy-to-development:
+    needs: [build-push-image]
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        id: checkout
+        with:
+          persist-credentials: false
+
+      - name: Authenticate to Cloud Platform
+        id: cloud_platform_authentication
+        run: |
+          echo "${KUBE_CERT}" > ca.crt
+          kubectl config set-cluster "${KUBE_CLUSTER}" --certificate-authority=./ca.crt --server="https://${KUBE_CLUSTER}"
+          kubectl config set-credentials deploy-user --token="${KUBE_TOKEN}"
+          kubectl config set-context "${KUBE_CLUSTER}" --cluster="${KUBE_CLUSTER}" --user=deploy-user --namespace="${KUBE_NAMESPACE}"
+          kubectl config get-contexts
+          kubectl config use-context "${KUBE_CLUSTER}"
+
+      - name: Deploy Helm Chart
+        id: deploy_helm_chart
+        run: |
+          helm upgrade github-community \
+            helm/github-community \
+            --install \
+            --force \
+            --wait \
+            --timeout 10m \
+            --namespace "${KUBE_NAMESPACE}" \
+            --values=helm/github-community/values-dev.yaml \
+            --set app.deployment.env.AUTH0_CLIENT_ID="${AUTH0_CLIENT_ID}" \
+            --set app.deployment.env.AUTH0_CLIENT_SECRET="${AUTH0_CLIENT_SECRET}" \
+            --set app.deployment.env.APP_SECRET_KEY="${FLASK_APP_SECRET}" \
+            --set app.deployment.env.POSTGRES_USER="${POSTGRES_USER}" \
+            --set app.deployment.env.POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
+            --set app.deployment.env.POSTGRES_DB="${POSTGRES_DB}" \
+            --set app.deployment.env.POSTGRES_HOST="${POSTGRES_HOST}" \
+            --set app.deployment.env.POSTGRES_PORT="${POSTGRES_PORT}" \
+            --set app.deployment.env.ADMIN_GITHUB_TOKEN="${ADMIN_GITHUB_TOKEN}" \
+            --set app.deployment.env.CIRCLECI_COST_PER_CREDIT="${CIRCLECI_COST_PER_CREDIT}" \
+            --set app.deployment.env.CIRCLECI_TOKEN="${CIRCLECI_TOKEN}" \
+            --set app.deployment.env.GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
+            --set app.deployment.env.GITHUB_APP_PRIVATE_KEY="${GITHUB_APP_PRIVATE_KEY}" \
+            --set app.deployment.env.GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}" \
+            --set app.deployment.image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
+            --set app.deployment.image.tag="${IMAGE_TAG}"
