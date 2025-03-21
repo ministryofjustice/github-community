@@ -1,8 +1,14 @@
-from typing import List, Optional
+from typing import List
 from urllib.parse import quote
 
 from flask import g
 
+from app.projects.repository_standards.config.repository_compliance_config import (
+    get_all_compliance_checks,
+)
+from app.projects.repository_standards.models.repository_compliance import (
+    RepositoryComplianceReportView,
+)
 from app.projects.repository_standards.repositories.asset_repository import (
     RepositoryView,
 )
@@ -10,30 +16,6 @@ from app.projects.repository_standards.services.asset_service import (
     AssetService,
     get_asset_service,
 )
-
-
-class RepositoryComplianceCheck:
-    def __init__(self, name: str, status: str, required: bool, description: str):
-        self.name = name
-        self.status = status
-        self.required = required
-        self.description = description
-
-
-class RepositoryComplianceReportView:
-    def __init__(
-        self,
-        name: str,
-        compliance_status: str,
-        authorative_owner: str | None,
-        checks: List[RepositoryComplianceCheck],
-        description: Optional[str] = "",
-    ):
-        self.name = name
-        self.compliance_status = compliance_status
-        self.authorative_owner = authorative_owner
-        self.checks = checks
-        self.description = description
 
 
 class RepositoryComplianceService:
@@ -44,95 +26,18 @@ class RepositoryComplianceService:
         self,
         repository: RepositoryView,
     ) -> RepositoryComplianceReportView:
-        authorative_owner = [
+        authorative_owners = [
             owner
             for owner in repository.owner_names
             if self.__asset_service.is_owner_authoritative_for_repository(
                 repository, owner
             )
         ]
+        authorative_owner = (
+            authorative_owners[0] if len(authorative_owners) > 0 else None
+        )
 
-        checks = [
-            RepositoryComplianceCheck(
-                name="Secret Scanning Enabled",
-                status="pass"
-                if repository.data.security_and_analysis.secret_scanning_status
-                == "enabled"
-                else "fail",
-                required=True,
-                description="Imporves organisational security by scanning and reporting secrets.",
-            ),
-            RepositoryComplianceCheck(
-                name="Push Protection Enabled",
-                status="pass"
-                if repository.data.security_and_analysis.push_protection_status
-                == "enabled"
-                else "fail",
-                required=True,
-                description="Prevents secrets from being pushed publicly to the repository.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch Protection Enforced For Admins",
-                status="pass"
-                if repository.data.default_branch_protection.enforce_admins
-                else "fail",
-                required=False,
-                description="Prevents admins from bypassing branch protection.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch Protection Requires Signed Commits",
-                status="pass"
-                if repository.data.default_branch_protection.required_signatures
-                else "fail",
-                required=False,
-                description="Signed commits ensure that the commit author is verified, preventing impersonations.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch Pull Request Requires Code Owner Reviews",
-                status="pass"
-                if repository.data.default_branch_protection.require_code_owner_reviews
-                else "fail",
-                required=False,
-                description="Useful for delegating reviews of parts of the codebase to specific people.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch Pull Request Dismiss Stale Reviews",
-                status="pass"
-                if repository.data.default_branch_protection.dismiss_stale_reviews
-                else "fail",
-                required=False,
-                description="Ensures that the latest changes are reviewed before merging.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch Pull Request Requires Atleast One Review",
-                status="pass"
-                if repository.data.default_branch_protection.required_approving_review_count
-                or 0 >= 1
-                else "fail",
-                required=False,
-                description="Ensures that at least one person has reviewed the changes before merging.",
-            ),
-            RepositoryComplianceCheck(
-                name="Has an Authorative Owner",
-                status="pass" if len(authorative_owner) > 0 else "fail",
-                required=False,
-                description="Prevents orphaned repositories by having an easily identifiable owner.",
-            ),
-            RepositoryComplianceCheck(
-                name="License is MIT",
-                status="pass" if repository.data.basic.license == "mit" else "fail",
-                required=False,
-                description="MIT License is a permissive license that allows for reuse of the codebase.",
-            ),
-            RepositoryComplianceCheck(
-                name="Default Branch is main",
-                status="pass"
-                if repository.data.basic.default_branch_name == "main"
-                else "fail",
-                required=False,
-                description="main is a more inclusive and modern term for the default branch.",
-            ),
-        ]
+        checks = get_all_compliance_checks(repository, authorative_owner)
 
         compliance_status = (
             "pass"
@@ -143,9 +48,7 @@ class RepositoryComplianceService:
         return RepositoryComplianceReportView(
             name=repository.name,
             compliance_status=compliance_status,
-            authorative_owner=authorative_owner[0]
-            if len(authorative_owner) > 0
-            else None,
+            authorative_owner=authorative_owner,
             checks=checks,
             description=repository.data.basic.description,
         )
