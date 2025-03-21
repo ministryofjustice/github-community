@@ -27,15 +27,15 @@ def index():
     )
 
 
-@repository_standards_main.route("/all-repositories", methods=["GET"])
+@repository_standards_main.route("/repositories", methods=["GET"])
 @requires_auth
-def all_repositories():
+def repositories():
     repository_compliance_service = get_repository_compliance_service()
 
     repositories = repository_compliance_service.get_all_repositories()
 
     return render_template(
-        "projects/repository_standards/pages/all_repositories.html",
+        "projects/repository_standards/pages/repositories.html",
         repositories=repositories,
         non_compliant_repositories=[
             repo for repo in repositories if repo.compliance_status == "fail"
@@ -43,7 +43,19 @@ def all_repositories():
     )
 
 
-@repository_standards_main.route("/<owner>", methods=["GET"])
+@repository_standards_main.route("/business-units", methods=["GET"])
+@requires_auth
+def business_units():
+    owner_repository = get_owner_repository()
+    owners = owner_repository.find_all_names()
+
+    return render_template(
+        "projects/repository_standards/pages/business_units.html",
+        owners=owners,
+    )
+
+
+@repository_standards_main.route("/business-units/<owner>", methods=["GET"])
 @requires_auth
 def owner(owner: str):
     repository_compliance_service = get_repository_compliance_service()
@@ -55,7 +67,7 @@ def owner(owner: str):
     ]
 
     return render_template(
-        "projects/repository_standards/pages/owner.html",
+        "projects/repository_standards/pages/business_unit.html",
         repositories=filtrated_repositories,
         non_compliant_repositories=[
             repo for repo in filtrated_repositories if repo.compliance_status == "fail"
@@ -64,9 +76,7 @@ def owner(owner: str):
     )
 
 
-@repository_standards_main.route(
-    "/<repository_name>/compliance-report", methods=["GET"]
-)
+@repository_standards_main.route("/<repository_name>", methods=["GET"])
 @requires_auth
 def repository_compliance_report(repository_name: str):
     repository_compliance_service = get_repository_compliance_service()
@@ -77,6 +87,6 @@ def repository_compliance_report(repository_name: str):
         return "Repository not found", 404
 
     return render_template(
-        "projects/repository_standards/pages/repository_compliance_report.html",
+        "projects/repository_standards/pages/repository.html",
         repository=repository,
     )

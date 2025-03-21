@@ -41,9 +41,7 @@ def deprecated_reports_badge_api(repository_name: str):
     methods=["GET"],
 )
 def deprecated_report_page_url(repository_name: str):
-    return redirect(
-        f"/repository-standards/{repository_name}/compliance-report", code=302
-    )
+    return redirect(f"/repository-standards/{repository_name}", code=302)
 
 
 @repository_standards_deprecated.route(
