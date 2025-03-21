@@ -1,0 +1,39 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Contact Us
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {
+        "text": "Home",
+        "href": "/"
+      },
+      {
+        "text": "Repository Standards",
+        "href": "/repository-standards"
+      },
+      {
+        "text": "Contact Us"
+      }
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl">Contact Us</h1>
+
+  <p class="govuk-body">
+    If you need support with your repositories or have any questions about our services,
+    the GitHub community in the Ministry of Justice is here to help.
+    Reach out to us on our Slack channel for assistance.
+  </p>
+
+  <p class="govuk-body">
+    Join the conversation on
+    <a class="govuk-link" href="https://moj.enterprise.slack.com/archives/C05L0KBA7RS" target="_blank" rel="noopener noreferrer">
+      #github-community Slack channel
+    </a>.
+  </p>
+
+{% endblock %}
