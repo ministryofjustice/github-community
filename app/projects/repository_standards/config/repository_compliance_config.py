@@ -20,6 +20,7 @@ def get_secret_scanning_enabled_check(
         else FAIL,
         required=required,
         description="Imporves organisational security by scanning and reporting secrets.",
+        link_to_guidance="/repository-standards/guidance#secret-scanning-enabled",
     )
 
 
@@ -33,6 +34,7 @@ def get_secret_scanning_push_protection_enabled_check(
         else FAIL,
         required=required,
         description="Prevents secrets from being pushed to the repository.",
+        link_to_guidance="/repository-standards/guidance#secret-scanning-push-protection-enabled",
     )
 
 
@@ -46,6 +48,7 @@ def get_branch_protection_enforced_for_admins_check(
         else FAIL,
         required=required,
         description="Prevents admins from bypassing branch protection.",
+        link_to_guidance="/repository-standards/guidance#default-branch-protection-enforced-for-admins",
     )
 
 
@@ -59,6 +62,7 @@ def get_default_branch_protection_requires_signed_commits_check(
         else FAIL,
         required=required,
         description="Signed commits ensure that the commit author is verified, preventing impersonations.",
+        link_to_guidance="/repository-standards/guidance#default-branch-protection-requires-signed-commits",
     )
 
 
@@ -72,6 +76,7 @@ def get_default_branch_protection_requires_code_owner_reviews_check(
         else FAIL,
         required=required,
         description="Useful for delegating reviews of parts of the codebase to specific people.",
+        link_to_guidance="/repository-standards/guidance#default-branch-protection-requires-code-owner-reviews",
     )
 
 
@@ -85,6 +90,7 @@ def get_default_branch_pull_requests_dismiss_stale_reviews_check(
         else FAIL,
         required=required,
         description="Ensures that the latest changes are reviewed before merging.",
+        link_to_guidance="/repository-standards/guidance#default-branch-pull-request-dismiss-stale-reviews",
     )
 
 
@@ -99,6 +105,7 @@ def get_default_branch_protection_requires_atleast_one_review_check(
         else FAIL,
         required=required,
         description="Ensures that at least one person has reviewed the changes before merging.",
+        link_to_guidance="/repository-standards/guidance#default-branch-pull-request-requires-atleast-one-review",
     )
 
 
@@ -110,6 +117,7 @@ def get_has_authorative_owner_check(
         status=PASS if authorative_owner else FAIL,
         required=required,
         description="Prevents orphaned repositories by having an easily identifiable owner.",
+        link_to_guidance="/repository-standards/guidance#has-an-authoritative-owner",
     )
 
 
@@ -121,6 +129,7 @@ def get_licence_is_mit_check(
         status=PASS if repository.data.basic.license == "mit" else FAIL,
         required=required,
         description="MIT License is a permissive license that allows for reuse of the codebase.",
+        link_to_guidance="/repository-standards/guidance#license-is-mit",
     )
 
 
@@ -132,6 +141,7 @@ def get_default_branch_is_main_check(
         status=PASS if repository.data.basic.default_branch_name == "main" else FAIL,
         required=required,
         description="main is a more inclusive and modern term for the default branch.",
+        link_to_guidance="/repository-standards/guidance#default-branch-is-main",
     )
 
 

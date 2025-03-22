@@ -93,6 +93,10 @@ def repository_compliance_report(repository_name: str):
 
 
 @repository_standards_main.route("/contact-us", methods=["GET"])
-@requires_auth
 def contact_us():
     return render_template("projects/repository_standards/pages/contact_us.html")
+
+
+@repository_standards_main.route("/guidance", methods=["GET"])
+def guidance():
+    return render_template("projects/repository_standards/pages/guidance.html")

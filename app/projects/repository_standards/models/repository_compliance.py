@@ -8,6 +8,7 @@ class RepositoryComplianceCheck:
     status: str
     required: bool
     description: str
+    link_to_guidance: Optional[str] = None
 
 
 @dataclass
