@@ -1,0 +1,146 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Repository Compliance Checks
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {
+        "text": "Home",
+        "href": "/"
+      },
+      {
+        "text": "Repository Standards",
+        "href": "/repository-standards"
+      },
+      {
+        "text": "Guidance"
+      }
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl" id="repository-compliance-checks">Guidance</h1>
+
+  <div class="govuk-grid-row">
+
+    <div class="govuk-grid-column-one-third">
+      <nav class="moj-side-navigation" aria-label="Side navigation">
+
+        <h4 class="moj-side-navigation__title">Security Checks</h4>
+        <ul class="moj-side-navigation__list">
+          <li class="moj-side-navigation__item">
+            <a href="#secret-scanning-enabled" aria-current="location">Secret Scanning Enabled</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#secret-scanning-push-protection-enabled">Secret Scanning Push Protection Enabled</a>
+          </li>
+        </ul>
+
+        <h4 class="moj-side-navigation__title">Branch Protection Checks</h4>
+        <ul class="moj-side-navigation__list">
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-protection-enforced-for-admins">Default Branch Protection Enforced For Admins</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-protection-requires-signed-commits">Default Branch Protection Requires Signed Commits</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-protection-requires-code-owner-reviews">Default Branch Protection Requires Code Owner Reviews</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-pull-request-dismiss-stale-reviews">Default Branch Pull Request Dismiss Stale Reviews</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-pull-request-requires-at-least-one-review">Default Branch Pull Request Requires At Least One Review</a>
+          </li>
+        </ul>
+
+        <h4 class="moj-side-navigation__title">Ownership & Governance Checks</h4>
+        <ul class="moj-side-navigation__list">
+          <li class="moj-side-navigation__item">
+            <a href="#has-an-authoritative-owner">Has an Authoritative Owner</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#license-is-mit">License is MIT</a>
+          </li>
+          <li class="moj-side-navigation__item">
+            <a href="#default-branch-is-main">Default Branch is Main</a>
+          </li>
+        </ul>
+
+      </nav>
+    </div>
+
+    <div class="govuk-grid-column-two-thirds">
+
+      <h2 class="govuk-heading-l" id="secret-scanning-enabled">Security Checks</h2>
+
+      <h3 class="govuk-heading-m" id="secret-scanning-enabled">Secret Scanning Enabled</h3>
+      <p class="govuk-body"><strong>Required:</strong> Yes</p>
+      <p class="govuk-body"><strong>Impact:</strong> Enhances security by detecting and alerting on the presence of exposed secrets, such as API keys and credentials, within the repository. This prevents sensitive data from being exploited by malicious actors.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – This feature can be easily enabled in the repository settings, requiring no additional development effort.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Enabling secret scanning is a crucial security measure that helps identify accidental leaks before they become security incidents. It is required as it provides significant protection against credential exposure with minimal overhead.</p>
+
+      <h3 class="govuk-heading-m" id="secret-scanning-push-protection-enabled">Secret Scanning Push Protection Enabled</h3>
+      <p class="govuk-body"><strong>Required:</strong> Yes</p>
+      <p class="govuk-body"><strong>Impact:</strong> Prevents commits containing secrets from being pushed to the repository, stopping security issues before they occur.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled in repository settings without requiring additional configuration.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Push protection blocks commits containing secrets at the source, preventing them from ever reaching the repository. This proactive security measure greatly reduces the risk of exposed credentials and should always be enabled.</p>
+
+      <h2 class="govuk-heading-l" id="secret-scanning-enabled">Branch Protection Checks</h2>
+
+      <h3 class="govuk-heading-m" id="default-branch-protection-enforced-for-admins">Default Branch Protection Enforced For Admins</h3>
+      <p class="govuk-body"><strong>Required:</strong> No (may be required in the future)</p>
+      <p class="govuk-body"><strong>Impact:</strong> Strengthens repository governance by ensuring that even administrators must adhere to branch protection rules. This prevents accidental or unreviewed changes from being merged.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – Can be configured via branch protection settings in GitHub.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> While administrators often require additional permissions, enforcing branch protection ensures that all changes go through the appropriate review process. It is currently optional to allow for flexibility, but it is recommended for maintaining robust security practices.</p>
+
+      <h3 class="govuk-heading-m" id="default-branch-protection-requires-signed-commits">Default Branch Protection Requires Signed Commits</h3>
+      <p class="govuk-body"><strong>Required:</strong> No</p>
+      <p class="govuk-body"><strong>Impact:</strong> Ensures that all commits are verified and traceable to their authors, preventing impersonation attacks.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Medium – Developers must configure GPG or SSH key signing, which requires some setup.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Signed commits add an additional layer of security by verifying the identity of commit authors. While useful for ensuring the integrity of the codebase, it requires developer setup and is therefore optional for now.</p>
+
+      <h3 class="govuk-heading-m" id="default-branch-protection-requires-code-owner-reviews">Default Branch Protection Requires Code Owner Reviews</h3>
+      <p class="govuk-body"><strong>Required:</strong> No</p>
+      <p class="govuk-body"><strong>Impact:</strong> Helps ensure that changes are reviewed by designated code owners, maintaining code quality and consistency.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Medium – Requires defining code owners in a repository via a CODEOWNERS file.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This check ensures that subject matter experts review relevant changes, reducing the risk of errors. It is currently optional to provide teams with flexibility in their review processes.</p>
+
+      <h3 class="govuk-heading-m" id="default-branch-pull-request-dismiss-stale-reviews">Default Branch Pull Request Dismiss Stale Reviews</h3>
+      <p class="govuk-body"><strong>Required:</strong> No (may be required in the future)</p>
+      <p class="govuk-body"><strong>Impact:</strong> Ensures that outdated approvals are dismissed when new changes are introduced to a pull request, reducing the risk of merging unreviewed modifications.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled through branch protection settings.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This feature improves the reliability of code reviews by ensuring that only the latest changes receive approval. It is optional to allow teams flexibility in managing approvals.</p>
+
+      <h3 class="govuk-heading-m" id="default-branch-pull-request-requires-at-least-one-review">Default Branch Pull Request Requires At Least One Review</h3>
+      <p class="govuk-body"><strong>Required:</strong> No (may be required in the future)</p>
+      <p class="govuk-body"><strong>Impact:</strong> Ensures that all pull requests undergo peer review before merging, improving code quality and security.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled through branch protection settings.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This policy encourages collaboration and reduces the risk of introducing bugs or security vulnerabilities. While not mandatory, it is a best practice for maintaining high-quality code.</p>
+
+      <h2 class="govuk-heading-l" id="secret-scanning-enabled">Ownership & Governance Checks</h2>
+
+      <h3 class="govuk-heading-m" id="has-an-authoritative-owner">Has an Authoritative Owner</h3>
+      <p class="govuk-body"><strong>Required:</strong> No</p>
+      <p class="govuk-body"><strong>Impact:</strong> Ensures that every repository has a designated owner responsible for its maintenance and security. Ownership is determined through an automated process that uses GitHub Teams to identify the relevant teams and sub-teams that have access to the repository.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Medium – Requires contacting the #github-community Slack channel to advise on how to ensure the correct ownership is allocated.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> An authoritative owner helps prevent repositories from becoming abandoned or neglected. Business Units within the Ministry of Justice can specify one or more GitHub Teams, and the system will check the access of these teams, along with any sub-teams, to determine repository ownership. To ensure proper ownership, users should reach out to the #github-community Slack channel to have their team added to the relevant business unit or verify that the teams with access to their repository have an identifiable parent team within the system.</p>
+
+      <h3 class="govuk-heading-m" id="license-is-mit">License is MIT</h3>
+      <p class="govuk-body"><strong>Required:</strong> No</p>
+      <p class="govuk-body"><strong>Impact:</strong> Ensures compatibility with open-source distribution and reuse.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Low – Setting a license is a one-time configuration.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> The MIT license is a widely accepted permissive license that allows broad usage. Other licenses may be appropriate depending on project needs.</p>
+
+      <h3 class="govuk-heading-m" id="default-branch-is-main">Default Branch is Main</h3>
+      <p class="govuk-body"><strong>Required:</strong> No (may be required in the future)</p>
+      <p class="govuk-body"><strong>Impact:</strong> Promotes a modern and inclusive naming convention across repositories by using `main` as the default branch name. This is the default for all new GitHub repositories.</p>
+      <p class="govuk-body"><strong>Effort:</strong> Medium – Changing the default branch name may require updates to processes that have hard-coded branch names, such as in CI/CD pipelines.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Standardizing the default branch name to `main` ensures consistency and aligns with modern best practices. While this change is optional, it is recommended for better inclusivity and standardization.</p>
+    </div>
+  </div>
+
+{% endblock %}
