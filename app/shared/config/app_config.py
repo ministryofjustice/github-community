@@ -63,4 +63,7 @@ app_config = SimpleNamespace(
         ),
         token=__get_env_var("ADMIN_GITHUB_TOKEN"),
     ),
+    sentry=SimpleNamespace(
+        dsn_key=__get_env_var("SENTRY_DSN_KEY"), environment=__get_env_var("SENTRY_ENV")
+    ),
 )
