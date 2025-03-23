@@ -9,6 +9,8 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/set-identifier: {{ $fullName }}-{{ $fullName }}-green
     external-dns.alpha.kubernetes.io/aws-weight: "100"
+    allow-duplicate-host: "true"
+    allowed-duplicate-ns: "operations-engineering-reports-prod,github-community-prod"
 spec:
   ingressClassName: "default"
   tls:
