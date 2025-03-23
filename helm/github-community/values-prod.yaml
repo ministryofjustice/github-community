@@ -3,7 +3,6 @@ app:
     hosts:
       - "github-community.cloud-platform.service.justice.gov.uk"
       - "github-community.service.justice.gov.uk"
-      - "operations-engineering-reports.cloud-platform.service.justice.gov.uk"
 
   deployment:
     replicaCount: 1
