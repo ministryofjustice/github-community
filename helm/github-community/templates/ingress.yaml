@@ -14,6 +14,7 @@ metadata:
     allowed-duplicate-ns: "operations-engineering-reports-prod,github-community-prod"
     nginx.ingress.kubernetes.io/canary: "true"
     nginx.ingress.kubernetes.io/canary-weight: "50"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
 spec:
   ingressClassName: "default"
   tls:
