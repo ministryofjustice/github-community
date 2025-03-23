@@ -7,7 +7,7 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
   annotations:
-    external-dns.alpha.kubernetes.io/set-identifier: {{ $fullName }}-{{ $fullName }}-green
+    external-dns.alpha.kubernetes.io/set-identifier: {{ $fullName }}-green
     external-dns.alpha.kubernetes.io/aws-weight: "100"
 spec:
   ingressClassName: "default"
