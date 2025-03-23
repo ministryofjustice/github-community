@@ -2,6 +2,8 @@ import logging
 
 from flask import Flask
 
+from app.projects.repository_standards.config.stub_data_config import create_stub_data
+from app.projects.repository_standards.db_models import db
 from app.shared.config.app_config import app_config
 from app.shared.config.cors_config import configure_cors
 from app.shared.config.error_handlers_config import configure_error_handlers
@@ -9,8 +11,7 @@ from app.shared.config.jinja_config import configure_jinja
 from app.shared.config.limiter_config import configure_limiter
 from app.shared.config.logging_config import configure_logging
 from app.shared.config.routes_config import configure_routes
-from app.projects.repository_standards.db_models import db
-from app.projects.repository_standards.config.stub_data_config import create_stub_data
+from app.shared.config.sentry_config import configure_sentry
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ def create_app(is_rate_limit_enabled=True) -> Flask:
     configure_limiter(app, is_rate_limit_enabled)
     configure_jinja(app)
     configure_cors(app)
+    configure_sentry(app_config.sentry.dsn_key, app_config.sentry.environment)
 
     if app_config.add_stub_values_to_database:
         create_stub_data(app)
