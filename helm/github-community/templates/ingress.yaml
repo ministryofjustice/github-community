@@ -10,6 +10,10 @@ metadata:
     external-dns.alpha.kubernetes.io/set-identifier: {{ $fullName }}-{{ $fullName }}-green
     external-dns.alpha.kubernetes.io/aws-weight: "100"
     cloud-platform.justice.gov.uk/ignore-external-dns-weight: "true"
+    allow-duplicate-host: "true"
+    allowed-duplicate-ns: "operations-engineering-reports-prod,github-community-prod"
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "50"
 spec:
   ingressClassName: "default"
   tls:
