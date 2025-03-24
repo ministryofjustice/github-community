@@ -186,10 +186,11 @@ class GitHubUserService:
 
     def is_user_in_organisation(self, org_name: str) -> bool:
         user = self.github.get_user()
+        orgs = user.get_orgs()
+        logger.info(f"User {user.login} is a member of orgs: {[orgs]}")
         if not user:
             return False
 
-        orgs = user.get_orgs()
         if any(org.login == org_name for org in orgs):
             return True
 
