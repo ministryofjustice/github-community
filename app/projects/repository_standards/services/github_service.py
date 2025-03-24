@@ -178,3 +178,19 @@ class GithubService:
             )
             counter += 1
         return response
+
+
+class GitHubUserService:
+    def __init__(self, access_token: str):
+        self.github = Github(access_token)
+
+    def is_user_in_organisation(self, org_name: str) -> bool:
+        user = self.github.get_user()
+        if not user:
+            return False
+
+        orgs = user.get_orgs()
+        if any(org.login == org_name for org in orgs):
+            return True
+
+        return False
