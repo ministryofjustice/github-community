@@ -1,0 +1,40 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+    Business Units
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {
+        "text": "Home",
+        "href": "/"
+      },
+      {
+        "text": "Repository Standards",
+        "href": "/repository-standards"
+      },
+      {
+        "text": "Business Units"
+      }
+    ]
+  }) }}
+
+
+  <h1 class="govuk-heading-xl">Business Units</h1>
+  <p class="govuk-body-s">View compliance reports for Business Units within the Ministry of Justice.</p>
+  <section>
+    <div class="govuk-grid-row">
+      {% for owner in owners %}
+      <div class="govuk-grid-column-one-third">
+        <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/business-units/{{ owner }}">{{ owner }}</a>
+        </h2>
+        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ owner }}.</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+{% endblock %}

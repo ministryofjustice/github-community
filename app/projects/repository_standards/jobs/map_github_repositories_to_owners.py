@@ -13,6 +13,7 @@ from app.projects.repository_standards.services.asset_service import AssetServic
 from app.projects.repository_standards.services.github_service import GithubService
 from app.shared.config.app_config import app_config
 from app.shared.config.logging_config import configure_logging
+from app.projects.repository_standards.config.owners_config import owners_config
 
 logger = logging.getLogger(__name__)
 
@@ -28,78 +29,7 @@ def contains_one_or_more(values: list[str], lists_to_check: list[list[str]]) -> 
     return found
 
 
-def main(
-    owners=[
-        {
-            "name": "HMPPS",
-            "teams": ["HMPPS Developers"],
-            "prefix": "hmpps-",
-        },
-        {
-            "name": "LAA",
-            "teams": [
-                "LAA Admins",
-                "LAA Technical Architects",
-                "LAA Developers",
-                "LAA Crime Apps team",
-                "LAA Crime Apply",
-                "laa-eligibility-platform",
-                "LAA Get Access",
-                "LAA Payments and Billing",
-            ],
-            "prefix": "laa-",
-        },
-        {
-            "name": "OPG",
-            "teams": ["OPG"],
-            "prefix": "opg-",
-        },
-        {
-            "name": "CICA",
-            "teams": ["CICA"],
-            "prefix": "cica-",
-        },
-        {
-            "name": "Central Digital",
-            "teams": [
-                "Central Digital Product Team",
-                "tactical-products",
-                # Data Platforms
-                "analytical-platform",
-                "data-engineering",
-                "analytics-hq",
-                "data-catalogue",
-                "data-platform",
-                "data-and-analytics-engineering",
-                "observability-platform",
-                # Publishing Platforms
-                "Form Builder",
-                "Hale platform",
-                "JOTW Content Devs",
-            ],
-            "prefix": "bichard7",
-        },
-        {
-            "name": "Platforms",
-            "teams": [
-                # Hosting Platforms
-                "modernisation-platform",
-                "operations-engineering",
-                "aws-root-account-admin-team",
-                "WebOps",  # Cloud Platform
-                "Studio Webops",  # Digital Studio Operations (DSO)
-            ],
-        },
-        {
-            "name": "Technology Services",
-            "teams": [
-                "nvvs-devops-admins",
-                "moj-official-techops",
-                "cloud-ops-alz-admins",
-            ],
-        },
-    ],
-):
+def main():
     configure_logging(app_config.logging_level)
     logger.info("Running...")
 
@@ -113,28 +43,30 @@ def main(
 
     repositories: List[RepositoryInfo] = github_service.get_all_repositories()
 
-    for owner in owners:
-        logger.info(f"Mapping Repositories for Owner [ {owner} ]")
-        name = owner["name"]
-        teams = owner["teams"]
-        prefix = owner.get("prefix")
+    for owner_config in owners_config:
+        logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
+
+        owners = owner_repository.find_by_name(owner_config.name)
+        if not owners or len(owners) == 0:
+            logger.error(f"Owner [ {owner_config.name} ] not found")
+            continue
+        owner = owners[0]
 
         for repository in repositories:
             logger.info(f"Mapping Repository [ {repository} ]")
 
-            repository_name_starts_with_prefix = (
-                repository.basic.name.startswith(prefix)
-                if prefix is not None
-                else False
-            )
-
-            owner = owner_repository.find_by_name(name)[0]
             asset = asset_service.update_asset_by_name(
                 repository.basic.name, repository.to_dict()
             )
 
+            repository_name_starts_with_prefix = (
+                repository.basic.name.startswith(owner_config.prefix)
+                if owner_config.prefix is not None
+                else False
+            )
+
             if contains_one_or_more(
-                teams,
+                owner_config.teams,
                 [
                     repository.access.teams_with_admin,
                     repository.access.teams_with_admin_parents,
@@ -145,7 +77,7 @@ def main(
                 )
             elif (
                 contains_one_or_more(
-                    teams,
+                    owner_config.teams,
                     [
                         repository.access.teams,
                         repository.access.teams_parents,

@@ -31,6 +31,7 @@ env:
   GITHUB_APP_CLIENT_ID: ${{ vars.GH_APP_CLIENT_ID }}
   GITHUB_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
   GITHUB_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+  SENTRY_DSN_KEY: ${{ secrets.SENTRY_DSN_KEY }}
 
 jobs:
   build-push-image:
@@ -112,5 +113,6 @@ jobs:
             --set app.deployment.env.GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
             --set app.deployment.env.GITHUB_APP_PRIVATE_KEY="${GITHUB_APP_PRIVATE_KEY}" \
             --set app.deployment.env.GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}" \
+            --set app.deployment.env.SENTRY_DSN_KEY=${SENTRY_DSN_KEY} \
             --set app.deployment.image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
             --set app.deployment.image.tag="${IMAGE_TAG}"

@@ -1,28 +1,21 @@
 {% extends "shared/components/base.html" %}
 
 {% block pageTitle %}
-  Compliance Report - {{ repository.name }}
+  {{ repository.name }}
 {% endblock %}
 
 {% block content %}
-  {{ govukBreadcrumbs({
+  {% set breadcrumbs = {
     "items": [
-      {
-        "text": "Home",
-        "href": "/"
-      },
-      {
-        "text": "Repository Standards",
-        "href": "/repository-standards"
-      },
-      {
-        "text": "Compliance Report"
-      }
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": repository.name }
     ]
-  }) }}
+  } %}
+  {{ govukBreadcrumbs(breadcrumbs) }}
 
 
-  <h1 class="govuk-heading-xl">Compliance Report - {{ repository.name }}</h1>
+  <h1 class="govuk-heading-xl">{{ repository.name }}</h1>
 
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <div class="govuk-summary-list__row">
@@ -53,7 +46,7 @@
 
 
   <section>
-    {% set badgeText = "To add the compliance badge to your README file, you can use the following markdown snippet: [![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/" + repository.name + "/badge)](https://github-community.service.justice.gov.uk/repository-standards/" + repository.name + "/compliance-report)" %}
+    {% set badgeText = "To add the compliance badge to your README file, you can use the following markdown snippet: [![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/" + repository.name + "/badge)](https://github-community.service.justice.gov.uk/repository-standards/" + repository.name + ")" %}
     {{ govukDetails({
       "summaryText": "How do I add the badge to my README file?",
       "text": badgeText
@@ -71,6 +64,9 @@
           <th scope="col" class="govuk-table__header" aria-sort="ascending">
            Compliance Status
           </th>
+          <th scope="col" class="govuk-table__header">
+            <!-- Guidance Link Column -->
+          </th>
         </tr>
       </thead>
       <tbody class="govuk-table__body">
@@ -86,6 +82,9 @@
             >
             {{ check.status.capitalize() }}
             </span>
+          </td>
+          <td class="govuk-table__cell">
+            <a href="{{ check.link_to_guidance }}" class="govuk-link">View Guidance</a>
           </td>
         </tr>
         {% endfor %}
@@ -104,6 +103,9 @@
           <th scope="col" class="govuk-table__header" aria-sort="ascending">
            Compliance Status
           </th>
+          <th scope="col" class="govuk-table__header">
+            <!-- Guidance Link Column -->
+          </th>
         </tr>
       </thead>
       <tbody class="govuk-table__body">
@@ -119,6 +121,9 @@
             >
             {{ check.status.capitalize() }}
             </span>
+          </td>
+          <td class="govuk-table__cell">
+            <a href="{{ check.link_to_guidance }}" class="govuk-link">View Guidance</a>
           </td>
         </tr>
         {% endfor %}

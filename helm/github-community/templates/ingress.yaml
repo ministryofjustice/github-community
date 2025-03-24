@@ -13,11 +13,11 @@ metadata:
 spec:
   ingressClassName: "default"
   tls:
-    {{- range .Values.app.ingress.hosts }}
     - hosts:
+      {{- range .Values.app.ingress.hosts }}
         - {{ . }}
+      {{- end }}
       secretName: "github-community-prod-cert"
-    {{- end }}
   rules:
     {{- range .Values.app.ingress.hosts }}
     - host: {{ . }}
