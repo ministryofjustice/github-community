@@ -7,7 +7,7 @@ from app.projects.repository_standards.services.github_service import GitHubUser
 
 logger = logging.getLogger(__name__)
 
-GITHUB_ORG = "ministryofjustice"
+GITHUB_ORG = "ministryofjustice-abc123"
 
 
 def requires_auth(function_f):
