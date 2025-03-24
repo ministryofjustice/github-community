@@ -19,6 +19,10 @@ repository_standards_deprecated = Blueprint("repository_standards_deprecated", _
     "/api/v1/compliant_public_repositories/endpoint/<repository_name>",
     methods=["GET"],
 )
+@repository_standards_deprecated.route(
+    "/api/v2/compliant-repository/<repository_name>",
+    methods=["GET"],
+)
 def deprecated_reports_badge_api(repository_name: str):
     repository_compliance_service = get_repository_compliance_service()
 
