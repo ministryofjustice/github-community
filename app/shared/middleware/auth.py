@@ -23,6 +23,7 @@ def requires_auth(function_f):
             access_token = session.get("access_token")
 
             # If the user logged in with GitHub, check their org membership
+            logger.info(f"User logged in with IDP: {idp}")
             if idp == "github":
                 if not access_token:
                     logger.warning("GitHub login detected but no access token found.")
