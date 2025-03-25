@@ -67,7 +67,7 @@ jobs:
 
   deploy-to-development:
     needs: [build-push-image]
-    name: Deploy to Production
+    name: Deploy to Development
     runs-on: ubuntu-latest
     permissions:
       contents: read
