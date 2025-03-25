@@ -3,8 +3,7 @@ from typing import List
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from sqlalchemy import JSON
 from app.shared.database import db
 
 
@@ -37,7 +36,7 @@ class Asset(db.Model):
     last_updated: Mapped[datetime] = mapped_column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
-    data: Mapped[dict] = mapped_column(JSONB)
+    data: Mapped[dict] = mapped_column(JSON)
 
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="asset"
