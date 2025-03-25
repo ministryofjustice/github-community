@@ -150,6 +150,7 @@ class AssetRepository:
         logging.info(
             f"Found existing respoistory with ID [ {asset.id} ] - updating existing assets data..."
         )
+        asset.last_updated = datetime.now()
         asset.data = data
         self.db_session.commit()
 
