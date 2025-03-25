@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional
-from app.projects.repository_standards.models.repository_info import (
+from app.projects.repository_standards.models.repository_compliance import (
     RepositoryComplianceCheck,
 )
 
