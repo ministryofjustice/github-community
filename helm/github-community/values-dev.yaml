@@ -1,0 +1,13 @@
+app:
+  ingress:
+    hosts:
+      - "github-community-dev.cloud-platform.service.justice.gov.uk"
+
+  deployment:
+    replicaCount: 1
+    env:
+      AUTH0_DOMAIN: "github-community.eu.auth0.com"
+      SENTRY_ENV: "development"
+      FLASK_DEBUG: true
+      PHASE_BANNER_TEXT: "ALPHA"
+      AUTH_ENABLED: false
