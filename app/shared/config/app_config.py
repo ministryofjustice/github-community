@@ -58,7 +58,7 @@ app_config = SimpleNamespace(
     github=SimpleNamespace(
         app=SimpleNamespace(
             client_id=__get_env_var("GITHUB_APP_CLIENT_ID"),
-            installation_id=__get_env_var("GITHUB_APP_INSTALLATION_ID") or "",
+            installation_id=int(__get_env_var("GITHUB_APP_INSTALLATION_ID") or ""),
             private_key=__get_env_var("GITHUB_APP_PRIVATE_KEY"),
         ),
         token=__get_env_var("ADMIN_GITHUB_TOKEN"),
