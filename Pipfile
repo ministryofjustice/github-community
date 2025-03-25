@@ -18,8 +18,8 @@ govuk-frontend-jinja = "==3.5.0"
 gunicorn = "==23.0.0"
 psycopg2-binary = "==2.9.10"
 pygithub = "==2.6.1"
-sentry-sdk = "==2.24.0"
+sentry-sdk = "==2.24.1"
 
 [dev-packages]
-coverage = "==7.6.12"
+coverage = "==7.7.1"
 pytest = "==8.3.5"
