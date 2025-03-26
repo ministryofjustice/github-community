@@ -28,10 +28,22 @@ def deprecated_reports_badge_api(repository_name: str):
 
     repository = repository_compliance_service.get_repository_by_name(repository_name)
 
+    if repository and repository.compliance_status == "pass":
+        return {
+            "color": "005ea5",
+            "label": "MoJ Compliant",
+            "labelColor": "0b0c0c",
+            "message": repository.compliance_status.capitalize()
+            if repository
+            else "Not Found",
+            "schemaVersion": 1,
+            "style": "for-the-badge",
+        }
+
     return {
-        "color": "005ea5",
+        "color": "cc0000",
         "label": "MoJ Compliant",
-        "labelColor": "231f20",
+        "labelColor": "0b0c0c",
         "message": repository.compliance_status.capitalize()
         if repository
         else "Not Found",
