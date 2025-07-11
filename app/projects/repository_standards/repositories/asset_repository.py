@@ -162,6 +162,10 @@ class AssetRepository:
         )
         for asset in stale_assets:
             logging.info(f"Removing stale asset: {asset.name}")
+            self.db_session.query(Relationship).filter_by(asset_id=asset.id).delete()
+            self.db_session.delete(asset)
+
+        self.db_session.commit()
 
 
 def get_asset_repository() -> AssetRepository:
