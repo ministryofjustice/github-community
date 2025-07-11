@@ -41,9 +41,9 @@ def main():
         app_config.github.app.installation_id,
     )
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    repositories: List[RepositoryInfo] = []
 
-    for owner_config in owners_config:
+    for owner_config in []:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
 
         owners = owner_repository.find_by_name(owner_config.name)
@@ -86,6 +86,8 @@ def main():
                 or repository_name_starts_with_prefix
             ):
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")
+
+    asset_service.remove_stale_assets()
 
     logger.info("Complete!")
 

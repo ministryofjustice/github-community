@@ -100,6 +100,9 @@ class AssetService:
         asset = self.__asset_repository.find_by_name(name)
         return RepositoryView.from_asset(asset[0]) if len(asset) > 0 else None
 
+    def remove_stale_assets(self):
+        self.__asset_repository.remove_stale_assets()
+
 
 def get_asset_service() -> AssetService:
     if "asset_service" not in g:
