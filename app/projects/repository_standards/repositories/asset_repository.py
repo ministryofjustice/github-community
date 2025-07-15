@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 from flask import g
@@ -155,6 +155,17 @@ class AssetRepository:
         self.db_session.commit()
 
         return assets[0]
+
+    def remove_stale_assets(self):
+        stale_assets = self.db_session.query(Asset).filter(
+            Asset.last_updated < datetime.today() - timedelta(days=1)
+        )
+        for asset in stale_assets:
+            logging.info(f"Removing stale asset: {asset.name}")
+            self.db_session.query(Relationship).filter_by(asset_id=asset.id).delete()
+            self.db_session.delete(asset)
+
+        self.db_session.commit()
 
 
 def get_asset_repository() -> AssetRepository:
