@@ -1,0 +1,53 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Acronyms
+{% endblock %}
+
+{% block content %}
+  <h1 class="govuk-heading-l">Ministry of Justice Acronyms</h1>
+
+  <p class="govuk-body">
+    Welcome to the Ministry of Justice Acronyms List website. This platform is designed to provide clear and comprehensive explanations of the various abbreviations and acronyms used across the Ministry of Justice (MoJ) and the wider legal and judicial systems.
+  </p>
+
+  <form method="POST" action="/acronyms">
+    {{ govukInput({
+      "id": "name",
+      "name": "name",
+      "label": {
+        "text": "Acronym Name"
+      }, 
+       "value": search_term
+    }) }}
+
+    {{ govukButton({
+      "text": "Search"
+    }) }}
+
+  {# Prepare the data for the table #}
+  {% set head = [
+    {"text": "Acronym"},
+    {"text": "Definition"},
+    {"text": "Description"}
+    ] %}
+
+  {% set rows = [] %}
+  {% for acronym in acronyms %}
+    {% set row = [
+      {"text": acronym.abbreviation},
+      {"text": acronym.definition},
+      {"text": acronym.description}
+    ] %}
+    {% set _ = rows.append(row) %}
+  {% endfor %}
+
+  {# Render the govukTable macro to display acronyms #}
+  {{ govukTable({
+      "head": head,
+      "rows": rows
+  }) }}
+
+  </form>
+  <a href="/acronyms" class="govuk-link">Clear Search</a>
+{% endblock %}
