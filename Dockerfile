@@ -36,6 +36,7 @@ WORKDIR ${APP_DIRECTORY}
 COPY Pipfile Pipfile
 COPY Pipfile.lock Pipfile.lock
 COPY app app
+COPY migrations migrations
 
 RUN <<EOF
 python3 -m pip install --no-cache-dir pipenv
