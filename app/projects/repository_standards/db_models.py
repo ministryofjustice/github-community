@@ -18,7 +18,7 @@ class Owner(db.Model):
     )
     assets: Mapped[List["Asset"]] = relationship(
         "Asset",
-        secondary="relationship",
+        secondary="relationships",
         back_populates="owners",
         overlaps="relationships",
     )
@@ -43,7 +43,7 @@ class Asset(db.Model):
     )
     owners: Mapped[List["Owner"]] = relationship(
         "Owner",
-        secondary="relationship",
+        secondary="relationships",
         back_populates="assets",
         overlaps="relationships",
     )
@@ -57,11 +57,11 @@ class Relationship(db.Model):
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     type: Mapped[str] = mapped_column(db.String)
-    asset_id: Mapped[int] = mapped_column(db.ForeignKey("asset.id"))
-    owner_id: Mapped[int] = mapped_column(db.ForeignKey("owner.id"))
+    assets_id: Mapped[int] = mapped_column(db.ForeignKey("assets.id"))
+    owners_id: Mapped[int] = mapped_column(db.ForeignKey("owners.id"))
 
     asset: Mapped["Asset"] = relationship("Asset", back_populates="relationships")
     owner: Mapped["Owner"] = relationship("Owner", back_populates="relationships")
 
     def __repr__(self) -> str:
-        return f"<Relationship id={self.id}, type={self.type}, asset_id={self.asset_id}, owner_id={self.owner_id}>"
+        return f"<Relationship id={self.id}, type={self.type}, assets_id={self.assets_id}, owners_id={self.owners_id}>"
