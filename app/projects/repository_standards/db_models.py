@@ -8,7 +8,7 @@ from app.shared.database import db
 
 
 class Owner(db.Model):
-    __tablename__ = "owner"
+    __tablename__ = "owners"
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     name: Mapped[str] = mapped_column(db.String)
@@ -28,7 +28,7 @@ class Owner(db.Model):
 
 
 class Asset(db.Model):
-    __tablename__ = "asset"
+    __tablename__ = "assets"
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     name: Mapped[str] = mapped_column(db.String)
@@ -53,7 +53,7 @@ class Asset(db.Model):
 
 
 class Relationship(db.Model):
-    __tablename__ = "relationship"
+    __tablename__ = "relationships"
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     type: Mapped[str] = mapped_column(db.String)
