@@ -82,8 +82,8 @@ class AssetRepository:
         self, asset: Asset, owner: Owner, relationship_type: str
     ) -> Relationship:
         relationship = Relationship()
-        relationship.owner_id = owner.id
-        relationship.asset_id = asset.id
+        relationship.owners_id = owner.id
+        relationship.assets_id = asset.id
         relationship.type = relationship_type
         self.db_session.add(relationship)
         self.db_session.commit()
@@ -103,7 +103,7 @@ class AssetRepository:
     ) -> Relationship:
         relationships = (
             self.db_session.query(Relationship)
-            .filter_by(asset_id=asset.id, owner_id=owner.id)
+            .filter_by(assets_id=asset.id, owners_id=owner.id)
             .all()
         )
 
@@ -162,7 +162,7 @@ class AssetRepository:
         )
         for asset in stale_assets:
             logging.info(f"Removing stale asset: {asset.name}")
-            self.db_session.query(Relationship).filter_by(asset_id=asset.id).delete()
+            self.db_session.query(Relationship).filter_by(assets_id=asset.id).delete()
             self.db_session.delete(asset)
 
         self.db_session.commit()
