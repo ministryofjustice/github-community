@@ -4,8 +4,6 @@ from flask import Flask
 from flask_migrate import upgrade
 
 from app.projects.repository_standards.config.stub_data_config import create_stub_data
-from app.shared.database import db
-from app.shared.database import db_migration
 from app.shared.config.app_config import app_config
 from app.shared.config.cors_config import configure_cors
 from app.shared.config.error_handlers_config import configure_error_handlers
@@ -14,6 +12,7 @@ from app.shared.config.limiter_config import configure_limiter
 from app.shared.config.logging_config import configure_logging
 from app.shared.config.routes_config import configure_routes
 from app.shared.config.sentry_config import configure_sentry
+from app.shared.database import db, db_migration
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ def create_app(is_rate_limit_enabled=True) -> Flask:
     db_migration.init_app(app, db)
 
     with app.app_context():
-       upgrade()
+        upgrade()
 
     configure_routes(app)
     configure_error_handlers(app)
