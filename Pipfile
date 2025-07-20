@@ -5,6 +5,7 @@ name = "pypi"
 
 [scripts]
 app = "python3 -m flask --app app.app --debug run"
+create_migration = "alembic revision --message 'project_name_description'"
 tests = "coverage run -m unittest"
 tests_report = "coverage report --omit=./test/** --sort=cover --show-missing --skip-empty"
 

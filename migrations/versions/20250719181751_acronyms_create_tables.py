@@ -1,13 +1,10 @@
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
+from sqlalchemy.sql import column, table
 
 # revision identifiers, used by Alembic.
-revision = "v03"
-down_revision = "v02"
-branch_labels = None
-depends_on = None
-
+revision = "d69ddc74df68"
+down_revision = "0e13a38dec3d"
 
 ACRONYMS = [
     {
@@ -4791,24 +4788,29 @@ ACRONYMS = [
 
 
 def upgrade():
-    acronyms = sa.Table(
+    op.create_table(
         "acronyms",
-        sa.MetaData(),
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("abbreviation", sa.String(), nullable=False),
         sa.Column("definition", sa.String(), nullable=False),
         sa.Column("url", sa.String(), nullable=True),
         sa.Column("description", sa.String(), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "abbreviation", "definition", name="_abbreviation_definition_uc"
+        ),
     )
 
-    op.bulk_insert(acronyms, ACRONYMS)
+    acronyms_table = table(
+        "acronyms",
+        column("abbreviation", sa.String),
+        column("definition", sa.String),
+        column("url", sa.String),
+        column("description", sa.String),
+    )
+
+    op.bulk_insert(acronyms_table, ACRONYMS)
 
 
 def downgrade():
-    acronyms = sa.Table(
-        "acronyms",
-        sa.MetaData(),
-        sa.Column("abbreviation", sa.String(), nullable=False),
-    )
-
-    abbreviations = [a["abbreviation"] for a in ACRONYMS]
-    op.execute(acronyms.delete().where(acronyms.c.abbreviation.in_(abbreviations)))
+    op.drop_table("acronyms")
