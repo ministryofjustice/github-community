@@ -24,7 +24,8 @@
     {{ govukButton({
       "text": "Search"
     }) }}
-
+    </form>
+  
   {# Prepare the data for the table #}
   {% set head = [
     {"text": "Acronym"},
@@ -43,11 +44,16 @@
   {% endfor %}
 
   {# Render the govukTable macro to display acronyms #}
-  {{ govukTable({
-      "head": head,
-      "rows": rows
-  }) }}
+  <div id="results-container">
+    {{ govukTable({
+        "head": head,
+        "rows": rows
+    }) }}
+  </div>
 
-  </form>
   <a href="/acronyms" class="govuk-link">Clear Search</a>
+
+  <script src="{{ url_for('static', filename='projects/acronyms/javascript/live-search.js') }}"></script>
 {% endblock %}
+
+

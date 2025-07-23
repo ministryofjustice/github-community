@@ -1,5 +1,4 @@
 import logging
-
 from flask import Blueprint, render_template, request, redirect, url_for
 from app.projects.acronyms.db_models import Acronym
 
@@ -25,5 +24,5 @@ def index():
 
     else:
         acronyms = Acronym.query.all()
-    
+
     return render_template("projects/acronyms/pages/main.html", acronyms=acronyms, search_term=search_term)
