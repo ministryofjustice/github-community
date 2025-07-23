@@ -10,7 +10,7 @@ tests = "coverage run -m unittest"
 tests_report = "coverage report --omit=./test/** --sort=cover --show-missing --skip-empty"
 
 [packages]
-authlib = "==1.6.0"
+authlib = "==1.6.1"
 flask = "==3.1.1"
 flask-cors = "==6.0.1"
 flask-limiter = "==3.11.0"
@@ -19,10 +19,10 @@ govuk-frontend-jinja = "==3.5.0"
 gunicorn = "==23.0.0"
 psycopg2-binary = "==2.9.10"
 pygithub = "==2.6.1"
-sentry-sdk = "==2.29.1"
+sentry-sdk = "==2.33.2"
 alembic = "==1.16.4"
 flask-migrate = "==4.1.0"
 
 [dev-packages]
-coverage = "==7.8.2"
-pytest = "==8.4.0"
+coverage = "==7.9.2"
+pytest = "==8.4.1"
