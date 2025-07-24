@@ -3,6 +3,7 @@ from sqlalchemy import String, Integer, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from app.shared.database import db
 
+
 class Acronym(db.Model):
     __tablename__ = 'acronyms'
 

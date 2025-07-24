@@ -19,3 +19,13 @@ def requires_auth(function_f):
         return function_f(*args, **kwargs)
 
     return decorated
+
+def requires_admin(function_f):
+    @wraps(function_f)
+    def decorated(*args, **kwargs):
+        if app_config.auth_enabled:
+            user = session.get("user")
+            if not user or user.get("email") not in app_config.admin_emails:
+                return redirect("/auth/login")
+        return function_f(*args, **kwargs)
+    return decorated

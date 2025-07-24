@@ -26,6 +26,7 @@ app_config = SimpleNamespace(
         "ADD_STUB_VALUES_TO_DATABASE", default=False
     ),
     auth_enabled=__get_env_var_as_boolean("AUTH_ENABLED", default=True),
+    admin_emails=["agnieszka.bachleda@justice.gov.uk"],
     auth0=SimpleNamespace(
         domain=__get_env_var("AUTH0_DOMAIN"),
         client_id=__get_env_var("AUTH0_CLIENT_ID"),
