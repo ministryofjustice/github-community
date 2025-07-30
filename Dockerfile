@@ -35,14 +35,10 @@ EOF
 
 # Migrate files to the application directory
 WORKDIR ${APP_DIRECTORY}
-COPY Pipfile Pipfile
-COPY Pipfile.lock Pipfile.lock
-COPY app app
-COPY migrations migrations
-
-# Ensure nonroot user and group can read and write to the application directory
-RUN chown -R "${CONTAINER_USER}:${CONTAINER_GROUP}" "${APP_DIRECTORY}" \
-  && chmod -R u+rwX,g+rX,o+rX "${APP_DIRECTORY}"
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile Pipfile
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile.lock Pipfile.lock
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} app app
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} migrations migrations
 
 # Install pipenv and dependencies
 RUN <<EOF
