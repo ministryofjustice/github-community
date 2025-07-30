@@ -14,8 +14,10 @@ ENV APP_DIRECTORY="/app" \
   PYTHONDONTWRITEBYTECODE="1" \
   PYTHONUNBUFFERED="1"
 
+# Set options for safe shell execution
 SHELL ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c"]
 
+# Setup the application directory
 RUN <<EOF
 groupadd \
   --gid ${CONTAINER_GID} \
@@ -31,13 +33,14 @@ useradd \
 install --directory --owner "${CONTAINER_USER}" --group "${CONTAINER_GROUP}" --mode 0755 "${APP_DIRECTORY}"
 EOF
 
+# Migrate files to the application directory
 WORKDIR ${APP_DIRECTORY}
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile Pipfile
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile.lock Pipfile.lock
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} app app
+COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} migrations migrations
 
-COPY Pipfile Pipfile
-COPY Pipfile.lock Pipfile.lock
-COPY app app
-COPY migrations migrations
-
+# Install pipenv and dependencies
 RUN <<EOF
 python3 -m pip install --no-cache-dir pipenv
 pipenv install --system --deploy --ignore-pipfile
@@ -45,6 +48,7 @@ EOF
 
 EXPOSE 4567
 
+# Switch to nonroot user
 USER ${CONTAINER_UID}
 
 ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
