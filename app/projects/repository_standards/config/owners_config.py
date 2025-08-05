@@ -48,6 +48,11 @@ owners_config = [
     ),
     Owner(
         name="Technology Services",
-        teams=["nvvs-devops-admins", "moj-official-techops", "cloud-ops-alz-admins"],
+        teams=[
+            "nvvs-devops-admins",
+            "moj-official-techops",
+            "cloud-ops-alz-admins",
+            "technology-services"
+        ],
     ),
 ]
