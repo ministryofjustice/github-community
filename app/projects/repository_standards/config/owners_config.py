@@ -52,7 +52,7 @@ owners_config = [
             "nvvs-devops-admins",
             "moj-official-techops",
             "cloud-ops-alz-admins",
-            "technology-services"
+            "Technology Services",
         ],
     ),
 ]
