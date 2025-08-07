@@ -3,9 +3,10 @@ from calendar import timegm
 from time import gmtime, sleep
 from typing import Callable, List
 
-from github import Auth, Github, RateLimitExceededException
+from github import Auth, Github, RateLimitExceededException, GithubIntegration
 from github.Repository import Repository
 from github.Team import Team
+from github.Installation import Installation
 
 from app.projects.repository_standards.models.repository_info import (
     RepositoryInfo,
@@ -69,8 +70,18 @@ class GithubService:
         app_installation_id: int,
     ) -> None:
         self.organisation_name: str = "ministryofjustice"
-        app_auth = Auth.AppAuth(app_client_id, app_private_key)
-        app_installation_auth = app_auth.get_installation_auth(app_installation_id)
+
+        # Authenitcate as a GitHub App
+        app = Auth.AppAuth(app_client_id, app_private_key)
+
+        # Get App Installtion
+        github_integration = GithubIntegration(auth=app)
+        self.github_app_installation_api = github_integration.get_app_installation(
+            app_installation_id
+        )
+
+        # Get GitHub Client Authenticated as the App Installation
+        app_installation_auth = app.get_installation_auth(app_installation_id)
         self.github_client_core_api: Github = Github(auth=app_installation_auth)
 
     @retries_github_rate_limit_exception_at_next_reset_once
@@ -141,11 +152,7 @@ class GithubService:
     ) -> List[RepositoryInfo]:
         response = []
         team_parent_cache = {}
-        repositories = list(
-            self.github_client_core_api.get_organization(
-                self.organisation_name
-            ).get_repos(type="all")
-        )
+        repositories = list(self.github_app_installation_api.get_repos())
         repositories_to_check = [
             repository
             for repository in repositories
@@ -154,7 +161,7 @@ class GithubService:
         logger.info(f"Total Repositories: [ {len(repositories_to_check)} ]")
         for repo in repositories_to_check:
             logger.info(
-                f"Repository: [ {repo.name} ] Archived: {repo.archived}, Fork: {repo.fork}, Private: {repo.private}"
+                f"Repository: [ {repo.name} ] Archived: {repo.archived}, Fork: {repo.fork}, Private: {repo.private}, Visibility: {repo.visibility}"
             )
         return []
         counter = 1

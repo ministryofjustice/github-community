@@ -41,7 +41,7 @@ def main():
         app_config.github.app.installation_id,
     )
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories(limit=20)
+    repositories: List[RepositoryInfo] = github_service.get_all_repositories(limit=50)
     return
 
     for owner_config in owners_config:
