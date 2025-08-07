@@ -144,14 +144,19 @@ class GithubService:
         repositories = list(
             self.github_client_core_api.get_organization(
                 self.organisation_name
-            ).get_repos(type="public")
+            ).get_repos(type="all")
         )
         repositories_to_check = [
             repository
             for repository in repositories
-            if not (repository.archived or repository.fork)
+            if not (repository.archived or repository.fork or repository.private)
         ]
         logger.info(f"Total Repositories: [ {len(repositories_to_check)} ]")
+        for repo in repositories_to_check:
+            logger.info(
+                f"Repository: [ {repo.name} ] Archived: {repo.archived}, Fork: {repo.fork}, Private: {repo.private}"
+            )
+        return []
         counter = 1
         for repo in repositories_to_check:
             if counter > limit:

@@ -41,7 +41,8 @@ def main():
         app_config.github.app.installation_id,
     )
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    repositories: List[RepositoryInfo] = github_service.get_all_repositories(limit=20)
+    return
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
