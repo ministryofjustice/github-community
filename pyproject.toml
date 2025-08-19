@@ -27,9 +27,3 @@ dev = [
     "ruff==0.12.9",
     "zizmor==1.12.1",
 ]
-
-[project.scripts]
-app = "python3 -m flask --app app.app --debug run"
-create_migration = "alembic revision --message 'project_name_description'"
-tests = "coverage run -m unittest"
-tests_report = "coverage report --omit=./test/** --sort=cover --show-missing --skip-empty"
