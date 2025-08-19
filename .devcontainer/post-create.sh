@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Install Pipenv
-python3 -m pip install --no-cache-dir pipenv
+echo "Running 'uv sync --frozen'"
+uv sync --frozen
 
-# Install Dependencies
-pipenv install --system --deploy --ignore-pipfile
+echo "Running 'uv run pre-commit install'"
+uv run pre-commit install
