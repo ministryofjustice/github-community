@@ -34,8 +34,6 @@ EOF
 # Stage: final
 # From: docker.io/python:3.13-alpine3.22
 ##################################################
-#checkov:skip=CKV_DOCKER_2: HEALTHCHECK not required for one-time execution container running a Python script
-
 FROM docker.io/python:3.13-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 AS final
 
 LABEL org.opencontainers.image.vendor="Ministry of Justice" \
