@@ -1,54 +1,72 @@
-FROM public.ecr.aws/docker/library/python:3.12.9-slim@sha256:aaa3f8cb64dd64e5f8cb6e58346bdcfa410a108324b0f28f1a7cc5964355b211
+##################################################
+# Stage: uv
+# From: ghcr.io/astral-sh/uv:python3.13-alpine
+##################################################
+FROM ghcr.io/astral-sh/uv:python3.13-alpine@sha256:c8293f21c6e5915d8cd1987fe4af18f159da72691769652d1c9f7a9712a91b34 AS uv
 
-LABEL org.opencontainers.image.vendor="Ministry of Justice" \
-  org.opencontainers.image.authors="GitHub Community <github-community@digital.justice.gov.uk>" \
-  org.opencontainers.image.title="GitHub Community" \
-  org.opencontainers.image.description="Passionate engineers delivering great services" \
-  org.opencontainers.image.url="https://github.com/ministryofjustice/github-community"
+##################################################
+# Stage: builder
+# From: docker.io/python:3.13-alpine3.22
+##################################################
+FROM docker.io/python:3.13-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 AS builder
 
-ENV APP_DIRECTORY="/app" \
-  CONTAINER_GID="1000" \
-  CONTAINER_GROUP="nonroot" \
-  CONTAINER_UID="1000" \
-  CONTAINER_USER="nonroot" \
-  PYTHONDONTWRITEBYTECODE="1" \
-  PYTHONUNBUFFERED="1"
+ARG BUILD_DEV="false"
 
-# Set options for safe shell execution
-SHELL ["/bin/bash", "-e", "-u", "-o", "pipefail", "-c"]
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE="copy"
 
-# Setup the application directory
-RUN <<EOF
-groupadd \
-  --gid ${CONTAINER_GID} \
-  ${CONTAINER_GROUP}
+WORKDIR /app
 
-useradd \
-  --uid ${CONTAINER_UID} \
-  --gid ${CONTAINER_GROUP} \
-  --create-home \
-  --shell /bin/bash \
-  ${CONTAINER_USER}
+COPY --from=uv /usr/local/bin/uv /usr/local/bin/uv
 
-install --directory --owner "${CONTAINER_USER}" --group "${CONTAINER_GROUP}" --mode 0755 "${APP_DIRECTORY}"
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+<<EOF
+if [[ "${BUILD_DEV}" == "true" ]]; then
+  uv sync --locked --no-install-project --no-editable
+else
+  uv sync --locked --no-install-project --no-editable --no-dev
+fi
 EOF
 
-# Migrate files to the application directory
-WORKDIR ${APP_DIRECTORY}
-COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile Pipfile
-COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} Pipfile.lock Pipfile.lock
+##################################################
+# Stage: final
+# From: docker.io/python:3.13-alpine3.22
+##################################################
+#checkov:skip=CKV_DOCKER_2: HEALTHCHECK not required for one-time execution container running a Python script
+
+FROM docker.io/python:3.13-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 AS final
+
+LABEL org.opencontainers.image.vendor="Ministry of Justice" \
+      org.opencontainers.image.authors="GitHub Community <github-community@digital.justice.gov.uk>" \
+      org.opencontainers.image.title="GitHub Community" \
+      org.opencontainers.image.description="Passionate engineers delivering great services" \
+      org.opencontainers.image.url="https://github.com/ministryofjustice/github-community"
+
+ENV CONTAINER_USER="nonroot" \
+    CONTAINER_UID="65532" \
+    CONTAINER_GROUP="nonroot" \
+    CONTAINER_GID="65532" \
+    APP_HOME="/app" \
+    PATH="/app/.venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+
+RUN <<EOF
+addgroup -g ${CONTAINER_GID} ${CONTAINER_GROUP}
+
+adduser -D -H -u ${CONTAINER_UID} -G ${CONTAINER_GROUP} ${CONTAINER_USER}
+
+install --directory --mode=0755 --owner="${CONTAINER_USER}" --group="${CONTAINER_GROUP}" "${APP_HOME}"
+EOF
+
+WORKDIR ${APP_HOME}
+COPY --from=builder --chown=${CONTAINER_UID}:${CONTAINER_GID} /app/.venv /app/.venv
 COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} app app
 COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} migrations migrations
 
-# Install pipenv and dependencies
-RUN <<EOF
-python3 -m pip install --no-cache-dir pipenv
-pipenv install --system --deploy --ignore-pipfile
-EOF
-
-EXPOSE 4567
-
-# Switch to nonroot user
 USER ${CONTAINER_UID}
 
 ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
