@@ -5,31 +5,13 @@ on:
   pull_request:
     branches:
       - main
-    types:
-      - edited
-      - opened
-      - reopened
-      - synchronize
 
 permissions: {}
 
 jobs:
   dependency-review:
     name: Dependency Review
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
-    steps:
-      - name: Checkout
-        id: checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          persist-credentials: false
-
-      - name: Dependency Review
-        id: dependency_review
-        uses: actions/dependency-review-action@bc41886e18ea39df68b1b1245f4184881938e050 # v4.7.2
-        with:
-          comment-summary-in-pr: true
-          fail-on-severity: critical
+    uses: ministryofjustice/analytical-platform-github-actions/.github/workflows/reusable-dependency-review.yml@31245f6d7852ff4fbb735ec759cf42d182f5836e # v5.0.0

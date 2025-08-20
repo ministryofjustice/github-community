@@ -1,20 +1,4 @@
-# .PHONY: run creation-migration test test-reports
-
-# run:
-# 	flask --app app.app --debug run
-
-# creation-migration:
-# 	alembic revision --message 'project_name_description'
-
-# test:
-# 	coverage run -m pytest
-
-# test-reports:
-# 	coverage report --omit=./test/** --sort=cover --show-missing --skip-empty
-
-
-###
-.PHONY: container-build container-test container-scan
+.PHONY: container-build container-test container-scan database-create-migration database-start database-stop flask-run test test-reports uv-pre-commit-install uv-activate uv-sync
 
 SHELL := /bin/bash
 
@@ -34,6 +18,10 @@ container-scan: container-test
 	@echo "Scanning container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) for vulnerabilities"
 	trivy image --platform linux/amd64 --severity HIGH,CRITICAL $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG)
 
+database-create-migration:
+	@echo "Creating database migration"
+	alembic revision --message 'project_name_description'
+
 database-start:
 	@echo "Starting PostgreSQL"
 	docker compose --file contrib/docker-compose.yaml up database --detach
@@ -45,6 +33,14 @@ database-stop:
 flask-run: database-start
 	@echo "Starting Flask application"
 	flask --app app.app --debug run
+
+test:
+	@echo "Running pytest"
+	coverage run -m pytest
+
+test-reports:
+	@echo "Generating test reports"
+	coverage report --omit=./test/** --sort=cover --show-missing --skip-empty
 
 uv-pre-commit-install: uv-sync
 	@echo "Installing pre-commit hooks"
