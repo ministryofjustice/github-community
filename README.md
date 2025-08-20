@@ -26,11 +26,11 @@ The **GitHub Community** is a group of passionate engineers dedicated to buildin
 
 The community currently provides the following projects and services:
 
-| Project Name         | Description                                                                                                 |
-|----------------------|-------------------------------------------------------------------------------------------------------------|
-| **Repository Standards** | Improving code quality and security by centralizing knowledge and best practices for GitHub repositories. |
+| Project Name              | Description                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Repository Standards**  | Improving code quality and security by centralizing knowledge and best practices for GitHub repositories. |
 | **Shared GitHub Actions** | Providing reusable GitHub Actions to reduce technical debt, improve maintainability, and enhance quality. |
-| **...**              | More projects to be added...                                                                               |
+| **...**                   | More projects to be added...                                                                              |
 
 ## 🏗️ github-community Repository
 
@@ -86,8 +86,7 @@ This repository provides a set of services accessible at **[github-community.ser
 
 ### Prerequisites
 
-- Python 3+
-- Pipenv
+- [uv](https://docs.astral.sh/uv/)
 - Docker (optional for local database setup)
 
 ### Setup Instructions
@@ -95,16 +94,14 @@ This repository provides a set of services accessible at **[github-community.ser
 ```sh
 # Clone the repository
 git clone https://github.com/ministryofjustice/github-community.git
+
 cd github-community
 
 # Install dependencies
-pipenv install --dev
-
-# Set up the database
-docker compose -f docker-compose.yaml up --build
+make uv-activate
 
 # Run the application
-pipenv run app
+make flask-run
 ```
 
 ---
