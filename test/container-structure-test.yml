@@ -4,7 +4,7 @@ schemaVersion: 2.0.0
 metadataTest:
   user: 65532
   workdir: /app
-  # entrypoint: ["python", "main.py"]
+  entrypoint: ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
 
 commandTests:
   - name: "python path"
@@ -18,12 +18,12 @@ commandTests:
     expectedOutput: ["Python 3.13.*"]
 
 fileExistenceTests:
-  # - name: "/app/app/app.py"
-  #   path: "/app/app/app.py"
-  #   shouldExist: true
-  #   uid: 65532
-  #   gid: 65532
-  #   permissions: "-rw-r--r--" # 644
+  - name: "/app/app/app.py"
+    path: "/app/app/app.py"
+    shouldExist: true
+    uid: 65532
+    gid: 65532
+    permissions: "-rwxr-xr-x" # 755
 
   - name: "/app/.venv"
     path: "/app/.venv"
