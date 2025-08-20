@@ -46,6 +46,10 @@ uv-pre-commit-install: uv-sync
 	@echo "Installing pre-commit hooks"
 	uv run pre-commit install
 
+uv-pre-commit-update:
+	@echo "Updating pre-commit hooks"
+	uv run pre-commit autoupdate --freeze
+
 uv-activate: uv-sync
 	@echo "Activating virtual environment"
 	source .venv/bin/activate

@@ -1,0 +1,17 @@
+---
+name: ♻️ pre-commit Update
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-5" # Monday-Friday at 09:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  pre-commit-update:
+    name: pre-commit Update
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: ministryofjustice/analytical-platform-github-actions/.github/workflows/reusable-pre-commit-update.yml@31245f6d7852ff4fbb735ec759cf42d182f5836e # v5.0.0
