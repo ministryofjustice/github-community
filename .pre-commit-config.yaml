@@ -6,6 +6,10 @@ repos:
       - id: check-added-large-files
       - id: check-json
       - id: check-yaml
+        exclude: |
+          (?x)^(
+            helm/github-community/templates/map-github-repositories-to-owners-job.yaml
+          )$
       - id: end-of-file-fixer
       - id: trailing-whitespace
 

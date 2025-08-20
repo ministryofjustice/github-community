@@ -10,7 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     rows.forEach(row => {
       const text = row.textContent.trim();
-      
+
       if (text.includes(query)) {
         row.style.display = '';
       } else {

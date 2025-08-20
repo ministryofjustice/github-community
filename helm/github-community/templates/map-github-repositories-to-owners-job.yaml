@@ -21,22 +21,22 @@ spec:
             command: ["python3", "-m"]
             args: ["app.projects.repository_standards.jobs.map_github_repositories_to_owners"]
             env:
-             - name: POSTGRES_USER
-               value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
-             - name: POSTGRES_PASSWORD
-               value: {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
-             - name: POSTGRES_DB
-               value: {{ .Values.app.deployment.env.POSTGRES_DB | quote }}
-             - name: POSTGRES_HOST
-               value: {{ .Values.app.deployment.env.POSTGRES_HOST | quote }}
-             - name: POSTGRES_PORT
-               value: {{ .Values.app.deployment.env.POSTGRES_PORT | quote }}
-             - name: GITHUB_APP_CLIENT_ID
-               value: {{ .Values.app.deployment.env.GITHUB_APP_CLIENT_ID | quote }}
-             - name: GITHUB_APP_PRIVATE_KEY
-               value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
-             - name: GITHUB_APP_INSTALLATION_ID
-               value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
+              - name: POSTGRES_USER
+                value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
+              - name: POSTGRES_PASSWORD
+                value: {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
+              - name: POSTGRES_DB
+                value: {{ .Values.app.deployment.env.POSTGRES_DB | quote }}
+              - name: POSTGRES_HOST
+                value: {{ .Values.app.deployment.env.POSTGRES_HOST | quote }}
+              - name: POSTGRES_PORT
+                value: {{ .Values.app.deployment.env.POSTGRES_PORT | quote }}
+              - name: GITHUB_APP_CLIENT_ID
+                value: {{ .Values.app.deployment.env.GITHUB_APP_CLIENT_ID | quote }}
+              - name: GITHUB_APP_PRIVATE_KEY
+                value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
+              - name: GITHUB_APP_INSTALLATION_ID
+                value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
 
           restartPolicy: Never
           activeDeadlineSeconds: 7200
