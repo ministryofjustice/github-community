@@ -1,0 +1,20 @@
+---
+name: ♻️ OpenSSF Scorecard
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "30 6 * * 1"
+
+permissions: {}
+
+jobs:
+  openssf-scorecard:
+    name: OpenSSF Scorecard
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
+    uses: ministryofjustice/analytical-platform-github-actions/.github/workflows/reusable-openssf-scorecard.yml@31245f6d7852ff4fbb735ec759cf42d182f5836e # v5.0.0
