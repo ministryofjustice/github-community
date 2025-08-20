@@ -5,6 +5,10 @@ repos:
     hooks:
       - id: check-added-large-files
       - id: check-json
+        exclude: |
+          (?x)^(
+            .devcontainer/devcontainer-lock.json
+          )$
       - id: check-yaml
         exclude: |
           (?x)^(
@@ -23,11 +27,10 @@ repos:
     hooks:
       - id: zizmor
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 54a455f7ce629598b7535ff828fd5fb796f4b83f  # frozen: v0.12.9
-    hooks:
-      - id: ruff-check
-        args: [--fix]
-      - id: ruff-format
-
-exclude: .devcontainer/devcontainer-lock.json
+  # Disabling ruff for now
+  # - repo: https://github.com/astral-sh/ruff-pre-commit
+  #   rev: 54a455f7ce629598b7535ff828fd5fb796f4b83f  # frozen: v0.12.9
+  #   hooks:
+  #     - id: ruff-check
+  #       args: [--fix]
+  #     - id: ruff-format

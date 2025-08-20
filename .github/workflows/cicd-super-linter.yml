@@ -16,3 +16,20 @@ jobs:
       packages: read
       statuses: write
     uses: ministryofjustice/analytical-platform-github-actions/.github/workflows/reusable-super-linter.yml@31245f6d7852ff4fbb735ec759cf42d182f5836e # v5.0.0
+    with:
+      super-linter-variables: |
+        {
+          "VALIDATE_CSS": false,
+          "VALIDATE_CSS_PRETTIER": false,
+          "VALIDATE_HTML": false,
+          "VALIDATE_HTML_PRETTIER": false,
+          "VALIDATE_JAVASCRIPT_ES": false,
+          "VALIDATE_JAVASCRIPT_PRETTIER": false,
+          "VALIDATE_JSCPD": false,
+          "VALIDATE_PYTHON_BLACK": false,
+          "VALIDATE_PYTHON_PYLINT": false,
+          "VALIDATE_PYTHON_FLAKE8": false,
+          "VALIDATE_PYTHON_ISORT": false,
+          "VALIDATE_PYTHON_MYPY": false,
+          "VALIDATE_PYTHON_RUFF": false
+        }

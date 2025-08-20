@@ -9,4 +9,4 @@ rules:
   truthy: disable
 
 ignore:
-  - "**/helm/templates/*.yaml"
+  - "**/helm/github-community/templates/*.yaml"
