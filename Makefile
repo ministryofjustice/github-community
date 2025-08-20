@@ -18,6 +18,16 @@ container-scan: container-test
 	@echo "Scanning container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) for vulnerabilities"
 	trivy image --platform linux/amd64 --severity HIGH,CRITICAL $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG)
 
+container-start: container-build database-start
+	@echo "Starting container"
+	CONTAINER_IMAGE_NAME=$(CONTAINER_IMAGE_NAME) CONTAINER_IMAGE_TAG=$(CONTAINER_IMAGE_TAG) docker compose --file=contrib/docker-compose.yaml up app --detach
+
+container-stop:
+	@echo "Stopping container"
+	CONTAINER_IMAGE_NAME=$(CONTAINER_IMAGE_NAME) CONTAINER_IMAGE_TAG=$(CONTAINER_IMAGE_TAG) docker compose --file=contrib/docker-compose.yaml down app --remove-orphans
+
+container-restart: container-stop container-start
+
 database-create-migration:
 	@echo "Creating database migration"
 	alembic revision --message 'project_name_description'

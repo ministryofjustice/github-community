@@ -15,7 +15,8 @@ services:
       retries: 5
 
   app:
-    image: github-community
+    image: "${CONTAINER_IMAGE_NAME:-ministryofjustice/github-community}:${CONTAINER_IMAGE_TAG:-local}"
+    platform: linux/amd64
     environment:
       # Flask
       - APP_SECRET_KEY=dev
