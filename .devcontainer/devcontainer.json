@@ -15,12 +15,36 @@
         "EditorConfig.EditorConfig",
         "GitHub.vscode-github-actions",
         "GitHub.vscode-pull-request-github",
+        "ms-ossdata.vscode-pgsql",
         "ms-python.python"
       ],
       "settings": {
         "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
         "python.terminal.activateEnvInCurrentTerminal": true,
-        "python.venvFolders": ["${workspaceFolder}/.venv"]
+        "python.venvFolders": ["${workspaceFolder}/.venv"],
+        "pgsql.connections": [
+          {
+            "applicationName": "vscode-pgsql",
+            "authenticationType": "SqlLogin",
+            "clientEncoding": "utf8",
+            "connectTimeout": 15,
+            "database": "admin",
+            "displayName": "docker-compose",
+            "emptyPasswordInput": false,
+            "expiresOn": 0,
+            "groupId": "800A70B7-F119-4024-8930-2FE52CE789D1",
+            "hostaddr": "127.0.0.1",
+            "id": "D9C05E16-5256-451C-A0FD-A48853988C30",
+            "password": "admin",
+            "port": "5432",
+            "profileName": "docker-compose",
+            "savePassword": true,
+            "server": "docker-compose",
+            "sshPassword": "",
+            "sslmode": "disable",
+            "user": "admin"
+          }
+        ]
       }
     }
   }

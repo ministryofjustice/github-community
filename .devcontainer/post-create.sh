@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-echo "Running 'uv sync --frozen'"
-uv sync --frozen
+echo "Running 'uv-sync'"
+make uv-sync
 
-echo "Running 'uv run pre-commit install'"
-uv run pre-commit install
+echo "Running 'uv-pre-commit-install'"
+make uv-pre-commit-install
+
+echo "Running 'database-start'"
+make database-start
