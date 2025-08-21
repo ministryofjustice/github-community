@@ -11,6 +11,20 @@
     "ghcr.io/ministryofjustice/devcontainer-feature/static-analysis:1": {}
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [
+    4567,
+    5432
+  ],
+  "portsAttributes": {
+    "4567": {
+      "label": "Frontend",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL (Docker Compose)",
+      "onAutoForward": "notify"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -25,6 +39,12 @@
         "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
         "python.terminal.activateEnvInCurrentTerminal": true,
         "python.venvFolders": ["${workspaceFolder}/.venv"],
+        "pgsql.serverGroups": [
+            {
+                "name": "Servers",
+                "id": "800A70B7-F119-4024-8930-2FE52CE789D1"
+            }
+        ],
         "pgsql.connections": [
           {
             "applicationName": "vscode-pgsql",
