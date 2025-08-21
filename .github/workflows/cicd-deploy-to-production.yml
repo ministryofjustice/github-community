@@ -116,6 +116,6 @@ jobs:
             --set app.deployment.env.GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
             --set app.deployment.env.GITHUB_APP_PRIVATE_KEY="${GITHUB_APP_PRIVATE_KEY}" \
             --set app.deployment.env.GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}" \
-            --set app.deployment.env.SENTRY_DSN_KEY=${SENTRY_DSN_KEY} \
+            --set app.deployment.env.SENTRY_DSN_KEY="${SENTRY_DSN_KEY}" \
             --set app.deployment.image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
             --set app.deployment.image.tag="${IMAGE_TAG}"
