@@ -37,6 +37,7 @@ env:
 
 jobs:
   build-push-image:
+    if: github.actor != 'dependabot[bot]' && !github.event.pull_request.draft
     name: Build and Push Image
     runs-on: ubuntu-latest
     permissions:
