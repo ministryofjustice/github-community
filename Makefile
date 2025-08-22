@@ -5,10 +5,11 @@ SHELL := /bin/bash
 CONTAINER_IMAGE_NAME     ?= ministryofjustice/github-community
 CONTAINER_IMAGE_TAG      ?= local
 CONTAINER_NAME           ?= github-community
+CONTAINER_BUILD_DEV      ?= false
 
 container-build:
-	@echo "Building container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG)"
-	docker build --platform linux/amd64 --file Dockerfile --tag $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) .
+	@echo "Building container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) with BUILD_DEV=$(CONTAINER_BUILD_DEV)"
+	docker build --platform linux/amd64 --file Dockerfile --build-arg BUILD_DEV=$(CONTAINER_BUILD_DEV) --tag $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) .
 
 container-test: container-build
 	@echo "Testing container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG)"

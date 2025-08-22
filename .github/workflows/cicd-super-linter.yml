@@ -19,10 +19,8 @@ jobs:
     with:
       super-linter-variables: |
         {
-          "VALIDATE_CHECKOV": false,
           "VALIDATE_CSS": false,
           "VALIDATE_CSS_PRETTIER": false,
-          "VALIDATE_DOCKERFILE_HADOLINT": false,
           "VALIDATE_EDITORCONFIG": false,
           "VALIDATE_HTML": false,
           "VALIDATE_HTML_PRETTIER": false,

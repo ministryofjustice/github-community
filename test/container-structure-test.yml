@@ -4,7 +4,7 @@ schemaVersion: 2.0.0
 metadataTest:
   user: 65532
   workdir: /app
-  entrypoint: ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
+  entrypoint: ["/usr/local/bin/entrypoint.sh"]
 
 commandTests:
   - name: "python path"
@@ -31,3 +31,10 @@ fileExistenceTests:
     uid: 65532
     gid: 65532
     permissions: "drwxr-xr-x" # 755
+
+  - name: "/usr/local/bin/entrypoint.sh"
+    path: "/usr/local/bin/entrypoint.sh"
+    shouldExist: true
+    uid: 65534 # nobody
+    gid: 65534 # nobody
+    permissions: "-rwxr-xr-x" # 755

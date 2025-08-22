@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
 <<EOF
-if [[ "${BUILD_DEV}" == "true" ]]; then
+if [ "${BUILD_DEV}" = "true" ]; then
+  echo "BUILD_DEV is true, installing dev dependencies"
   uv sync --locked --no-install-project --no-editable
 else
   uv sync --locked --no-install-project --no-editable --no-dev
@@ -34,6 +35,8 @@ EOF
 # Stage: final
 # From: docker.io/python:3.13-alpine3.22
 ##################################################
+#checkov:skip=CKV_DOCKER_2: HEALTHCHECK not required - Health checks are implemented in Kubernetes as liveness and readiness probes
+
 FROM docker.io/python:3.13-alpine3.22@sha256:9ba6d8cbebf0fb6546ae71f2a1c14f6ffd2fdab83af7fa5669734ef30ad48844 AS final
 
 LABEL org.opencontainers.image.vendor="Ministry of Justice" \
@@ -64,7 +67,8 @@ WORKDIR ${APP_HOME}
 COPY --from=builder --chown=${CONTAINER_UID}:${CONTAINER_GID} /app/.venv /app/.venv
 COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} app app
 COPY --chown=${CONTAINER_UID}:${CONTAINER_GID} migrations migrations
+COPY --chown=nobody:nobody --chmod=0755 container/usr/local/bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 
 USER ${CONTAINER_UID}
 
-ENTRYPOINT ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
