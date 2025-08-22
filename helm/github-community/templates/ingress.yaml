@@ -34,4 +34,11 @@ spec:
                 name: {{ $fullName }}
                 port:
                   number: 80
+          - path: /healthz
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: blackhole
+                port:
+                  number: 80
     {{- end }}
