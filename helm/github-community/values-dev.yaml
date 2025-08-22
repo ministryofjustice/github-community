@@ -2,6 +2,9 @@ app:
   ingress:
     hosts:
       - "github-community-dev.cloud-platform.service.justice.gov.uk"
+    modsec:
+      githubTeam: "github-community"
+      ingressName: "modsec-non-prod"
 
   deployment:
     replicaCount: 1
