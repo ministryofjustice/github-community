@@ -15,11 +15,23 @@ spec:
       template:
         spec:
           serviceAccountName: cd-serviceaccount
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
           containers:
           - name: map-github-repositories-to-owners-job
             image: "{{ .Values.app.deployment.image.repository }}:{{ .Values.app.deployment.image.tag | default .Chart.AppVersion }}"
             command: ["python3", "-m"]
             args: ["app.projects.repository_standards.jobs.map_github_repositories_to_owners"]
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - "ALL"
+              runAsNonRoot: true
+              seccompProfile:
+                type: RuntimeDefault
             env:
              - name: POSTGRES_USER
                value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
