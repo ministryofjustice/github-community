@@ -2,9 +2,6 @@
 name: ♻️ Deploy to Development
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -71,7 +68,7 @@ jobs:
           tags: ${{ steps.ecr_login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
   deploy-to-development:
-    if: github.actor != 'dependabot[bot]'
+    if: github.actor != 'dependabot[bot]' && !github.event.pull_request.draft
     needs: [build-push-image]
     name: Deploy to Development
     runs-on: ubuntu-latest
