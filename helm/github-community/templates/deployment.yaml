@@ -48,8 +48,7 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
             - name: POSTGRES_PASSWORD
-              value:
-                {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
+              value: {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
             - name: POSTGRES_DB
               value: {{ .Values.app.deployment.env.POSTGRES_DB | quote }}
             - name: POSTGRES_HOST
