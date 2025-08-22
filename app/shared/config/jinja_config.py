@@ -15,4 +15,5 @@ def configure_jinja(app: Flask) -> None:
     )
     app.jinja_env.trim_blocks = True
     app.jinja_env.lstrip_blocks = True
+    app.jinja_env.globals["govukRebrand"] = False
     app.jinja_env.globals["phase_banner_text"] = app_config.phase_banner_text

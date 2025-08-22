@@ -1,7 +1,7 @@
 .env
 .terraform/
 coverage/
-venv/
+.venv/
 env/
 .DS_STORE
 .vscode
@@ -11,3 +11,5 @@ terraform.tfstate
 *.pyc
 __pycache__/
 .coverage
+.pytest_cache/
+.ruff_cache/

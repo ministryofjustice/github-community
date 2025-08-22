@@ -2,18 +2,6 @@
 version: 2
 
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "daily"
-    commit-message:
-      prefix: ":dependabot: github-actions"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
@@ -21,20 +9,35 @@ updates:
     commit-message:
       prefix: ":dependabot: devcontainers"
       include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-  - package-ecosystem: "pip"
+
+  - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "daily"
     commit-message:
-      prefix: ":dependabot: pip"
+      prefix: ":dependabot: docker"
       include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/contrib"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: ":dependabot: docker-compose"
+      include: "scope"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: ":dependabot: github-actions"
+      include: "scope"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: ":dependabot: uv"
+      include: "scope"

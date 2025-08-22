@@ -1,6 +1,7 @@
 # 🚀 GitHub Community
 
-[![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/github-community/badge)](https://github-community.service.justice.gov.uk/repository-standards/github-community)
+[![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/github-community/badge)](https://github-community.service.justice.gov.uk/repository-standards/github-community) [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ministryofjustice/github-community/badge)](https://scorecard.dev/viewer/?uri=github.com/ministryofjustice/github-community)
+
 [![Open in Dev Container](https://raw.githubusercontent.com/ministryofjustice/.devcontainer/refs/heads/main/contrib/badge.svg)](https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/ministryofjustice/github-community) [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/ministryofjustice/github-community)
 
 Welcome to the **GitHub Community**! This repository serves as a central hub for community-driven projects within the **Ministry of Justice** GitHub space.
@@ -26,11 +27,11 @@ The **GitHub Community** is a group of passionate engineers dedicated to buildin
 
 The community currently provides the following projects and services:
 
-| Project Name         | Description                                                                                                 |
-|----------------------|-------------------------------------------------------------------------------------------------------------|
-| **Repository Standards** | Improving code quality and security by centralizing knowledge and best practices for GitHub repositories. |
+| Project Name              | Description                                                                                               |
+| ------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **Repository Standards**  | Improving code quality and security by centralizing knowledge and best practices for GitHub repositories. |
 | **Shared GitHub Actions** | Providing reusable GitHub Actions to reduce technical debt, improve maintainability, and enhance quality. |
-| **...**              | More projects to be added...                                                                               |
+| **...**                   | More projects to be added...                                                                              |
 
 ## 🏗️ github-community Repository
 
@@ -86,8 +87,7 @@ This repository provides a set of services accessible at **[github-community.ser
 
 ### Prerequisites
 
-- Python 3+
-- Pipenv
+- [uv](https://docs.astral.sh/uv/)
 - Docker (optional for local database setup)
 
 ### Setup Instructions
@@ -95,16 +95,14 @@ This repository provides a set of services accessible at **[github-community.ser
 ```sh
 # Clone the repository
 git clone https://github.com/ministryofjustice/github-community.git
+
 cd github-community
 
 # Install dependencies
-pipenv install --dev
-
-# Set up the database
-docker compose -f docker-compose.yaml up --build
+make uv-activate
 
 # Run the application
-pipenv run app
+make container-start
 ```
 
 ---
