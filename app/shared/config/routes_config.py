@@ -8,13 +8,18 @@ from app.projects.repository_standards.routes.main import repository_standards_m
 from app.projects.acronyms.routes.main import acronyms_main
 from app.shared.routes.auth import auth_route
 from app.shared.routes.main import main
+
 from app.shared.routes.robots import robot_route
+from app.shared.routes.healthz import healthz_route
 
 
 def configure_routes(app: Flask) -> None:
     app.register_blueprint(auth_route, url_prefix="/auth")
     app.register_blueprint(main)
     app.register_blueprint(robot_route)
+
+    # Health check endpoint (no auth)
+    app.register_blueprint(healthz_route)
 
     app.register_blueprint(
         repository_standards_main, url_prefix="/repository-standards/"
