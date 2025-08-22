@@ -10,8 +10,12 @@ metadata:
     external-dns.alpha.kubernetes.io/set-identifier: {{ $fullName }}-{{ $fullName }}-green
     external-dns.alpha.kubernetes.io/aws-weight: "100"
     cloud-platform.justice.gov.uk/ignore-external-dns-weight: "true"
+    nginx.ingress.kubernetes.io/enable-modsecurity: "true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet: |
+      SecRuleEngine On
+      SecDefaultAction "phase:2,pass,log,tag:github_team={{ .Values.app.ingress.modsec.githubTeam }}"
 spec:
-  ingressClassName: "default"
+  ingressClassName: "{{ .Values.app.ingress.modsec.ingressName }}"
   tls:
     - hosts:
       {{- range .Values.app.ingress.hosts }}

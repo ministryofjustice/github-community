@@ -9,6 +9,9 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: production
+
 env:
   KUBE_CLUSTER: ${{ secrets.KUBE_CLUSTER }}
   KUBE_NAMESPACE: ${{ secrets.PROD_KUBE_NAMESPACE }}
