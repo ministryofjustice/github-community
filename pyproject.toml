@@ -1,0 +1,45 @@
+[project]
+name = "github-community"
+version = "1.0.0"
+description = "Passionate engineers delivering great services"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic==1.16.4",
+    "authlib==1.6.1",
+    "flask==3.1.2",
+    "flask-cors==6.0.1",
+    "flask-limiter==3.12",
+    "flask-migrate==4.1.0",
+    "flask-sqlalchemy==3.1.1",
+    "govuk-frontend-jinja==3.7.0",
+    "gunicorn==23.0.0",
+    "psycopg2-binary==2.9.10",
+    "pygithub==2.7.0",
+    "sentry-sdk==2.35.0",
+]
+
+[dependency-groups]
+dev = [
+    "coverage==7.10.4",
+    "pre-commit==4.3.0",
+    "pytest==8.4.1",
+    "ruff==0.12.10",
+    "zizmor==1.12.1",
+]
+
+# [tool.ruff.lint]
+# select = [
+#     # flake8-bugbear
+#     "B",
+#     # pycodestyle
+#     "E",
+#     # Pyflakes
+#     "F",
+#     # isort
+#     "I",
+#     # flake8-simplify
+#     "SIM",
+#     # pyupgrade
+#     "UP",
+# ]

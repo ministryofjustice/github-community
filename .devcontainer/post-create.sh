@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-# Install Pipenv
-python3 -m pip install --no-cache-dir pipenv
+echo "Running 'uv-sync'"
+make uv-sync
 
-# Install Dependencies
-pipenv install --system --deploy --ignore-pipfile
+echo "Running 'uv-pre-commit-install'"
+make uv-pre-commit-install
+
+echo "Running 'database-start'"
+make database-start
