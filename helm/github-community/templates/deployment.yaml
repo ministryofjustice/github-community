@@ -72,7 +72,7 @@ spec:
 
           ports:
             - name: http
-              containerPort: 80
+              containerPort: {{ .Values.app.port }}
           livenessProbe:
             httpGet:
               path: /healthz

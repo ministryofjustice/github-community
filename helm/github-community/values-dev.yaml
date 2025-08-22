@@ -1,4 +1,7 @@
 app:
+  port: 4567
+  service:
+    port: 4567
   ingress:
     hosts:
       - "github-community-dev.cloud-platform.service.justice.gov.uk"

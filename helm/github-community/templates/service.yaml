@@ -6,8 +6,8 @@ metadata:
     {{- include "app.labels" . | nindent 4 }}
 spec:
   ports:
-    - port: 80
-      targetPort: 4567
-      name: https
+    - name: http
+      port: {{ .Values.app.service.port }}
+      targetPort: http
   selector:
     {{- include "app.selectorLabels" . | nindent 4 }}
