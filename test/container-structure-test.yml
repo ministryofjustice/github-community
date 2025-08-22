@@ -31,3 +31,10 @@ fileExistenceTests:
     uid: 65532
     gid: 65532
     permissions: "drwxr-xr-x" # 755
+
+  - name: "/usr/local/bin/entrypoint.sh"
+    path: "/usr/local/bin/entrypoint.sh"
+    shouldExist: true
+    uid: 65534 # nobody
+    gid: 65534 # nobody
+    permissions: "-rwxr-xr-x" # 755
