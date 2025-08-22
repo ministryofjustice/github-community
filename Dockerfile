@@ -23,7 +23,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
 <<EOF
-if [[ "${BUILD_DEV}" == "true" ]]; then
+if [ "${BUILD_DEV}" = "true" ]; then
+  echo "BUILD_DEV is true, installing dev dependencies"
   uv sync --locked --no-install-project --no-editable
 else
   uv sync --locked --no-install-project --no-editable --no-dev
