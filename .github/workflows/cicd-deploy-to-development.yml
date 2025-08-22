@@ -68,6 +68,7 @@ jobs:
           tags: ${{ steps.ecr_login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
 
   deploy-to-development:
+    if: github.actor != 'dependabot[bot]'
     needs: [build-push-image]
     name: Deploy to Development
     runs-on: ubuntu-latest
