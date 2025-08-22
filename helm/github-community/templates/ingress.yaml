@@ -33,7 +33,7 @@ spec:
               service:
                 name: {{ $fullName }}
                 port:
-                  number: {{ .Values.app.service.port }}
+                  number: 4567
           - path: /healthz
             pathType: ImplementationSpecific
             backend:
