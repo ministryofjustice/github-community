@@ -102,7 +102,7 @@ cd github-community
 make uv-activate
 
 # Run the application
-make flask-run
+make container-start
 ```
 
 ---
