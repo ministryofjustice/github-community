@@ -4,7 +4,7 @@ schemaVersion: 2.0.0
 metadataTest:
   user: 65532
   workdir: /app
-  entrypoint: ["gunicorn", "--bind=0.0.0.0:4567", "app.run:app()"]
+  entrypoint: ["/usr/local/bin/entrypoint.sh"]
 
 commandTests:
   - name: "python path"
