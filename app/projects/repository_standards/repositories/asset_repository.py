@@ -93,6 +93,7 @@ class AssetRepository:
         self.db_session.query(Relationship).delete()
         self.db_session.query(Owner).delete()
         self.db_session.query(Asset).delete()
+        self.db_session.commit()
 
     def find_by_name(self, name: str) -> List[Asset]:
         assets = self.db_session.query(Asset).filter(Asset.name == name).all()
