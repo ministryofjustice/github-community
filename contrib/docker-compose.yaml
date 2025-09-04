@@ -10,7 +10,7 @@ services:
       - "5432:5432"
     healthcheck:
       test: "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"
-      interval: 10s
+      interval: 1s
       timeout: 5s
       retries: 5
 
@@ -36,10 +36,7 @@ services:
 
       # App
       - PHASE_BANNER_TEXT=LOCAL DEV
-
-      # CircleCI
-      - CIRCLECI_TOKEN=test
-      - CIRCLECI_COST_PER_CREDIT=0.0005
+      - ENV=local
 
       # GitHub
       - ADMIN_GITHUB_TOKEN=test
@@ -54,3 +51,24 @@ services:
     depends_on:
       database:
         condition: service_healthy
+
+  db-seed:
+    image: postgres:17-alpine
+    depends_on:
+      - database
+    environment:
+      PGPASSWORD: admin
+    networks:
+      - default
+    volumes:
+      - ./db-init:/db-init
+    entrypoint: >
+      sh -c '
+        echo "Waiting for database...";
+        until pg_isready -h database -p 5432 -U admin; do sleep 1; done;
+        echo "Waiting for Alembic migrations...";
+        until psql -h database -U admin -d admin -c "SELECT 1 FROM alembic_version" >/dev/null 2>&1; do sleep 1; done;
+        echo "Running stub SQL files...";
+        psql -h database -U admin -d admin -f "/db-init/01-stub-repository-standards-data.sql";
+        echo "Database seeding complete.";
+      '
