@@ -43,7 +43,7 @@ container-restart: container-stop container-start
 
 database-create-migration:
 	@echo "Creating database migration"
-	alembic revision --message 'project_name_description'
+	alembic --config migrations/alembic.ini revision --message 'project_name_description'
 
 database-start:
 	@echo "Starting PostgreSQL"
