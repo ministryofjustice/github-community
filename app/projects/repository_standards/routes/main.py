@@ -75,6 +75,24 @@ def owner(owner: str):
         owner=owner,
     )
 
+@repository_standards_main.route("/unowned-repositories", methods=["GET"])
+@requires_auth
+def unowned_repositories():
+    repository_compliance_service = get_repository_compliance_service()
+
+    repositories = repository_compliance_service.get_all_repositories()
+
+    filtrated_repositories = [
+        repo for repo in repositories if repo.authorative_owner is None
+    ]
+
+    return render_template(
+        "projects/repository_standards/pages/unowned_repositories.html",
+        repositories=filtrated_repositories,
+        non_compliant_repositories=[
+            repo for repo in filtrated_repositories if repo.compliance_status == "fail"
+        ]
+    )
 
 @repository_standards_main.route("/<repository_name>", methods=["GET"])
 @requires_auth
