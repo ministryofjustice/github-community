@@ -50,7 +50,7 @@ class AssetRepository:
     def find_all_by_owners(self, owner_names: list[str]) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
-            .join(Asset.owners)
+            .join(Asset.relationships.owners)
             .filter(Owner.name.in_(owner_names))
             .distinct()
             .all()
@@ -61,8 +61,8 @@ class AssetRepository:
     def find_all_by_owner(self, owner_name: str) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
-            .join(Asset.owners)
-            .filter(Asset.owners.any(name=owner_name))
+            .join(Asset.relationships.owners)
+            .filter(Asset.relationships.owners.any(name=owner_name))
             .all()
         )
 
@@ -88,11 +88,6 @@ class AssetRepository:
         self.db_session.add(relationship)
         self.db_session.commit()
         return relationship
-
-    def clean_all_tables(self):
-        self.db_session.query(Relationship).delete()
-        self.db_session.query(Owner).delete()
-        self.db_session.query(Asset).delete()
 
     def find_by_name(self, name: str) -> List[Asset]:
         assets = self.db_session.query(Asset).filter(Asset.name == name).all()

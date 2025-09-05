@@ -1,4 +1,4 @@
-.PHONY: container-build container-test container-scan database-create-migration database-start database-stop flask-run test test-reports uv-pre-commit-install uv-activate uv-sync
+.PHONY: app-start app-start-debug app-stop container-build container-test container-scan database-create-migration database-start database-stop flask-run test test-reports uv-pre-commit-install uv-activate uv-sync
 
 SHELL := /bin/bash
 
@@ -6,6 +6,18 @@ CONTAINER_IMAGE_NAME     ?= ministryofjustice/github-community
 CONTAINER_IMAGE_TAG      ?= local
 CONTAINER_NAME           ?= github-community
 CONTAINER_BUILD_DEV      ?= false
+
+app-start: container-build
+	@echo "Starting app"
+	CONTAINER_IMAGE_NAME=$(CONTAINER_IMAGE_NAME) CONTAINER_IMAGE_TAG=$(CONTAINER_IMAGE_TAG) docker compose --file=contrib/docker-compose.yaml up --renew-anon-volumes --build --detach
+
+app-start-debug: container-build
+	@echo "Starting app"
+	CONTAINER_IMAGE_NAME=$(CONTAINER_IMAGE_NAME) CONTAINER_IMAGE_TAG=$(CONTAINER_IMAGE_TAG) docker compose --file=contrib/docker-compose.yaml up --renew-anon-volumes --build
+
+app-stop:
+	@echo "Stopping app"
+	CONTAINER_IMAGE_NAME=$(CONTAINER_IMAGE_NAME) CONTAINER_IMAGE_TAG=$(CONTAINER_IMAGE_TAG) docker compose --file=contrib/docker-compose.yaml down --remove-orphans --volumes
 
 container-build:
 	@echo "Building container image $(CONTAINER_IMAGE_NAME):$(CONTAINER_IMAGE_TAG) with BUILD_DEV=$(CONTAINER_BUILD_DEV)"
@@ -31,7 +43,7 @@ container-restart: container-stop container-start
 
 database-create-migration:
 	@echo "Creating database migration"
-	alembic revision --message 'project_name_description'
+	alembic --config migrations/alembic.ini revision --message 'project_name_description'
 
 database-start:
 	@echo "Starting PostgreSQL"
