@@ -33,4 +33,7 @@ def logout():
 @auth_route.route("/callback", methods=["GET", "POST"])
 def callback():
     session["user"] = auth0_service.get_access_token()
+    path = session.pop("post_auth_redirect_path", None)
+    if path:
+        return redirect(path)
     return redirect("/")

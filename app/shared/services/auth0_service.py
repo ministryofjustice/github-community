@@ -41,4 +41,4 @@ class Auth0_Service:
             },
             quote_via=quote_plus,
         )
-        return redirect(f"https://${self.domain}/v2/logout?${query_parameters}")
+        return redirect(f"https://{self.domain}/v2/logout?{query_parameters}")
