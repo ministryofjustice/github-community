@@ -115,7 +115,8 @@ def unowned_repositories():
     filtrated_repositories = [
         repo
         for repo in repositories
-        if repo.authorative_business_unit_owner and repo.authorative_team_owner is None
+        if repo.authorative_business_unit_owner is None
+        and repo.authorative_team_owner is None
     ]
 
     return render_template(
