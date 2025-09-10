@@ -75,7 +75,7 @@
           <td class="govuk-table__cell">
             <img src="/assets/images/{{ repository.compliance_status }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
           </td>
-          <td class="govuk-table__cell">{{ repository.authorative_owner }}</td>
+          <td class="govuk-table__cell">{{ repository.authorative_business_unit_owner or repository.authorative_team_owner }}</td>
           <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}" rel="noreferrer noopener" class="govuk-link">View Compliance Report</a></td>
         </tr>
         {% endfor %}

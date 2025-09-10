@@ -5,13 +5,15 @@ from typing import List
 
 
 class OwnerView:
-    def __init__(self, name: str):
+    def __init__(self, name: str, type: str):
         self.name = name
+        self.type = type
 
     @classmethod
-    def from_owner(cls, asset: Owner):
+    def from_owner(cls, owner: Owner):
         return cls(
-            name=asset.name,
+            name=owner.name,
+            type=owner.type.name,
         )
 
 

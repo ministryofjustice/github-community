@@ -37,8 +37,8 @@ INSERT INTO public.assets (id,"name","type",last_updated,"data") VALUES
   }');
 
 INSERT INTO public.relationships (id,"type",assets_id,owners_id) VALUES
-  (1,'ADMIN_ACCESS',1,8),
-  (2,'ADMIN_ACCESS',2,2),
+  (1,'ADMIN_ACCESS',1,6),
+  (2,'ADMIN_ACCESS',1,8),
   (3,'ADMIN_ACCESS',3,3),
   (4,'ADMIN_ACCESS',4,4),
   (5,'ADMIN_ACCESS',5,5),
