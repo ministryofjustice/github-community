@@ -18,7 +18,7 @@ def requires_auth(function_f):
         if app_config.auth_enabled and (
             "user" not in session or session["user"].get("expires_at", 0) < time()
         ):
-            session.pop("user")
+            session.pop("user", None)
             session["post_auth_redirect_path"] = request.full_path
             return redirect("/auth/login")
         return function_f(*args, **kwargs)
