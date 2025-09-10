@@ -19,8 +19,8 @@ class OwnerRepository:
     def __init__(self, db_session: scoped_session = db.session):
         self.db_session = db_session
 
-    def find_all(self) -> List[OwnerView]:
-        owners = self.db_session.query(Owner).all()
+    def find_all_by_type_id(self, type_id: int) -> List[OwnerView]:
+        owners = self.db_session.query(Owner).filter(Owner.type_id == type_id).all()
 
         return [OwnerView.from_owner(owner) for owner in owners]
 
@@ -29,8 +29,13 @@ class OwnerRepository:
 
         return owners
 
-    def find_all_names(self) -> List[str]:
-        owners = self.find_all()
+    def find_all_business_unit_names(self) -> List[str]:
+        owners = self.find_all_by_type_id(type_id=1)
+
+        return [owner.name for owner in owners]
+
+    def find_all_team_names(self) -> List[str]:
+        owners = self.find_all_by_type_id(type_id=2)
 
         return [owner.name for owner in owners]
 

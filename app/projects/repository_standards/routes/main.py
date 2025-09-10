@@ -18,12 +18,8 @@ repository_standards_main = Blueprint("repository_standards_main", __name__)
 @repository_standards_main.route("/", methods=["GET"])
 @requires_auth
 def index():
-    owner_repository = get_owner_repository()
-    owners = owner_repository.find_all_names()
-
     return render_template(
         "projects/repository_standards/pages/home.html",
-        owners=owners,
     )
 
 
@@ -47,17 +43,17 @@ def repositories():
 @requires_auth
 def business_units():
     owner_repository = get_owner_repository()
-    owners = owner_repository.find_all_names()
+    business_unit_names = owner_repository.find_all_business_unit_names()
 
     return render_template(
         "projects/repository_standards/pages/business_units.html",
-        owners=owners,
+        business_unit_names=business_unit_names,
     )
 
 
 @repository_standards_main.route("/business-units/<owner>", methods=["GET"])
 @requires_auth
-def owner(owner: str):
+def business_units_owner(owner: str):
     repository_compliance_service = get_repository_compliance_service()
 
     repositories = repository_compliance_service.get_all_repositories()
@@ -75,6 +71,40 @@ def owner(owner: str):
         owner=owner,
     )
 
+
+@repository_standards_main.route("/teams", methods=["GET"])
+@requires_auth
+def teams():
+    owner_repository = get_owner_repository()
+    team_names = owner_repository.find_all_team_names()
+
+    return render_template(
+        "projects/repository_standards/pages/teams.html",
+        team_names=team_names,
+    )
+
+
+@repository_standards_main.route("/teams/<owner>", methods=["GET"])
+@requires_auth
+def teams_owner(owner: str):
+    repository_compliance_service = get_repository_compliance_service()
+
+    repositories = repository_compliance_service.get_all_repositories()
+
+    filtrated_repositories = [
+        repo for repo in repositories if owner == repo.authorative_owner
+    ]
+
+    return render_template(
+        "projects/repository_standards/pages/team.html",
+        repositories=filtrated_repositories,
+        non_compliant_repositories=[
+            repo for repo in filtrated_repositories if repo.compliance_status == "fail"
+        ],
+        owner=owner,
+    )
+
+
 @repository_standards_main.route("/unowned-repositories", methods=["GET"])
 @requires_auth
 def unowned_repositories():
@@ -91,8 +121,9 @@ def unowned_repositories():
         repositories=filtrated_repositories,
         non_compliant_repositories=[
             repo for repo in filtrated_repositories if repo.compliance_status == "fail"
-        ]
+        ],
     )
+
 
 @repository_standards_main.route("/<repository_name>", methods=["GET"])
 @requires_auth

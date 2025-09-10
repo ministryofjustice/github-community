@@ -12,10 +12,12 @@ class Owner(db.Model):
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     name: Mapped[str] = mapped_column(db.String)
+    type_id: Mapped[int] = mapped_column(db.ForeignKey("owner_types.id"))
 
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="owner"
     )
+    type: Mapped["OwnerTypes"] = relationship("OwnerTypes")
 
     def __repr__(self):
         return f"<Owner id={self.id}, name={self.name}>"
@@ -53,3 +55,13 @@ class Relationship(db.Model):
 
     def __repr__(self):
         return f"<Relationship id={self.id}, type={self.type}, asset={self.assets_id}, owner={self.owners_id}>"
+
+
+class OwnerTypes(db.Model):
+    __tablename__ = "owner_types"
+
+    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(db.String)
+
+    def __repr__(self):
+        return f"<OwnerTypes id={self.id}, name={self.name}>"

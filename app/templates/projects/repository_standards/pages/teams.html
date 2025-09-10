@@ -16,22 +16,22 @@
         "href": "/repository-standards"
       },
       {
-        "text": "Business Units"
+        "text": "Teams"
       }
     ]
   }) }}
 
 
-  <h1 class="govuk-heading-xl">Business Units</h1>
-  <p class="govuk-body-s">View compliance reports for Business Units within the Ministry of Justice.</p>
+  <h1 class="govuk-heading-xl">Teams</h1>
+  <p class="govuk-body-s">View compliance reports for Teams within the Ministry of Justice.</p>
   <section>
     <div class="govuk-grid-row">
-      {% for business_unit in business_unit_names %}
+      {% for team in team_names %}
       <div class="govuk-grid-column-one-third">
         <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
-          <a class="govuk-link" href="/repository-standards/business-units/{{ business_unit }}">{{ business_unit }}</a>
+          <a class="govuk-link" href="/repository-standards/teams/{{ team }}">{{ team }}</a>
         </h2>
-        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ business_unit }}.</p>
+        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ team }}.</p>
       </div>
       {% endfor %}
     </div>

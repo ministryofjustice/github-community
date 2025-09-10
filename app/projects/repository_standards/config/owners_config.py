@@ -55,4 +55,10 @@ owners_config = [
             "Technology Services",
         ],
     ),
+    Owner(
+        name="Modernisation Platform",
+        teams=[
+            "modernisation-platform",
+        ],
+    ),
 ]
