@@ -61,15 +61,15 @@ class RepositoryComplianceService:
         maturity_level = (
             3
             if all(
-                check.status == "pass" for check in checks if check.maturity_level == 3
+                check.status == "pass" for check in checks if check.maturity_level <= 3
             )
             else 2
             if all(
-                check.status == "pass" for check in checks if check.maturity_level == 2
+                check.status == "pass" for check in checks if check.maturity_level <= 2
             )
             else 1
             if all(
-                check.status == "pass" for check in checks if check.maturity_level == 1
+                check.status == "pass" for check in checks if check.maturity_level <= 1
             )
             else 0
         )
