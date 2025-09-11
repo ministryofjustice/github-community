@@ -42,9 +42,7 @@ class RepositoryView:
         return cls(
             name=asset.name,
             owner_names=[owner.name for owner in owners],
-            admin_owner_names=[
-                owner.name for owner in owners if owner.type.name == "ADMIN"
-            ],
+            admin_owner_names=[owner.name for owner in admin_owners],
             business_unit_owner_names=[
                 owner.name for owner in owners if owner.type.name == "BUSINESS_UNIT"
             ],
