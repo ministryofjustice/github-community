@@ -1,6 +1,7 @@
 from app.projects.repository_standards.models.owner import Owner
 
 owners_config = [
+    # Business Units
     Owner(name="HMPPS", teams=["HMPPS Developers"], prefix="hmpps-"),
     Owner(
         name="LAA",
@@ -53,6 +54,19 @@ owners_config = [
             "moj-official-techops",
             "cloud-ops-alz-admins",
             "Technology Services",
+        ],
+    ),
+    # Teams
+    Owner(
+        name="Modernisation Platform",
+        teams=[
+            "modernisation-platform",
+        ],
+    ),
+    Owner(
+        name="GitHub Community",
+        teams=[
+            "github-community",
         ],
     ),
 ]

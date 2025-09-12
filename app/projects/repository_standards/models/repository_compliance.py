@@ -16,5 +16,6 @@ class RepositoryComplianceReportView:
     name: str
     compliance_status: str
     checks: List[RepositoryComplianceCheck]
-    authorative_owner: Optional[str] = None
+    authorative_business_unit_owner: Optional[str] = None
+    authorative_team_owner: Optional[str] = None
     description: Optional[str] = None

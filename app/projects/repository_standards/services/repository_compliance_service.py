@@ -22,13 +22,12 @@ class RepositoryComplianceService:
     def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
-    def get_repository_compliance_report(
-        self,
-        repository: RepositoryView,
-    ) -> RepositoryComplianceReportView:
+    def __get_authorative_owner(
+        self, repository: RepositoryView, owners_to_check: List[str]
+    ) -> str | None:
         authorative_owners = [
             owner
-            for owner in repository.owner_names
+            for owner in owners_to_check
             if self.__asset_service.is_owner_authoritative_for_repository(
                 repository, owner
             )
@@ -37,7 +36,21 @@ class RepositoryComplianceService:
             authorative_owners[0] if len(authorative_owners) > 0 else None
         )
 
-        checks = get_all_compliance_checks(repository, authorative_owner)
+        return authorative_owner
+
+    def __get_repository_compliance_report(
+        self,
+        repository: RepositoryView,
+    ) -> RepositoryComplianceReportView:
+        authorative_business_unit_owner = self.__get_authorative_owner(
+            repository, repository.business_unit_owners_names
+        )
+        authorative_team_owner = self.__get_authorative_owner(
+            repository, repository.team_owners_names
+        )
+        checks = get_all_compliance_checks(
+            repository, authorative_business_unit_owner or authorative_team_owner
+        )
 
         compliance_status = (
             "pass"
@@ -48,7 +61,8 @@ class RepositoryComplianceService:
         return RepositoryComplianceReportView(
             name=repository.name,
             compliance_status=compliance_status,
-            authorative_owner=authorative_owner,
+            authorative_business_unit_owner=authorative_business_unit_owner,
+            authorative_team_owner=authorative_team_owner,
             checks=checks,
             description=repository.data.basic.description,
         )
@@ -57,7 +71,7 @@ class RepositoryComplianceService:
         repositories_compliance_reports = []
         repositories = self.__asset_service.get_all_repositories()
         for repository in repositories:
-            repository_compliance_report = self.get_repository_compliance_report(
+            repository_compliance_report = self.__get_repository_compliance_report(
                 repository
             )
             repositories_compliance_reports.append(repository_compliance_report)
@@ -70,7 +84,9 @@ class RepositoryComplianceService:
         if not repository:
             return None
 
-        repository_compliance_report = self.get_repository_compliance_report(repository)
+        repository_compliance_report = self.__get_repository_compliance_report(
+            repository
+        )
 
         return repository_compliance_report
 
