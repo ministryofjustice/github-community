@@ -14,6 +14,7 @@ owners_config = [
             "laa-eligibility-platform",
             "LAA Get Access",
             "LAA Payments and Billing",
+            "payforlegalaid"
         ],
         prefix="laa-",
     ),
