@@ -69,5 +69,5 @@ owners_config = [
         teams=[
             "github-community",
         ],
-    )
+    ),
 ]
