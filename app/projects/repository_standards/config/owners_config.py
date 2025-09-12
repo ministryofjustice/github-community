@@ -41,8 +41,8 @@ owners_config = [
     Owner(
         name="Platforms",
         teams=[
-            "modernisation-platform",
-            "operations-engineering",
+            "Platforms",
+            "hosting-migrations",
             "aws-root-account-admin-team",
             "WebOps",
             "Studio Webops",
