@@ -25,9 +25,9 @@
       <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
     </div>
 
-    {% set compliance_percentage = ((repositories | length - non_compliant_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    {% set compliance_percentage = ((baseline_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
     <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Compliant Repositories</dt>
+      <dt class="govuk-summary-list__key">Baseline Compliant</dt>
       <dd class="govuk-summary-list__value">
         <span class="
                      {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
@@ -36,11 +36,46 @@
                      {% else %} govuk-tag govuk-tag--green-dark
                      {% endif %}
                      ">
-          {{ repositories | length - non_compliant_repositories | length }}
+          {{ baseline_maturity_level_repositories | length }}
           ({{ compliance_percentage | round | int }}%)
         </span>
       </dd>
     </div>
+
+    {% set compliance_percentage = ((standard_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Standard Compliant</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ standard_maturity_level_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+
+    {% set compliance_percentage = ((gold_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Gold Compliant</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ gold_maturity_level_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+
   </section>
 
   <section>
@@ -66,7 +101,7 @@
         <tr class="govuk-table__row">
           <td class="govuk-table__cell">{{ repository.name }}</td>
           <td class="govuk-table__cell">
-            <img src="/assets/images/{{ repository.compliance_status }}-badge.svg"  alt="{{ repository["compliance_status"] }}" />
+            <img src={% if repository.maturity_level > 0 %}"/assets/images/{{ repository.maturity_level }}-badge.svg"{% else %}"/assets/images/fail-badge.svg"{% endif %}  alt="{{ repository.maturity_level }}" />
           </td>
           <td class="govuk-table__cell">{{ repository.authorative_team_owner }}</td>
           <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}" rel="noreferrer noopener" class="govuk-link">View Compliance Report</a></td>
