@@ -33,8 +33,14 @@ def repositories():
     return render_template(
         "projects/repository_standards/pages/repositories.html",
         repositories=repositories,
-        non_compliant_repositories=[
-            repo for repo in repositories if repo.compliance_status == "fail"
+        baseline_maturity_level_repositories=[
+            repo for repo in repositories if repo.maturity_level >= 1
+        ],
+        standard_maturity_level_repositories=[
+            repo for repo in repositories if repo.maturity_level >= 2
+        ],
+        gold_maturity_level_repositories=[
+            repo for repo in repositories if repo.maturity_level >= 3
         ],
     )
 
@@ -65,8 +71,14 @@ def business_units_owner(owner: str):
     return render_template(
         "projects/repository_standards/pages/business_unit.html",
         repositories=filtrated_repositories,
-        non_compliant_repositories=[
-            repo for repo in filtrated_repositories if repo.compliance_status == "fail"
+        baseline_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 1
+        ],
+        standard_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 2
+        ],
+        gold_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
         owner=owner,
     )
@@ -98,8 +110,14 @@ def teams_owner(owner: str):
     return render_template(
         "projects/repository_standards/pages/team.html",
         repositories=filtrated_repositories,
-        non_compliant_repositories=[
-            repo for repo in filtrated_repositories if repo.compliance_status == "fail"
+        baseline_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 1
+        ],
+        standard_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 2
+        ],
+        gold_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
         owner=owner,
     )
@@ -122,8 +140,14 @@ def unowned_repositories():
     return render_template(
         "projects/repository_standards/pages/unowned_repositories.html",
         repositories=filtrated_repositories,
-        non_compliant_repositories=[
-            repo for repo in filtrated_repositories if repo.compliance_status == "fail"
+        baseline_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 1
+        ],
+        standard_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 2
+        ],
+        gold_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
     )
 
