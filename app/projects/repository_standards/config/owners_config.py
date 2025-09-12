@@ -69,4 +69,12 @@ owners_config = [
             "github-community",
         ],
     ),
+    Owner(
+        name="LAA Get Payments & Finance Data (GPFD)",
+        teams=[
+            "payforlegalaid",
+            "payforlegalaid-admin-team"
+        ],
+        prefix="payforlegalaid"
+    )
 ]
