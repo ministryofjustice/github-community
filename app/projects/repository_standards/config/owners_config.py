@@ -14,6 +14,7 @@ owners_config = [
             "laa-eligibility-platform",
             "LAA Get Access",
             "LAA Payments and Billing",
+            "payforlegalaid"
         ],
         prefix="laa-",
     ),
@@ -68,13 +69,5 @@ owners_config = [
         teams=[
             "github-community",
         ],
-    ),
-    Owner(
-        name="LAA Get Payments & Finance Data (GPFD)",
-        teams=[
-            "payforlegalaid",
-            "payforlegalaid-admin-team"
-        ],
-        prefix="payforlegalaid"
     )
 ]
