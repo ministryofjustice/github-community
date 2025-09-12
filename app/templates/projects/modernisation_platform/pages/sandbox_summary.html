@@ -1,0 +1,88 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Sandbox Access Summary
+{% endblock %}
+
+{% block content %}
+<h1 class="govuk-heading-l">Sandbox Access Summary</h1>
+  <p class="govuk-body">
+    This page details Modernisation Platform accounts with sandbox access.
+  </p>
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Accounts with Sandbox Access</dt>
+      <dd class="govuk-summary-list__value" id="sandbox-total"></dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Accounts with Nuke Excluded</dt>
+      <dd class="govuk-summary-list__value" id="sandbox-exclude-total"></dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Accounts with Nuke Rebuild</dt>
+      <dd class="govuk-summary-list__value" id="sandbox-rebuild-total"></dd>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="govuk-heading-m">Apps and Environments with Sandbox Access</h2>
+
+    <input type="text" id="sandbox-search" class="govuk-input" placeholder="Search apps, environments, group name, nuke status..." style="margin-bottom: 1em;">
+
+    <table class="govuk-table">
+      <thead>
+        <tr>
+          <th class="govuk-table__header">App Name</th>
+          <th class="govuk-table__header">Environment</th>
+          <th class="govuk-table__header">Group Name(s)</th>
+          <th class="govuk-table__header">Nuke Status</th>
+         
+        </tr>
+      </thead>
+      <tbody id="sandbox-table-body"></tbody>
+    </table>
+  </section>
+
+  <script>
+    let sandboxData = [];
+
+    fetch('/modernisation-platform/api/apps-with-sandbox')
+      .then(response => response.json())
+      .then(data => {
+        sandboxData = data;
+        renderTable(sandboxData);
+
+        document.getElementById('sandbox-total').innerText = data.length;
+        document.getElementById('sandbox-exclude-total').innerText = data.filter(app => app.nuke === "exclude").length;
+        document.getElementById('sandbox-rebuild-total').innerText = data.filter(app => app.nuke === "rebuild").length;
+      });
+
+    document.getElementById('sandbox-search').addEventListener('input', function() {
+      const query = this.value.toLowerCase();
+      const filtered = sandboxData.filter(app =>
+        app.app_name.toLowerCase().includes(query) ||
+        app.environment.toLowerCase().includes(query) ||
+        app.nuke.toLowerCase().includes(query) ||
+        app.groups.join(' ').toLowerCase().includes(query)
+      );
+      renderTable(filtered);
+    });
+
+    function renderTable(data) {
+      const tbody = document.getElementById('sandbox-table-body');
+      tbody.innerHTML = "";
+      data.forEach(app => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="govuk-table__cell">${app.app_name}</td>
+          <td class="govuk-table__cell">${app.environment}</td>
+          <td class="govuk-table__cell">${app.groups.join('<br>')}</td>
+          <td class="govuk-table__cell">${app.nuke}</td>
+          
+        `;
+        tbody.appendChild(row);
+      });
+    }
+  </script>
+  {% endblock %}
