@@ -11,7 +11,7 @@ FAIL = "fail"
 
 BASELINE = 1
 STANDARD = 2
-GOLD = 3
+EXEMPLAR = 3
 
 
 def get_secret_scanning_enabled_check(
@@ -68,7 +68,7 @@ def get_default_branch_protection_requires_signed_commits_check(
         if repository.data.default_branch_protection.required_signatures
         else FAIL,
         required=required,
-        maturity_level=GOLD,
+        maturity_level=EXEMPLAR,
         description="Signed commits ensure that the commit author is verified, preventing impersonations.",
         link_to_guidance="/repository-standards/guidance#default-branch-protection-requires-signed-commits",
     )
@@ -83,7 +83,7 @@ def get_default_branch_protection_requires_code_owner_reviews_check(
         if repository.data.default_branch_protection.require_code_owner_reviews
         else FAIL,
         required=required,
-        maturity_level=GOLD,
+        maturity_level=EXEMPLAR,
         description="Useful for delegating reviews of parts of the codebase to specific people.",
         link_to_guidance="/repository-standards/guidance#default-branch-protection-requires-code-owner-reviews",
     )

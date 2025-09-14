@@ -39,7 +39,7 @@ def repositories():
         standard_maturity_level_repositories=[
             repo for repo in repositories if repo.maturity_level >= 2
         ],
-        gold_maturity_level_repositories=[
+        exemplar_maturity_level_repositories=[
             repo for repo in repositories if repo.maturity_level >= 3
         ],
     )
@@ -77,7 +77,7 @@ def business_units_owner(owner: str):
         standard_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 2
         ],
-        gold_maturity_level_repositories=[
+        exemplar_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
         owner=owner,
@@ -116,7 +116,7 @@ def teams_owner(owner: str):
         standard_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 2
         ],
-        gold_maturity_level_repositories=[
+        exemplar_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
         owner=owner,
@@ -146,7 +146,7 @@ def unowned_repositories():
         standard_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 2
         ],
-        gold_maturity_level_repositories=[
+        exemplar_maturity_level_repositories=[
             repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
     )

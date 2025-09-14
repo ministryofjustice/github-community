@@ -114,21 +114,23 @@ class RepositoryComplianceService:
         logo = "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAflBMVEULDAwaGxsbGxsbHBwpKioqKioqKys5OTk5OjpISEhISUlJSUlXWFhYWFhYWVlmZ2dnZ2dnaGh1dnZ2dnZ2d3eEhYWFhYWFhoaUlJSUlZWVlZWjo6OjpKSkpKSys7Ozs7PBwsLCwsLDw8PR0dHR0tLS0tLg4ODh4eHw8PD////0W6DbAAACOElEQVQYGdXB4XYbJxAG0A8pi6YYuqPMdlgiLETWK+D9X7Cpj6PjpO2J/+Ze/KaOFh8j1eJDfDL4iOPaLH7NiqyqQvgFK0zz8+RCAODwv47MgBRg4gAYh39z+If3Ro1P1jJ5A5Az+Nmn4AwgLNvzbSv3QskArkbCj0zgwBNMdtWtNWQWxpS3dl/xE82XnYG6pZK5yd4NPt/a6JXwQLAwpeZrNeBS9t56ah7gKNso4Qhr8MrfdwepeW0BVNcYgvdZgDmke8+Ua8Gb5Cu4llztE2fSmJxNLlH05FOUXDzeTFhh4ku7VQ5x8fQnLJ6ClD7U4WImPAjDtvv4OrHzvLgzK7v1cq9juCMpHripbWMbPX8+XXPiSOK4nNIYoxcnjDfaV7uPfl/62J7nWf44k7Ct6lwbo2juweDVqnYdbQJiTrprCtHNjjM5QFqPPm54ZRKkjTp7eJl5Cecnf37y56xneL1+rQy1eMW3KKOPsbJ6f02UtGlSJubRK+dUVrwhuDF0fHGBXdI5Srkkr+yWEbkxToTvtO8xNeeE/e7nL7roykJh7lzKTnigez9M22hbnJVilnQtgVZdCfN0qBMeaG9AKNcqs5bMkywiM7sDsAAZ77ShHjg4TEUNO9GjygGASfAveG/ZEgCaZ7nQRDL75Gd3BHkqJ7znLqpx3/NLlyl4yKnlOZdvtgvhPTfyKlteVBKckYlUpbTntcR9wg+WKP4AwMbtL5K6Eb4h1nzGfzPrlpzetoAPOOA39TfuoTeEaSFm3gAAAABJRU5ErkJggg=="
         label = "MoJ Compliant"
 
-        if repository and repository.maturity_level == 1:
-            color = "00703c"  # Green
-            message = "BASELINE"
-        elif repository and repository.maturity_level == 2:
-            color = "005ea5"  # MoJ Blue
-            message = "STANDARD"
-        elif repository and repository.maturity_level == 3:
-            color = "ffbf47"  # Gold
-            message = "🏆 GOLD STANDARD 🏆"
+        badge_config = {
+            1: {"color": "b1b4b6", "message": "📝 BASELINE"},  # Grey
+            2: {"color": "005ea5", "message": "🔒 STANDARD"},  # MoJ Blue
+            3: {"color": "4c2c92", "message": "🏆 EXEMPLAR"},  # Purple
+            "fail": {"color": "d4351c", "message": "❕ FAIL"},  # Red
+            "not_found": {"color": "b1b4b6", "message": "🔍 NOT FOUND"},  # Grey
+        }
+
+        if repository and repository.maturity_level in badge_config:
+            config = badge_config[repository.maturity_level]
         elif repository and not repository.maturity_level:
-            color = "cc0000"  # Red
-            message = "Fail"
+            config = badge_config["fail"]
         else:
-            color = "#808080"  # Grey
-            message = "Not Found"
+            config = badge_config["not_found"]
+
+        color = config["color"]
+        message = config["message"]
 
         return f"https://img.shields.io/badge/{quote(label)}-{quote(message)}-{color}?style=for-the-badge&labelColor=0b0c0c&logo=data:image/png;base64,{logo}"
 

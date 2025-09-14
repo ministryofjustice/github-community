@@ -66,9 +66,9 @@
       </dd>
     </div>
 
-    {% set compliance_percentage = ((gold_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    {% set compliance_percentage = ((exemplar_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
     <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Gold Compliant</dt>
+      <dt class="govuk-summary-list__key">Exemplar Compliant</dt>
       <dd class="govuk-summary-list__value">
         <span class="
                      {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
@@ -77,7 +77,7 @@
                      {% else %} govuk-tag govuk-tag--green-dark
                      {% endif %}
                      ">
-          {{ gold_maturity_level_repositories | length }}
+          {{ exemplar_maturity_level_repositories | length }}
           ({{ compliance_percentage | round | int }}%)
         </span>
       </dd>
