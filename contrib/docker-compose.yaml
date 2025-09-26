@@ -45,7 +45,7 @@ services:
       # Local
       - LOGGING_LEVEL=DEBUG
       - AUTH_ENABLED=false
-      - ADD_STUB_VALUES_TO_DATABASE=false
+      - ADD_STUB_VALUES_TO_DATABASE=true
     ports:
       - "4567:4567"
     depends_on:
