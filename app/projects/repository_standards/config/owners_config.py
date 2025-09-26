@@ -1,6 +1,7 @@
 from app.projects.repository_standards.models.owner import Owner
 
 owners_config = [
+    # Business Units
     Owner(name="HMPPS", teams=["HMPPS Developers"], prefix="hmpps-"),
     Owner(
         name="LAA",
@@ -13,6 +14,7 @@ owners_config = [
             "laa-eligibility-platform",
             "LAA Get Access",
             "LAA Payments and Billing",
+            "payforlegalaid"
         ],
         prefix="laa-",
     ),
@@ -39,8 +41,8 @@ owners_config = [
     Owner(
         name="Platforms",
         teams=[
-            "modernisation-platform",
-            "operations-engineering",
+            "Platforms",
+            "hosting-migrations",
             "aws-root-account-admin-team",
             "WebOps",
             "Studio Webops",
@@ -53,6 +55,19 @@ owners_config = [
             "moj-official-techops",
             "cloud-ops-alz-admins",
             "Technology Services",
+        ],
+    ),
+    # Teams
+    Owner(
+        name="Modernisation Platform",
+        teams=[
+            "modernisation-platform",
+        ],
+    ),
+    Owner(
+        name="GitHub Community",
+        teams=[
+            "github-community",
         ],
     ),
 ]

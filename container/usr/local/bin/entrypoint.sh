@@ -5,4 +5,8 @@ GUNICORN_BIND_HOST="${GUNICORN_BIND_HOST:-"0.0.0.0"}"
 GUNICORN_BIND_PORT="${GUNICORN_BIND_PORT:-"4567"}"
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-"4"}"
 
+echo "Running migrations..."
+alembic -c /app/migrations/alembic.ini upgrade head
+
+echo "Starting Gunicorn..."
 gunicorn --bind="${GUNICORN_BIND_HOST}:${GUNICORN_BIND_PORT}" --workers="${GUNICORN_WORKERS}" "${GUNICORN_APP_MODULE}"

@@ -12,19 +12,15 @@ class Owner(db.Model):
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     name: Mapped[str] = mapped_column(db.String)
+    type_id: Mapped[int] = mapped_column(db.ForeignKey("owner_types.id"))
 
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="owner"
     )
-    assets: Mapped[List["Asset"]] = relationship(
-        "Asset",
-        secondary="relationships",
-        back_populates="owners",
-        overlaps="relationships",
-    )
+    type: Mapped["OwnerTypes"] = relationship("OwnerTypes")
 
-    def __repr__(self) -> str:
-        return f"<Owner id={self.id}, name={self.name}, relationships={self.relationships}>"
+    def __repr__(self):
+        return f"<Owner id={self.id}, name={self.name}>"
 
 
 class Asset(db.Model):
@@ -41,15 +37,9 @@ class Asset(db.Model):
     relationships: Mapped[List["Relationship"]] = relationship(
         "Relationship", back_populates="asset"
     )
-    owners: Mapped[List["Owner"]] = relationship(
-        "Owner",
-        secondary="relationships",
-        back_populates="assets",
-        overlaps="relationships",
-    )
 
-    def __repr__(self) -> str:
-        return f"<Asset id={self.id}, name={self.name}, owners={[self.owners]}, relationships={self.relationships}>"
+    def __repr__(self):
+        return f"<Asset id={self.id}, name={self.name}>"
 
 
 class Relationship(db.Model):
@@ -63,5 +53,15 @@ class Relationship(db.Model):
     asset: Mapped["Asset"] = relationship("Asset", back_populates="relationships")
     owner: Mapped["Owner"] = relationship("Owner", back_populates="relationships")
 
-    def __repr__(self) -> str:
-        return f"<Relationship id={self.id}, type={self.type}, assets_id={self.assets_id}, owners_id={self.owners_id}>"
+    def __repr__(self):
+        return f"<Relationship id={self.id}, type={self.type}, asset={self.assets_id}, owner={self.owners_id}>"
+
+
+class OwnerTypes(db.Model):
+    __tablename__ = "owner_types"
+
+    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(db.String)
+
+    def __repr__(self):
+        return f"<OwnerTypes id={self.id}, name={self.name}>"

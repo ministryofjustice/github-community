@@ -15,25 +15,48 @@ class RepositoryView:
         name: str,
         owner_names: List[str],
         admin_owner_names: List[str],
+        business_unit_owner_names: List[str],
+        business_unit_admin_owner_names: List[str],
+        team_owner_names: List[str],
+        team_admin_owner_names: List[str],
         data: RepositoryInfo,
     ):
         self.name = name
         self.admin_owner_names = admin_owner_names
         self.owner_names = owner_names
+        self.business_unit_owners_names = business_unit_owner_names
+        self.business_unit_admin_owners_names = business_unit_admin_owner_names
+        self.team_owners_names = team_owner_names
+        self.team_admin_owners_names = team_admin_owner_names
         self.data = data
 
     @classmethod
     def from_asset(cls, asset: Asset):
-        owner_names = [relationship.owner.name for relationship in asset.relationships]
-        admin_owner_names = [
-            relationship.owner.name
+        owners = [relationship.owner for relationship in asset.relationships]
+        admin_owners = [
+            relationship.owner
             for relationship in asset.relationships
             if "ADMIN_ACCESS" in relationship.type
         ]
+
         return cls(
             name=asset.name,
-            owner_names=owner_names,
-            admin_owner_names=admin_owner_names,
+            owner_names=[owner.name for owner in owners],
+            admin_owner_names=[owner.name for owner in admin_owners],
+            business_unit_owner_names=[
+                owner.name for owner in owners if owner.type.name == "BUSINESS_UNIT"
+            ],
+            business_unit_admin_owner_names=[
+                owner.name
+                for owner in admin_owners
+                if owner.type.name == "BUSINESS_UNIT"
+            ],
+            team_owner_names=[
+                owner.name for owner in owners if owner.type.name == "TEAM"
+            ],
+            team_admin_owner_names=[
+                owner.name for owner in admin_owners if owner.type.name == "TEAM"
+            ],
             data=RepositoryInfo.from_dict(asset.data),
         )
 
@@ -50,7 +73,7 @@ class AssetRepository:
     def find_all_by_owners(self, owner_names: list[str]) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
-            .join(Asset.owners)
+            .join(Asset.relationships.owners)
             .filter(Owner.name.in_(owner_names))
             .distinct()
             .all()
@@ -61,8 +84,8 @@ class AssetRepository:
     def find_all_by_owner(self, owner_name: str) -> list[RepositoryView]:
         assets = (
             self.db_session.query(Asset)
-            .join(Asset.owners)
-            .filter(Asset.owners.any(name=owner_name))
+            .join(Asset.relationships.owners)
+            .filter(Asset.relationships.owners.any(name=owner_name))
             .all()
         )
 
@@ -88,11 +111,6 @@ class AssetRepository:
         self.db_session.add(relationship)
         self.db_session.commit()
         return relationship
-
-    def clean_all_tables(self):
-        self.db_session.query(Relationship).delete()
-        self.db_session.query(Owner).delete()
-        self.db_session.query(Asset).delete()
 
     def find_by_name(self, name: str) -> List[Asset]:
         assets = self.db_session.query(Asset).filter(Asset.name == name).all()
