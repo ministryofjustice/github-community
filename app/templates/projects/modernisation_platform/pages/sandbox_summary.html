@@ -45,44 +45,91 @@
   </section>
 
   <script>
-    let sandboxData = [];
+  console.log('=== DEBUG: Script starting ===');
+  
+  let sandboxData = []; // Store data globally for search
+  
+  // Check if required elements exist
+  const requiredElements = ['sandbox-total', 'sandbox-exclude-total', 'sandbox-rebuild-total', 'sandbox-table-body'];
+  requiredElements.forEach(id => {
+    const element = document.getElementById(id);
+    console.log(`Element ${id}:`, element ? 'EXISTS' : 'MISSING');
+  });
 
-    fetch('/modernisation-platform/api/apps-with-sandbox')
-      .then(response => response.json())
-      .then(data => {
-        sandboxData = data;
-        renderTable(sandboxData);
+  console.log('Starting fetch request...');
+  fetch('/modernisation-platform/api/apps-with-sandbox')
+    .then(response => {
+      console.log('Response status:', response.status);
+      return response.json();
+    })
+    .then(data => {
+      console.log('=== RECEIVED DATA ===');
+      console.log('Data length:', Array.isArray(data) ? data.length : 'Not an array');
+      
+      if (!Array.isArray(data)) {
+        console.error('Data is not an array!', data);
+        return;
+      }
+      
+      if (data.length === 0) {
+        console.warn('Data array is empty');
+        return;
+      }
 
-        document.getElementById('sandbox-total').innerText = data.length;
-        document.getElementById('sandbox-exclude-total').innerText = data.filter(app => app.nuke === "exclude").length;
-        document.getElementById('sandbox-rebuild-total').innerText = data.filter(app => app.nuke === "rebuild").length;
-      });
+      // Store data globally
+      sandboxData = data;
 
-    document.getElementById('sandbox-search').addEventListener('input', function() {
-      const query = this.value.toLowerCase();
-      const filtered = sandboxData.filter(app =>
-        app.app_name.toLowerCase().includes(query) ||
-        app.environment.toLowerCase().includes(query) ||
-        app.nuke.toLowerCase().includes(query) ||
-        app.groups.join(' ').toLowerCase().includes(query)
-      );
-      renderTable(filtered);
+      // Update summary
+      console.log('Updating summary...');
+      document.getElementById('sandbox-total').innerText = data.length;
+      document.getElementById('sandbox-exclude-total').innerText = data.filter(app => app.nuke === "exclude").length;
+      document.getElementById('sandbox-rebuild-total').innerText = data.filter(app => app.nuke === "rebuild").length;
+
+      // Update table
+      console.log('Updating table...');
+      renderTable(data);
+      console.log('=== UPDATE COMPLETE ===');
+    })
+    .catch(error => {
+      console.error('=== FETCH ERROR ===', error);
     });
 
-    function renderTable(data) {
-      const tbody = document.getElementById('sandbox-table-body');
-      tbody.innerHTML = "";
-      data.forEach(app => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td class="govuk-table__cell">${app.app_name}</td>
-          <td class="govuk-table__cell">${app.environment}</td>
-          <td class="govuk-table__cell">${app.groups.join('<br>')}</td>
-          <td class="govuk-table__cell">${app.nuke}</td>
-          
-        `;
-        tbody.appendChild(row);
-      });
+  // Search functionality
+  document.getElementById('sandbox-search').addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    const terms = query.split(/\s+/);
+
+    const filtered = sandboxData.filter(app =>
+      terms.every(term =>
+        app.app_name.toLowerCase().includes(term) ||
+        app.environment.toLowerCase().includes(term) ||
+        app.nuke.toLowerCase().includes(term) ||
+        app.groups.join(' ').toLowerCase().includes(term)
+      )
+    );
+    renderTable(filtered);
+  });
+
+  function renderTable(data) {
+    console.log('renderTable called with', data.length, 'items');
+    const tbody = document.getElementById('sandbox-table-body');
+    if (!tbody) {
+      console.error('Table body element not found!');
+      return;
     }
-  </script>
+    
+    tbody.innerHTML = "";
+    data.forEach((app, index) => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td class="govuk-table__cell">${app.app_name || 'N/A'}</td>
+        <td class="govuk-table__cell">${app.environment || 'N/A'}</td>
+        <td class="govuk-table__cell">${app.groups ? app.groups.join('<br>') : 'N/A'}</td>
+        <td class="govuk-table__cell">${app.nuke || 'N/A'}</td>
+      `;
+      tbody.appendChild(row);
+    });
+    console.log('Table updated with', data.length, 'rows');
+  }
+</script>
   {% endblock %}
