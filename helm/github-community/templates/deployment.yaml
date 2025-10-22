@@ -48,8 +48,7 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.app.deployment.env.POSTGRES_USER | quote }}
             - name: POSTGRES_PASSWORD
-              value:
-                {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
+              value: {{ .Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
             - name: POSTGRES_DB
               value: {{ .Values.app.deployment.env.POSTGRES_DB | quote }}
             - name: POSTGRES_HOST
@@ -73,4 +72,18 @@ spec:
 
           ports:
             - name: http
-              containerPort: 80
+              containerPort: {{ .Values.app.port }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
