@@ -30,17 +30,11 @@ def get_all_json_data(org, repo, branch, directory):
         return cache_data['data']
     
     json_files = list_json_files(org, repo, directory)
-    json_data_list = []
-    
-    # Prepare arguments for parallel execution
     args_list = [(org, repo, branch, file_info) for file_info in json_files]
 
     # Fetch files concurrently
     with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
-        try:
-            json_data_list = list(executor.map(fetch_json_file_with_filename, args_list))
-        except Exception as exc:
-            raise
+        json_data_list = list(executor.map(fetch_json_file_with_filename, args_list))
     
     # Save to file cache
     try:
@@ -65,12 +59,7 @@ def fetch_json_file_with_filename(args):
     org, repo, branch, file_info = args
     raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=file_info['path'])
     
-    headers = {}
-    github_token = os.getenv('GITHUB_TOKEN')
-    if github_token:
-        headers['Authorization'] = f'token {github_token}'
-    
-    response = requests.get(raw_url, headers=headers)
+    response = requests.get(raw_url)
     response.raise_for_status()
     json_data = response.json()
     json_data["_filename"] = file_info["name"].replace(".json", "")
