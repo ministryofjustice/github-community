@@ -59,7 +59,7 @@
   </section>
 
   <section>
-    <h2 class="govuk-heading-l">Required Checks</h1>
+    <h2 class="govuk-heading-l">Baseline Checks</h1>
     <table class="govuk-table" data-module="moj-sortable-table">
       <thead class="govuk-table__head">
         <tr class="govuk-table__row">
@@ -75,7 +75,7 @@
         </tr>
       </thead>
       <tbody class="govuk-table__body">
-        {% for check in repository.checks if check.required %}
+        {% for check in repository.checks if check.maturity_level == 1 %}
         <tr class="govuk-table__row">
           <td class="govuk-table__cell govuk-!-font-weight-bold">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
           <td class="govuk-table__cell">
@@ -98,7 +98,7 @@
   </section>
 
   <section>
-    <h2 class="govuk-heading-l">Optional Checks</h1>
+    <h2 class="govuk-heading-l">Standard Checks</h1>
     <table class="govuk-table" data-module="moj-sortable-table">
       <thead class="govuk-table__head">
         <tr class="govuk-table__row">
@@ -114,7 +114,47 @@
         </tr>
       </thead>
       <tbody class="govuk-table__body">
-        {% for check in repository.checks if not check.required %}
+        {% for check in repository.checks if check.maturity_level == 2 %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell govuk-!-font-weight-bold">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
+          <td class="govuk-table__cell">
+            <span class="
+                        {% if check.status == "fail" %} govuk-tag govuk-tag--red
+                        {% elif check.status == "pass" %} govuk-tag govuk-tag--green
+                        {% else %} govuk-tag govuk-tag--grey
+                        {% endif %}"
+            >
+            {{ check.status.capitalize() }}
+            </span>
+          </td>
+          <td class="govuk-table__cell">
+            <a href="{{ check.link_to_guidance }}" class="govuk-link">View Guidance</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+
+  <section>
+    <h2 class="govuk-heading-l">Exemplar Checks</h1>
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Check
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Compliance Status
+          </th>
+          <th scope="col" class="govuk-table__header">
+            <!-- Guidance Link Column -->
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for check in repository.checks if check.maturity_level == 3 %}
         <tr class="govuk-table__row">
           <td class="govuk-table__cell govuk-!-font-weight-bold">{{ check.name }}<p class="govuk-body-s">{{ check.description }}</p></td>
           <td class="govuk-table__cell">
