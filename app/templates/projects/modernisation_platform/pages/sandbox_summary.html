@@ -13,15 +13,15 @@
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Total Accounts with Sandbox Access</dt>
-      <dd class="govuk-summary-list__value" id="sandbox-total"></dd>
+      <dd class="govuk-summary-list__value">{{ apps|length }}</dd>
     </div>
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Accounts with Nuke Excluded</dt>
-      <dd class="govuk-summary-list__value" id="sandbox-exclude-total"></dd>
+      <dd class="govuk-summary-list__value">{{ apps | selectattr('nuke', 'equalto', 'exclude') | list | length }}</dd>
     </div>
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Accounts with Nuke Rebuild</dt>
-      <dd class="govuk-summary-list__value" id="sandbox-rebuild-total"></dd>
+      <dd class="govuk-summary-list__value">{{ apps | selectattr('nuke', 'equalto', 'rebuild') | list | length }}</dd>
     </div>
   </section>
 
@@ -29,7 +29,6 @@
     <h2 class="govuk-heading-m">Apps and Environments with Sandbox Access</h2>
 
     <input type="text" id="sandbox-search" class="govuk-input" placeholder="Search apps, environments, group name, nuke status..." style="margin-bottom: 1em;">
-
     <table class="govuk-table">
       <thead>
         <tr>
@@ -37,99 +36,33 @@
           <th class="govuk-table__header">Environment</th>
           <th class="govuk-table__header">Group Name(s)</th>
           <th class="govuk-table__header">Nuke Status</th>
-         
         </tr>
       </thead>
-      <tbody id="sandbox-table-body"></tbody>
+      <tbody id="sandbox-table-body">
+        {% for app in apps %}
+        <tr>
+          <td class="govuk-table__cell">{{ app.app_name }}</td>
+          <td class="govuk-table__cell">{{ app.environment }}</td>
+          <td class="govuk-table__cell">{% for group in app.groups %}{{ group }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td class="govuk-table__cell">{{ app.nuke }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
   </section>
-
   <script>
-  console.log('=== DEBUG: Script starting ===');
-  
-  let sandboxData = []; // Store data globally for search
-  
-  // Check if required elements exist
-  const requiredElements = ['sandbox-total', 'sandbox-exclude-total', 'sandbox-rebuild-total', 'sandbox-table-body'];
-  requiredElements.forEach(id => {
-    const element = document.getElementById(id);
-    console.log(`Element ${id}:`, element ? 'EXISTS' : 'MISSING');
-  });
-
-  console.log('Starting fetch request...');
-  fetch('/modernisation-platform/api/apps-with-sandbox')
-    .then(response => {
-      console.log('Response status:', response.status);
-      return response.json();
-    })
-    .then(data => {
-      console.log('=== RECEIVED DATA ===');
-      console.log('Data length:', Array.isArray(data) ? data.length : 'Not an array');
-      
-      if (!Array.isArray(data)) {
-        console.error('Data is not an array!', data);
-        return;
-      }
-      
-      if (data.length === 0) {
-        console.warn('Data array is empty');
-        return;
-      }
-
-      // Store data globally
-      sandboxData = data;
-
-      // Update summary
-      console.log('Updating summary...');
-      document.getElementById('sandbox-total').innerText = data.length;
-      document.getElementById('sandbox-exclude-total').innerText = data.filter(app => app.nuke === "exclude").length;
-      document.getElementById('sandbox-rebuild-total').innerText = data.filter(app => app.nuke === "rebuild").length;
-
-      // Update table
-      console.log('Updating table...');
-      renderTable(data);
-      console.log('=== UPDATE COMPLETE ===');
-    })
-    .catch(error => {
-      console.error('=== FETCH ERROR ===', error);
+    document.getElementById('sandbox-search').addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      const terms = query.split(/\s+/);
+      const rows = document.querySelectorAll('#sandbox-table-body tr');
+      rows.forEach(row => {
+        // Gather text from all cells
+        const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+        // Show row if all terms match
+        const match = terms.every(term => text.includes(term));
+        row.style.display = match ? '' : 'none';
+      });
     });
-
-  // Search functionality
-  document.getElementById('sandbox-search').addEventListener('input', function() {
-    const query = this.value.toLowerCase().trim();
-    const terms = query.split(/\s+/);
-
-    const filtered = sandboxData.filter(app =>
-      terms.every(term =>
-        app.app_name.toLowerCase().includes(term) ||
-        app.environment.toLowerCase().includes(term) ||
-        app.nuke.toLowerCase().includes(term) ||
-        app.groups.join(' ').toLowerCase().includes(term)
-      )
-    );
-    renderTable(filtered);
-  });
-
-  function renderTable(data) {
-    console.log('renderTable called with', data.length, 'items');
-    const tbody = document.getElementById('sandbox-table-body');
-    if (!tbody) {
-      console.error('Table body element not found!');
-      return;
-    }
-    
-    tbody.innerHTML = "";
-    data.forEach((app, index) => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td class="govuk-table__cell">${app.app_name || 'N/A'}</td>
-        <td class="govuk-table__cell">${app.environment || 'N/A'}</td>
-        <td class="govuk-table__cell">${app.groups ? app.groups.join('<br>') : 'N/A'}</td>
-        <td class="govuk-table__cell">${app.nuke || 'N/A'}</td>
-      `;
-      tbody.appendChild(row);
-    });
-    console.log('Table updated with', data.length, 'rows');
-  }
-</script>
+  </script>
+  
   {% endblock %}
