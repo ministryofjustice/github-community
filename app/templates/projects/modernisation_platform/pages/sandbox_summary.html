@@ -1,0 +1,68 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Sandbox Access Summary
+{% endblock %}
+
+{% block content %}
+<h1 class="govuk-heading-l">Sandbox Access Summary</h1>
+  <p class="govuk-body">
+    This page details Modernisation Platform accounts with sandbox access.
+  </p>
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Accounts with Sandbox Access</dt>
+      <dd class="govuk-summary-list__value">{{ apps|length }}</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Accounts with Nuke Excluded</dt>
+      <dd class="govuk-summary-list__value">{{ apps | selectattr('nuke', 'equalto', 'exclude') | list | length }}</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Accounts with Nuke Rebuild</dt>
+      <dd class="govuk-summary-list__value">{{ apps | selectattr('nuke', 'equalto', 'rebuild') | list | length }}</dd>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="govuk-heading-m">Apps and Environments with Sandbox Access</h2>
+
+    <input type="text" id="sandbox-search" class="govuk-input" placeholder="Search apps, environments, group name, nuke status..." style="margin-bottom: 1em;">
+    <table class="govuk-table">
+      <thead>
+        <tr>
+          <th class="govuk-table__header">App Name</th>
+          <th class="govuk-table__header">Environment</th>
+          <th class="govuk-table__header">Group Name(s)</th>
+          <th class="govuk-table__header">Nuke Status</th>
+        </tr>
+      </thead>
+      <tbody id="sandbox-table-body">
+        {% for app in apps %}
+        <tr>
+          <td class="govuk-table__cell">{{ app.app_name }}</td>
+          <td class="govuk-table__cell">{{ app.environment }}</td>
+          <td class="govuk-table__cell">{% for group in app.groups %}{{ group }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          <td class="govuk-table__cell">{{ app.nuke }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <script>
+    document.getElementById('sandbox-search').addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      const terms = query.split(/\s+/);
+      const rows = document.querySelectorAll('#sandbox-table-body tr');
+      rows.forEach(row => {
+        // Gather text from all cells
+        const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+        // Show row if all terms match
+        const match = terms.every(term => text.includes(term));
+        row.style.display = match ? '' : 'none';
+      });
+    });
+  </script>
+  
+  {% endblock %}

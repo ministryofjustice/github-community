@@ -1,0 +1,36 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Modernisation Platform
+{% endblock %}
+
+{% block content %}
+
+  {{ govukBreadcrumbs({
+      "items": [
+        {
+          "text": "Home",
+          "href": "/"
+        },
+        {
+          "text": "Modernisation Platform"
+        }
+      ]
+    }) }}
+
+  <h1 class="govuk-heading-xl">Modernisation Platform Overview</h1>
+
+  <section>
+    <h2 class="govuk-heading-m">Reports</h2>
+    <p class="govuk-body-s">View platform access reports for users and teams in the Modernisation Platform.</p>
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('modernisation_platform_main.sandbox_summary') }}">Sandbox Access Summary</a>
+        </h3>
+        <p class="govuk-body-s">See a summary of sandbox access for Modernisation Platform users.</p>
+      </div>
+    </div>
+  </section>
+
+{% endblock %}
