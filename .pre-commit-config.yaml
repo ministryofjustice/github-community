@@ -19,7 +19,7 @@ repos:
       - id: gitleaks
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: 5fee7cc03a2498e0ce36a18f36dfb558a30a426c  # frozen: v1.12.1
+    rev: d0bc12378d4f1619265f64726c5726f2c072a7ed  # frozen: v1.16.0
     hooks:
       - id: zizmor
 
