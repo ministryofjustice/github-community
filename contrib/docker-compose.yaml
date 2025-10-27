@@ -1,7 +1,7 @@
 ---
 services:
   database:
-    image: docker.io/postgres:18-alpine@sha256:9636ae7feacd8d630303eede7f95cd0f472d514e7864422c6aa8ea07b2171df8
+    image: docker.io/postgres:18-alpine@sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40
     environment:
       - POSTGRES_DB=admin
       - POSTGRES_USER=admin
@@ -53,7 +53,7 @@ services:
         condition: service_healthy
 
   db-seed:
-    image: docker.io/postgres:18-alpine@sha256:9636ae7feacd8d630303eede7f95cd0f472d514e7864422c6aa8ea07b2171df8
+    image: docker.io/postgres:18-alpine@sha256:48c8ad3a7284b82be4482a52076d47d879fd6fb084a1cbfccbd551f9331b0e40
     depends_on:
       - database
     environment:
