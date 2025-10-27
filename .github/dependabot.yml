@@ -4,40 +4,75 @@ version: 2
 updates:
   - package-ecosystem: "devcontainers"
     directory: "/"
+    cooldown:
+      default-days: 14
     schedule:
-      interval: "daily"
+      interval: "weekly"
     commit-message:
       prefix: ":dependabot: devcontainers"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/"
+    cooldown:
+      default-days: 14
     schedule:
-      interval: "daily"
+      interval: "weekly"
     commit-message:
       prefix: ":dependabot: docker"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "docker-compose"
     directory: "/contrib"
+    cooldown:
+      default-days: 14
     schedule:
-      interval: "daily"
+      interval: "weekly"
     commit-message:
       prefix: ":dependabot: docker-compose"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    cooldown:
+      default-days: 14
     schedule:
-      interval: "daily"
+      interval: "weekly"
     commit-message:
       prefix: ":dependabot: github-actions"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "uv"
     directory: "/"
+    cooldown:
+      default-days: 14
     schedule:
-      interval: "daily"
+      interval: "weekly"
     commit-message:
       prefix: ":dependabot: uv"
       include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
