@@ -111,7 +111,12 @@ def get_default_branch_protection_requires_atleast_one_review_check(
         name="Default Branch Pull Request Requires Atleast One Review",
         status=PASS
         if repository.data.default_branch_protection.required_approving_review_count
-        or repository.data.default_branch_ruleset.required_approving_review_count
+        or (
+            repository.data.default_branch_ruleset.pull_request_enforcement == "active"
+            and repository.data.default_branch_ruleset.pull_request_bypass_actors_length
+            == 0
+            and repository.data.default_branch_ruleset.pull_request_required_approving_review_count
+        )
         else FAIL,
         required=required,
         maturity_level=STANDARD,

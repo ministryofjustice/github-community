@@ -101,19 +101,18 @@ class RepositoryInfoFactory:
             pull_request_rulseset_bypass_actors = pull_request_ruleset.get(
                 "bypass_actors", None
             )
-            pull_requests_fully_enforced = (
-                pull_request_rulset_enforcenment == "active"
-                and pull_request_rulseset_bypass_actors
-                and len(pull_request_rulseset_bypass_actors) == 0
-            )
 
             default_branch_ruleset = BranchRulesetInfo(
                 enabled=True if response and len(response) > 0 else False,
-                required_approving_review_count=pull_request_parameters.get(
-                    "required_approving_review_count", None
+                pull_request_enforcement=pull_request_rulset_enforcenment,
+                pull_request_bypass_actors_length=len(
+                    pull_request_rulseset_bypass_actors
                 )
-                if pull_requests_fully_enforced
+                if pull_request_rulseset_bypass_actors
                 else None,
+                pull_request_required_approving_review_count=pull_request_parameters.get(
+                    "required_approving_review_count", None
+                ),
             )
         except Exception as e:
             default_branch_ruleset = None
@@ -170,7 +169,9 @@ class BranchProtectionInfo:
 @dataclass
 class BranchRulesetInfo:
     enabled: Optional[bool] = None
-    required_approving_review_count: Optional[int] = None
+    pull_request_enforcement: Optional[str] = None
+    pull_request_bypass_actors_length: Optional[int] = None
+    pull_request_required_approving_review_count: Optional[int] = None
 
 
 @dataclass
