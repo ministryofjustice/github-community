@@ -109,9 +109,7 @@ class GithubService:
         repositories_to_check = [
             repository
             for repository in repositories
-            # if not (repository.archived or repository.fork)
-            if repository.name == "github-community"
-            or repository.name == "modernisation-platform"
+            if not (repository.archived or repository.fork)
         ]
         logger.info(f"Total Repositories: [ {len(repositories_to_check)} ]")
         counter = 1
