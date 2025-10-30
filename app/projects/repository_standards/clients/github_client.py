@@ -91,3 +91,10 @@ class GitHubClient:
         Docs: https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#list-repository-rulesets
         """
         return self.__call("GET", f"/repos/{self.org}/{repo}/rules/branches/{branch}")
+
+    def get_repository_ruleset(self, repo: str, ruleset_id: str) -> Dict[str, Any]:
+        """
+        Get a ruleset for a repository.
+        Docs: https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#get-a-repository-ruleset
+        """
+        return self.__call("GET", f"/repos/{self.org}/{repo}/rulesets/{ruleset_id}")

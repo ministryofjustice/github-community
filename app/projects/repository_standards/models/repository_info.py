@@ -86,14 +86,34 @@ class RepositoryInfoFactory:
         try:
             response = github_client.get_branch_rulesets(repo.name, repo.default_branch)
             rules_by_type = {r["type"]: r for r in response if "type" in r}
-            pull_request_parameters = rules_by_type.get("pull_request", {}).get(
-                "parameters", {}
+
+            pull_request = rules_by_type.get("pull_request", {})
+            pull_request_parameters = pull_request.get("parameters", {})
+            pull_request_ruleset_id = pull_request.get("ruleset_id", None)
+            pull_request_ruleset = (
+                github_client.get_repository_ruleset(repo.name, pull_request_ruleset_id)
+                if pull_request_ruleset_id
+                else {}
             )
+            pull_request_rulset_enforcenment = pull_request_ruleset.get(
+                "enforcement", None
+            )
+            pull_request_rulseset_bypass_actors = pull_request_ruleset.get(
+                "bypass_actors", None
+            )
+            pull_requests_fully_enforced = (
+                pull_request_rulset_enforcenment == "active"
+                and pull_request_rulseset_bypass_actors
+                and len(pull_request_rulseset_bypass_actors) == 0
+            )
+
             default_branch_ruleset = BranchRulesetInfo(
                 enabled=True if response and len(response) > 0 else False,
                 required_approving_review_count=pull_request_parameters.get(
                     "required_approving_review_count", None
-                ),
+                )
+                if pull_requests_fully_enforced
+                else None,
             )
         except Exception as e:
             default_branch_ruleset = None
