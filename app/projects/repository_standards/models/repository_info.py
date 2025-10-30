@@ -102,6 +102,22 @@ class RepositoryInfoFactory:
                 "bypass_actors", None
             )
 
+            required_signatures = rules_by_type.get("required_signatures", {})
+            required_signatures_ruleset_id = required_signatures.get("ruleset_id", None)
+            required_signatures_ruleset = (
+                github_client.get_repository_ruleset(
+                    repo.name, required_signatures_ruleset_id
+                )
+                if required_signatures_ruleset_id
+                else {}
+            )
+            required_signatures_ruleset_enforcement = required_signatures_ruleset.get(
+                "enforcement", None
+            )
+            required_signatures_ruleset_bypass_actors = required_signatures_ruleset.get(
+                "bypass_actors"
+            )
+
             default_branch_ruleset = BranchRulesetInfo(
                 enabled=True if response and len(response) > 0 else False,
                 pull_request_enforcement=pull_request_rulset_enforcenment,
@@ -113,6 +129,18 @@ class RepositoryInfoFactory:
                 pull_request_required_approving_review_count=pull_request_parameters.get(
                     "required_approving_review_count", None
                 ),
+                pull_request_dismiss_stale_reviews_on_push=pull_request_parameters.get(
+                    "dismiss_stale_reviews_on_push", None
+                ),
+                pull_request_require_code_owner_review=pull_request_parameters.get(
+                    "require_code_owner_review", None
+                ),
+                required_signatures_enforcement=required_signatures_ruleset_enforcement,
+                required_signatures_ruleset_bypass_actors_length=len(
+                    required_signatures_ruleset_bypass_actors
+                )
+                if required_signatures_ruleset_bypass_actors
+                else None,
             )
         except Exception as e:
             default_branch_ruleset = None
@@ -172,6 +200,10 @@ class BranchRulesetInfo:
     pull_request_enforcement: Optional[str] = None
     pull_request_bypass_actors_length: Optional[int] = None
     pull_request_required_approving_review_count: Optional[int] = None
+    pull_request_dismiss_stale_reviews_on_push: Optional[bool] = None
+    pull_request_require_code_owner_review: Optional[bool] = None
+    required_signatures_enforcement: Optional[str] = None
+    required_signatures_ruleset_bypass_actors_length: Optional[int] = None
 
 
 @dataclass

@@ -69,7 +69,6 @@ class GitHubClient:
             {
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
-                "User-Agent": "MoJ-GitHubClient",
             }
         )
 

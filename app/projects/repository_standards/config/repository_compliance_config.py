@@ -51,6 +51,11 @@ def get_branch_protection_enforced_for_admins_check(
         name="Default Branch Protection Enforced For Admins",
         status=PASS
         if repository.data.default_branch_protection.enforce_admins
+        or (
+            repository.data.default_branch_ruleset.enabled
+            and not repository.data.default_branch_ruleset.pull_request_bypass_actors_length
+            and not repository.data.default_branch_ruleset.required_signatures_ruleset_bypass_actors_length
+        )
         else FAIL,
         required=required,
         maturity_level=STANDARD,
@@ -66,6 +71,12 @@ def get_default_branch_protection_requires_signed_commits_check(
         name="Default Branch Protection Requires Signed Commits",
         status=PASS
         if repository.data.default_branch_protection.required_signatures
+        or (
+            repository.data.default_branch_ruleset.enabled
+            and repository.data.default_branch_ruleset.required_signatures_enforcement
+            == "active"
+            and not repository.data.default_branch_ruleset.required_signatures_ruleset_bypass_actors_length
+        )
         else FAIL,
         required=required,
         maturity_level=EXEMPLAR,
@@ -81,6 +92,13 @@ def get_default_branch_protection_requires_code_owner_reviews_check(
         name="Default Branch Protection Requires Code Owner Reviews",
         status=PASS
         if repository.data.default_branch_protection.require_code_owner_reviews
+        or (
+            repository.data.default_branch_ruleset.enabled
+            and repository.data.default_branch_ruleset.pull_request_enforcement
+            == "active"
+            and not repository.data.default_branch_ruleset.required_signatures_ruleset_bypass_actors_length
+            and repository.data.default_branch_ruleset.pull_request_require_code_owner_review
+        )
         else FAIL,
         required=required,
         maturity_level=EXEMPLAR,
@@ -96,6 +114,13 @@ def get_default_branch_pull_requests_dismiss_stale_reviews_check(
         name="Default Branch Pull Request Dismiss Stale Reviews",
         status=PASS
         if repository.data.default_branch_protection.dismiss_stale_reviews
+        or (
+            repository.data.default_branch_ruleset.enabled
+            and repository.data.default_branch_ruleset.pull_request_enforcement
+            == "active"
+            and not repository.data.default_branch_ruleset.required_signatures_ruleset_bypass_actors_length
+            and repository.data.default_branch_ruleset.pull_request_dismiss_stale_reviews_on_push
+        )
         else FAIL,
         required=required,
         maturity_level=STANDARD,
@@ -112,10 +137,10 @@ def get_default_branch_protection_requires_atleast_one_review_check(
         status=PASS
         if repository.data.default_branch_protection.required_approving_review_count
         or (
-            repository.data.default_branch_ruleset.pull_request_enforcement == "active"
-            and not bool(
-                repository.data.default_branch_ruleset.pull_request_bypass_actors_length
-            )
+            repository.data.default_branch_ruleset.enabled
+            and repository.data.default_branch_ruleset.pull_request_enforcement
+            == "active"
+            and not repository.data.default_branch_ruleset.pull_request_bypass_actors_length
             and repository.data.default_branch_ruleset.pull_request_required_approving_review_count
         )
         else FAIL,
