@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from app.projects.repository_standards.clients.github_client import GitHubClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,6 +16,7 @@ class RepositoryInfoFactory:
         teams_with_admin_parents,
         teams_with_any,
         teams_with_any_parents,
+        github_client: GitHubClient,
     ):
         basic_info = BasicRepositoryInfo(
             name=repo.name,
@@ -80,6 +83,20 @@ class RepositoryInfoFactory:
             default_branch_protection = None
             logger.error("Error getting default branch protection: %s", e)
 
+        try:
+            response = github_client.get_branch_rulesets(repo.name, repo.default_branch)
+            rules_by_type = {r["type"]: r for r in response if "type" in r}
+            pull_request = rules_by_type["pull_request"]
+            default_branch_ruleset = BranchRulesetInfo(
+                enabled=True if response and len(response) > 0 else False,
+                required_approving_review_count=pull_request[
+                    "required_approving_review_count"
+                ],
+            )
+        except Exception as e:
+            default_branch_ruleset = None
+            logger.error("Error getting default branch rules: %s", e)
+
         repository_access = RepositoryAccess(
             teams_with_admin=teams_with_admin,
             teams_with_admin_parents=teams_with_admin_parents,
@@ -93,6 +110,7 @@ class RepositoryInfoFactory:
             security_and_analysis=security_analysis,
             default_branch_protection=default_branch_protection
             or BranchProtectionInfo(),
+            default_branch_ruleset=default_branch_ruleset or BranchRulesetInfo(),
         )
 
 
@@ -128,6 +146,12 @@ class BranchProtectionInfo:
 
 
 @dataclass
+class BranchRulesetInfo:
+    enabled: Optional[bool] = None
+    required_approving_review_count: Optional[int] = None
+
+
+@dataclass
 class RepositoryAccess:
     teams_with_admin: List[str]
     teams_with_admin_parents: List[str]
@@ -145,6 +169,7 @@ class RepositoryInfo:
     default_branch_protection: BranchProtectionInfo = field(
         default_factory=BranchProtectionInfo
     )
+    default_branch_ruleset: BranchRulesetInfo = field(default_factory=BranchRulesetInfo)
 
     def to_dict(self):
         return json.loads(json.dumps(self, default=lambda o: o.__dict__))
@@ -159,5 +184,8 @@ class RepositoryInfo:
             ),
             default_branch_protection=BranchProtectionInfo(
                 **data.get("default_branch_protection", {})
+            ),
+            default_branch_ruleset=BranchRulesetInfo(
+                **data.get("default_branch_ruleset", {})
             ),
         )
