@@ -29,7 +29,9 @@ class GithubService:
         app_installation_auth = app_auth.get_installation_auth(app_installation_id)
         self.github_client_core_api: Github = Github(auth=app_installation_auth)
         self.github_client = GitHubClient(
-            token=app_installation_auth.token,
+            app_client_id=app_client_id,
+            app_private_key=app_private_key,
+            app_installation_id=app_installation_id,
             org=self.organisation_name,
         )
 

@@ -1,8 +1,10 @@
 import logging
 from calendar import timegm
-from time import gmtime, sleep
+from time import gmtime, sleep, time
+from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, List
 
+import jwt
 import requests
 from github import RateLimitExceededException
 
@@ -55,31 +57,83 @@ def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Ca
     return decorator
 
 
-class GitHubClient:
+def create_installation_token(
+    app_id: str, private_key: str, installation_id: int
+) -> dict:
     """
-    High-level GitHub API client — wraps GitHub's REST API.
-    Used to make calls to GitHub using their API, typically ones that are not supported yet by PyGithub.
-    """
+    Create a GitHub App installation token.
 
-    def __init__(self, token: str, org: str, base_url: str = "https://api.github.com"):
+    Returns:
+        dict: { "token": str, "expires_at": datetime }
+    """
+    now_ts = int(time())
+    payload = {
+        "iat": now_ts,
+        "exp": now_ts + 600,  # max 10 minutes
+        "iss": app_id,
+    }
+    encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
+
+    url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
+    headers = {
+        "Authorization": f"Bearer {encoded_jwt}",
+        "Accept": "application/vnd.github+json",
+    }
+    response = requests.post(url, headers=headers)
+    response.raise_for_status()
+    data = response.json()
+
+    return {
+        "token": data["token"],
+        "expires_at": datetime.strptime(
+            data["expires_at"], "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=timezone.utc),
+    }
+
+
+class GitHubClient:
+    def __init__(
+        self,
+        app_client_id: str,
+        app_private_key: str,
+        app_installation_id: int,
+        org: str,
+        base_url: str = "https://api.github.com",
+    ):
         self.org = org
         self.base_url = base_url.rstrip("/")
+        self.app_client_id = app_client_id
+        self.app_private_key = app_private_key
+        self.app_installation_id = app_installation_id
+
+        self.__token = None
+        self.__token_expires_at = datetime.fromtimestamp(0, tz=timezone.utc)
+
         self.session = requests.Session()
-        self.session.headers.update(
-            {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-            }
-        )
+        self.session.headers.update({"Accept": "application/vnd.github+json"})
+
+    def __get_token(self) -> str:
+        now = datetime.now(timezone.utc)
+        if not self.__token or now >= self.__token_expires_at:
+            token_data = create_installation_token(
+                self.app_client_id,
+                self.app_private_key,
+                self.app_installation_id,
+            )
+            self.__token = token_data["token"]
+            self.__token_expires_at = now + timedelta(minutes=55)
+        return self.__token
 
     def __call(self, method: str, path: str, **kwargs) -> Any:
         """Internal request helper."""
+        self.session.headers.update({"Authorization": f"Bearer {self.__get_token()}"})
+
         url = f"{self.base_url}{path}"
         response = self.session.request(method, url, **kwargs)
 
         if not response.ok:
             raise ValueError(
-                f"Error calling URL: [{url}], Status Code: [{response.status_code}], Response: {response.text} "
+                f"Error calling URL: [{url}], Status Code: [{response.status_code}], Response: {response.text}"
             )
 
         return response.json()
