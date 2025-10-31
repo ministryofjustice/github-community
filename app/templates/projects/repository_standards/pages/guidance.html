@@ -81,13 +81,13 @@
       <p class="govuk-body"><strong>Maturity:</strong> Baseline</p>
       <p class="govuk-body"><strong>Impact:</strong> Enhances security by detecting and alerting on the presence of exposed secrets, such as API keys and credentials, within the repository. This prevents sensitive data from being exploited by malicious actors.</p>
       <p class="govuk-body"><strong>Effort:</strong> Low – This feature can be easily enabled in the repository settings, requiring no additional development effort.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> Enabling secret scanning is a crucial security measure that helps identify accidental leaks before they become security incidents. It is Maturity as it provides significant protection against credential exposure with minimal overhead.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Enabling secret scanning is a crucial security measure that helps identify accidental leaks before they become security incidents. It provides significant protection against credential exposure with minimal overhead and it's enablement is enforced at the Enterprise level.</p>
 
       <h3 class="govuk-heading-m" id="secret-scanning-push-protection-enabled">Secret Scanning Push Protection Enabled</h3>
       <p class="govuk-body"><strong>Maturity:</strong> Baseline</p>
       <p class="govuk-body"><strong>Impact:</strong> Prevents commits containing secrets from being pushed to the repository, stopping security issues before they occur.</p>
       <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled in repository settings without requiring additional configuration.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> Push protection blocks commits containing secrets at the source, preventing them from ever reaching the repository. This proactive security measure greatly reduces the risk of exposed credentials and should always be enabled.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Push protection blocks commits containing secrets at the source, preventing them from ever reaching the repository. This proactive security measure greatly reduces the risk of exposed credentials and it's enablement is enforced at the Enterprise level.</p>
 
       <h2 class="govuk-heading-l" id="secret-scanning-enabled">Branch Protection Checks</h2>
 
@@ -95,31 +95,31 @@
       <p class="govuk-body"><strong>Maturity:</strong> Standard</p>
       <p class="govuk-body"><strong>Impact:</strong> Strengthens repository governance by ensuring that even administrators must adhere to branch protection rules. This prevents accidental or unreviewed changes from being merged.</p>
       <p class="govuk-body"><strong>Effort:</strong> Low – Can be configured via branch protection settings in GitHub.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> While administrators often require additional permissions, enforcing branch protection ensures that all changes go through the appropriate review process. It is currently optional to allow for flexibility, but it is recommended for maintaining robust security practices.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> While administrators often require additional permissions, enforcing branch protection ensures that all changes go through the appropriate review process. For Branch Rulesets, this check ensures there are no actors in the Bypass Allow List for all Active Rulesets.</p>
 
       <h3 class="govuk-heading-m" id="default-branch-protection-requires-signed-commits">Default Branch Protection Requires Signed Commits</h3>
       <p class="govuk-body"><strong>Maturity:</strong> Exemplar</p>
       <p class="govuk-body"><strong>Impact:</strong> Ensures that all commits are verified and traceable to their authors, preventing impersonation attacks.</p>
       <p class="govuk-body"><strong>Effort:</strong> Medium – Developers must configure GPG or SSH key signing, which requires some setup.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> Signed commits add an additional layer of security by verifying the identity of commit authors. While useful for ensuring the integrity of the codebase, it requires developer setup and is therefore optional for now.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Signed commits add an additional layer of security by verifying the identity of commit authors. While useful for ensuring the integrity of the codebase, it requires developer setup.</p>
 
       <h3 class="govuk-heading-m" id="default-branch-protection-requires-code-owner-reviews">Default Branch Protection Requires Code Owner Reviews</h3>
       <p class="govuk-body"><strong>Maturity:</strong> Exemplar</p>
       <p class="govuk-body"><strong>Impact:</strong> Helps ensure that changes are reviewed by designated code owners, maintaining code quality and consistency.</p>
       <p class="govuk-body"><strong>Effort:</strong> Medium – Requires defining code owners in a repository via a CODEOWNERS file.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> This check ensures that subject matter experts review relevant changes, reducing the risk of errors. It is currently optional to provide teams with flexibility in their review processes.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This check ensures that subject matter experts review relevant changes, reducing the risk of errors.</p>
 
       <h3 class="govuk-heading-m" id="default-branch-pull-request-dismiss-stale-reviews">Default Branch Pull Request Dismiss Stale Reviews</h3>
       <p class="govuk-body"><strong>Maturity:</strong> Standard</p>
       <p class="govuk-body"><strong>Impact:</strong> Ensures that outdated approvals are dismissed when new changes are introduced to a pull request, reducing the risk of merging unreviewed modifications.</p>
       <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled through branch protection settings.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> This feature improves the reliability of code reviews by ensuring that only the latest changes receive approval. It is optional to allow teams flexibility in managing approvals.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This feature improves the reliability of code reviews by ensuring that only the latest changes receive approval.</p>
 
       <h3 class="govuk-heading-m" id="default-branch-pull-request-requires-at-least-one-review">Default Branch Pull Request Requires At Least One Review</h3>
       <p class="govuk-body"><strong>Maturity:</strong> Standard</p>
       <p class="govuk-body"><strong>Impact:</strong> Ensures that all pull requests undergo peer review before merging, improving code quality and security.</p>
       <p class="govuk-body"><strong>Effort:</strong> Low – Can be enabled through branch protection settings.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> This policy encourages collaboration and reduces the risk of introducing bugs or security vulnerabilities. While not mandatory, it is a best practice for maintaining high-quality code.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> This policy encourages collaboration and reduces the risk of introducing bugs or security vulnerabilities.</p>
 
       <h2 class="govuk-heading-l" id="secret-scanning-enabled">Ownership & Governance Checks</h2>
 
@@ -139,7 +139,7 @@
       <p class="govuk-body"><strong>Maturity:</strong> Standard</p>
       <p class="govuk-body"><strong>Impact:</strong> Promotes a modern and inclusive naming convention across repositories by using `main` as the default branch name. This is the default for all new GitHub repositories.</p>
       <p class="govuk-body"><strong>Effort:</strong> Medium – Changing the default branch name may require updates to processes that have hard-coded branch names, such as in CI/CD pipelines.</p>
-      <p class="govuk-body"><strong>Guidance:</strong> Standardizing the default branch name to `main` ensures consistency and aligns with modern best practices. While this change is optional, it is recommended for better inclusivity and standardization.</p>
+      <p class="govuk-body"><strong>Guidance:</strong> Standardizing the default branch name to `main` ensures consistency and aligns with modern best practices.</p>
     </div>
   </div>
 
