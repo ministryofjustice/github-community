@@ -1,64 +1,20 @@
 import logging
-from calendar import timegm
-from time import gmtime, sleep
-from typing import Callable, List
+from typing import List
 
-from github import Auth, Github, RateLimitExceededException
+from github import Auth, Github
 from github.Repository import Repository
 from github.Team import Team
 
+from app.projects.repository_standards.clients.github_client import (
+    retries_github_rate_limit_exception_at_next_reset_once,
+    GitHubClient,
+)
 from app.projects.repository_standards.models.repository_info import (
     RepositoryInfo,
     RepositoryInfoFactory,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Callable:
-    def decorator(*args, **kwargs):
-        """
-        A decorator to retry the method when rate limiting for GitHub resets if the method fails due to Rate Limit related exception.
-
-        WARNING: Since this decorator retries methods, ensure that the method being decorated is idempotent
-         or contains only one non-idempotent method at the end of a call chain to GitHub.
-
-         Example of idempotent methods are:
-            - Retrieving data
-         Example of (potentially) non-idempotent methods are:
-            - Deleting data
-            - Updating data
-        """
-        try:
-            return func(*args, **kwargs)
-        except RateLimitExceededException as exception:
-            logger.warning(
-                f"Caught {type(exception).__name__}, retrying calls when rate limit resets."
-            )
-            rate_limits = args[0].github_client_core_api.get_rate_limit()
-            rate_limit_to_use = (
-                rate_limits.core
-                if isinstance(exception, RateLimitExceededException)
-                else rate_limits.graphql
-            )
-
-            reset_timestamp = timegm(rate_limit_to_use.reset.timetuple())
-            now_timestamp = timegm(gmtime())
-            time_until_core_api_rate_limit_resets = (
-                (reset_timestamp - now_timestamp)
-                if reset_timestamp > now_timestamp
-                else 0
-            )
-
-            wait_time_buffer = 5
-            sleep(
-                time_until_core_api_rate_limit_resets + wait_time_buffer
-                if time_until_core_api_rate_limit_resets
-                else 0
-            )
-            return func(*args, **kwargs)
-
-    return decorator
 
 
 class GithubService:
@@ -72,6 +28,12 @@ class GithubService:
         app_auth = Auth.AppAuth(app_client_id, app_private_key)
         app_installation_auth = app_auth.get_installation_auth(app_installation_id)
         self.github_client_core_api: Github = Github(auth=app_installation_auth)
+        self.github_client = GitHubClient(
+            app_client_id=app_client_id,
+            app_private_key=app_private_key,
+            app_installation_id=app_installation_id,
+            org=self.organisation_name,
+        )
 
     @retries_github_rate_limit_exception_at_next_reset_once
     def __get_all_parents_team_names_of_team(
@@ -174,6 +136,7 @@ class GithubService:
                     teams_with_admin_access_parents,
                     teams_with_any_access,
                     teams_with_any_access_parents,
+                    self.github_client,
                 )
             )
             counter += 1

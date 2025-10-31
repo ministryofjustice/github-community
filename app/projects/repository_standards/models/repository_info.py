@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+from app.projects.repository_standards.clients.github_client import GitHubClient
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,6 +16,7 @@ class RepositoryInfoFactory:
         teams_with_admin_parents,
         teams_with_any,
         teams_with_any_parents,
+        github_client: GitHubClient,
     ):
         basic_info = BasicRepositoryInfo(
             name=repo.name,
@@ -80,6 +83,69 @@ class RepositoryInfoFactory:
             default_branch_protection = None
             logger.error("Error getting default branch protection: %s", e)
 
+        try:
+            response = github_client.get_branch_rulesets(repo.name, repo.default_branch)
+            rules_by_type = {r["type"]: r for r in response if "type" in r}
+
+            pull_request = rules_by_type.get("pull_request", {})
+            pull_request_parameters = pull_request.get("parameters", {})
+            pull_request_ruleset_id = pull_request.get("ruleset_id", None)
+            pull_request_ruleset = (
+                github_client.get_repository_ruleset(repo.name, pull_request_ruleset_id)
+                if pull_request_ruleset_id
+                else {}
+            )
+            pull_request_rulset_enforcenment = pull_request_ruleset.get(
+                "enforcement", None
+            )
+            pull_request_rulseset_bypass_actors = pull_request_ruleset.get(
+                "bypass_actors", None
+            )
+
+            required_signatures = rules_by_type.get("required_signatures", {})
+            required_signatures_ruleset_id = required_signatures.get("ruleset_id", None)
+            required_signatures_ruleset = (
+                github_client.get_repository_ruleset(
+                    repo.name, required_signatures_ruleset_id
+                )
+                if required_signatures_ruleset_id
+                else {}
+            )
+            required_signatures_ruleset_enforcement = required_signatures_ruleset.get(
+                "enforcement", None
+            )
+            required_signatures_ruleset_bypass_actors = required_signatures_ruleset.get(
+                "bypass_actors"
+            )
+
+            default_branch_ruleset = BranchRulesetInfo(
+                enabled=True if response and len(response) > 0 else False,
+                pull_request_enforcement=pull_request_rulset_enforcenment,
+                pull_request_bypass_actors_length=len(
+                    pull_request_rulseset_bypass_actors
+                )
+                if pull_request_rulseset_bypass_actors
+                else None,
+                pull_request_required_approving_review_count=pull_request_parameters.get(
+                    "required_approving_review_count", None
+                ),
+                pull_request_dismiss_stale_reviews_on_push=pull_request_parameters.get(
+                    "dismiss_stale_reviews_on_push", None
+                ),
+                pull_request_require_code_owner_review=pull_request_parameters.get(
+                    "require_code_owner_review", None
+                ),
+                required_signatures_enforcement=required_signatures_ruleset_enforcement,
+                required_signatures_ruleset_bypass_actors_length=len(
+                    required_signatures_ruleset_bypass_actors
+                )
+                if required_signatures_ruleset_bypass_actors
+                else None,
+            )
+        except Exception as e:
+            default_branch_ruleset = None
+            logger.error("Error getting default branch rules: %s", e)
+
         repository_access = RepositoryAccess(
             teams_with_admin=teams_with_admin,
             teams_with_admin_parents=teams_with_admin_parents,
@@ -93,6 +159,7 @@ class RepositoryInfoFactory:
             security_and_analysis=security_analysis,
             default_branch_protection=default_branch_protection
             or BranchProtectionInfo(),
+            default_branch_ruleset=default_branch_ruleset or BranchRulesetInfo(),
         )
 
 
@@ -128,6 +195,18 @@ class BranchProtectionInfo:
 
 
 @dataclass
+class BranchRulesetInfo:
+    enabled: Optional[bool] = None
+    pull_request_enforcement: Optional[str] = None
+    pull_request_bypass_actors_length: Optional[int] = None
+    pull_request_required_approving_review_count: Optional[int] = None
+    pull_request_dismiss_stale_reviews_on_push: Optional[bool] = None
+    pull_request_require_code_owner_review: Optional[bool] = None
+    required_signatures_enforcement: Optional[str] = None
+    required_signatures_ruleset_bypass_actors_length: Optional[int] = None
+
+
+@dataclass
 class RepositoryAccess:
     teams_with_admin: List[str]
     teams_with_admin_parents: List[str]
@@ -145,6 +224,7 @@ class RepositoryInfo:
     default_branch_protection: BranchProtectionInfo = field(
         default_factory=BranchProtectionInfo
     )
+    default_branch_ruleset: BranchRulesetInfo = field(default_factory=BranchRulesetInfo)
 
     def to_dict(self):
         return json.loads(json.dumps(self, default=lambda o: o.__dict__))
@@ -159,5 +239,8 @@ class RepositoryInfo:
             ),
             default_branch_protection=BranchProtectionInfo(
                 **data.get("default_branch_protection", {})
+            ),
+            default_branch_ruleset=BranchRulesetInfo(
+                **data.get("default_branch_ruleset", {})
             ),
         )

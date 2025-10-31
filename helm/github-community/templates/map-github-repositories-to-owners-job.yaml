@@ -49,6 +49,8 @@ spec:
                value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
              - name: GITHUB_APP_INSTALLATION_ID
                value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
+             - name: GUNICORN_WORKERS
+               value: "1"
 
           restartPolicy: Never
           activeDeadlineSeconds: 7200
