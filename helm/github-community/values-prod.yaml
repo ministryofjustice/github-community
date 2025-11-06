@@ -17,3 +17,7 @@ app:
       FLASK_DEBUG: true
       PHASE_BANNER_TEXT: "ALPHA"
       AUTH_ENABLED: true
+
+  jobs:
+    map_github_repositories_to_owners:
+      schedule: "0 6,9,12,15,18 * * *"

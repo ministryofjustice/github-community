@@ -5,7 +5,7 @@ metadata:
   labels:
     {{- include "app.labels" . | nindent 4 }}
 spec:
-  schedule: "0 12 * * *"
+  schedule: "{{ .Values.app.jobs.map_github_repositories_to_owners.schedule }}"
   concurrencyPolicy: Replace
   failedJobsHistoryLimit: 3
   startingDeadlineSeconds: 300
