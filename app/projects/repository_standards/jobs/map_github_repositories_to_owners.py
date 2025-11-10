@@ -88,6 +88,7 @@ def main():
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")
 
     asset_service.remove_stale_assets()
+    asset_service.remove_stale_relationships()
 
     logger.info("Complete!")
 

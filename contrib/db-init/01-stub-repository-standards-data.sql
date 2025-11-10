@@ -36,14 +36,14 @@ INSERT INTO public.assets (id, name, type, last_updated, data) VALUES
   "default_branch_protection":{"allow_force_pushes":false, "enforce_admins":true, "require_code_owner_reviews":true}
   }');
 
-INSERT INTO public.relationships (id, type, assets_id, owners_id) VALUES
-(1, 'ADMIN_ACCESS', 1, 6),
-(2, 'ADMIN_ACCESS', 1, 8),
-(3, 'ADMIN_ACCESS', 3, 3),
-(4, 'ADMIN_ACCESS', 4, 4),
-(5, 'ADMIN_ACCESS', 5, 5),
-(6, 'OTHER', 1, 2),
-(7, 'OTHER', 2, 3),
-(8, 'OTHER', 3, 4),
-(9, 'OTHER', 4, 5),
-(10, 'OTHER', 5, 8);
+INSERT INTO public.relationships (id, type, assets_id, owners_id, last_updated) VALUES
+(1, 'ADMIN_ACCESS', 1, 6, NOW()),
+(2, 'ADMIN_ACCESS', 1, 8, NOW()),
+(3, 'ADMIN_ACCESS', 3, 3, NOW()),
+(4, 'ADMIN_ACCESS', 4, 4, NOW()),
+(5, 'ADMIN_ACCESS', 5, 5, NOW()),
+(6, 'OTHER', 1, 2, NOW()),
+(7, 'OTHER', 2, 3, NOW()),
+(8, 'OTHER', 3, 4, NOW()),
+(9, 'OTHER', 4, 5, NOW()),
+(10, 'OTHER', 5, 8, NOW());

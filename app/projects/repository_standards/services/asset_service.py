@@ -50,6 +50,9 @@ class AssetService:
     def remove_stale_assets(self):
         self.__asset_repository.remove_stale_assets()
 
+    def remove_stale_relationships(self):
+        self.__asset_repository.remove_stale_assets()
+
 
 def get_asset_service() -> AssetService:
     if "asset_service" not in g:
