@@ -98,7 +98,7 @@ class GithubService:
     @retries_github_rate_limit_exception_at_next_reset_once
     def get_all_repositories(
         self,
-        limit: int = 1000,
+        limit: int = 100,
         teams_to_ignore: List[str] = [
             "organisation-security-auditor",
             "organisation-security-auditor-external",
