@@ -165,11 +165,11 @@ class AssetRepository:
             )
 
         if len(assets) == 0:
-            logging.info(f"No repository found [ {name} ] - creating a new asset...")
+            logging.debug(f"No repository found [ {name} ] - creating a new asset...")
             return self.add_asset(name, "REPOSITORY", data)
 
         asset = assets[0]
-        logging.info(
+        logging.debug(
             f"Found existing respoistory with ID [ {asset.id} ] - updating existing assets data..."
         )
         asset.last_updated = datetime.now()
