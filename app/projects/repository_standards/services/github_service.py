@@ -72,7 +72,7 @@ class GithubService:
             if team.name in teams_to_ignore:
                 logging.info("Team specified to ignore, skipping...")
                 continue
-            permissions = team.get_repo_permission(repository)
+            permissions = team.permissions
             team_parents = self.__get_all_parents_team_names_of_team(
                 team, team_parent_cache
             )
