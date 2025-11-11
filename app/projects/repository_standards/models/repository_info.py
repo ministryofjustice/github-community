@@ -81,7 +81,7 @@ class RepositoryInfoFactory:
             )
         except Exception as e:
             default_branch_protection = None
-            logger.error("Error getting default branch protection: %s", e)
+            logger.debug("Error getting default branch protection: %s", e)
 
         try:
             response = github_client.get_branch_rulesets(repo.name, repo.default_branch)
@@ -144,7 +144,7 @@ class RepositoryInfoFactory:
             )
         except Exception as e:
             default_branch_ruleset = None
-            logger.error("Error getting default branch rules: %s", e)
+            logger.debug("Error getting default branch rules: %s", e)
 
         repository_access = RepositoryAccess(
             teams_with_admin=teams_with_admin,

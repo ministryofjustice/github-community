@@ -40,7 +40,7 @@ class GithubService:
         self, team: Team, team_parent_cache: dict[str, List[str]] = {}
     ) -> list[str]:
         if team.name in team_parent_cache:
-            logging.info("Teams parents cache hit!")
+            logging.debug("Teams parents cache hit!")
             return team_parent_cache[team.name]
 
         parents = []
@@ -68,9 +68,9 @@ class GithubService:
         teams_with_any_access_parents = []
 
         for team in list(repository.get_teams()):
-            logger.info(f"Processing Team: [ {team.name} ]")
+            logger.debug(f"Processing Team: [ {team.name} ]")
             if team.name in teams_to_ignore:
-                logging.info("Team specified to ignore, skipping...")
+                logging.debug("Team specified to ignore, skipping...")
                 continue
             permissions = team.permissions
             team_parents = self.__get_all_parents_team_names_of_team(
