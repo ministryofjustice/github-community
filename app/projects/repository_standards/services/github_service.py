@@ -99,7 +99,11 @@ class GithubService:
     def get_all_repositories(
         self,
         limit: int = 1000,
-        teams_to_ignore: List[str] = ["organisation-security-auditor"],
+        teams_to_ignore: List[str] = [
+            "organisation-security-auditor",
+            "organisation-security-auditor-external",
+            "organisation-security-auditor-architects",
+        ],
     ) -> List[RepositoryInfo]:
         response = []
         team_parent_cache = {}
