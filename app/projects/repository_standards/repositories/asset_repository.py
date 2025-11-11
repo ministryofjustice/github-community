@@ -141,8 +141,10 @@ class AssetRepository:
 
         if relationship.type == relationship_type:
             logging.info(
-                f"No relationship change between Asset [ {asset.name} ] and Owner [ {owner.name} ] - skipping"
+                f"No relationship change between Asset [ {asset.name} ] and Owner [ {owner.name} ] - only updating last_updated date"
             )
+            relationship.last_updated = datetime.now()
+            self.db_session.commit()
             return relationship
 
         logging.info(

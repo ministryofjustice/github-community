@@ -18,4 +18,4 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_column("relationships", "type_id")
+    op.drop_column("relationships", "last_updated")
