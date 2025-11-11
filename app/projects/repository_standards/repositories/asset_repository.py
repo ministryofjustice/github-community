@@ -108,6 +108,7 @@ class AssetRepository:
         relationship.owners_id = owner.id
         relationship.assets_id = asset.id
         relationship.type = relationship_type
+        relationship.last_updated = datetime.now()
         self.db_session.add(relationship)
         self.db_session.commit()
         return relationship
@@ -140,14 +141,17 @@ class AssetRepository:
 
         if relationship.type == relationship_type:
             logging.info(
-                f"No relationship change between Asset [ {asset.name} ] and Owner [ {owner.name} ] - skipping"
+                f"No relationship change between Asset [ {asset.name} ] and Owner [ {owner.name} ] - only updating last_updated date"
             )
+            relationship.last_updated = datetime.now()
+            self.db_session.commit()
             return relationship
 
         logging.info(
             f"Asset [ {asset.name} ] has one relationships with [ {owner.name} ] - updating relationship from [ {relationship.type} ] to new relationship [ {relationship_type} ] "
         )
         relationship.type = relationship_type
+        relationship.last_updated = datetime.now()
         self.db_session.commit()
 
         return relationship
@@ -182,6 +186,16 @@ class AssetRepository:
             logging.info(f"Removing stale asset: {asset.name}")
             self.db_session.query(Relationship).filter_by(assets_id=asset.id).delete()
             self.db_session.delete(asset)
+
+        self.db_session.commit()
+
+    def remove_stale_relationships(self):
+        stale_relationships = self.db_session.query(Relationship).filter(
+            Relationship.last_updated < datetime.today() - timedelta(days=1)
+        )
+        for relationship in stale_relationships:
+            logging.info(f"Removing stale relationship: {relationship.id}")
+            self.db_session.delete(relationship)
 
         self.db_session.commit()
 

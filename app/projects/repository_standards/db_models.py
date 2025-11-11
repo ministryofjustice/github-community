@@ -49,6 +49,9 @@ class Relationship(db.Model):
     type: Mapped[str] = mapped_column(db.String)
     assets_id: Mapped[int] = mapped_column(db.ForeignKey("assets.id"))
     owners_id: Mapped[int] = mapped_column(db.ForeignKey("owners.id"))
+    last_updated: Mapped[datetime] = mapped_column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     asset: Mapped["Asset"] = relationship("Asset", back_populates="relationships")
     owner: Mapped["Owner"] = relationship("Owner", back_populates="relationships")
