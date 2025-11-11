@@ -12,7 +12,7 @@ def upgrade():
     op.add_column(
         "relationships",
         sa.Column(
-            "last_updated", sa.DateTime(), nullable=False, default=datetime.utcnow()
+            "last_updated", sa.DateTime(), nullable=True, default=datetime.utcnow()
         ),
     )
 
