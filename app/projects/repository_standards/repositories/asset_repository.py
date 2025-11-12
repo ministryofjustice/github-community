@@ -132,7 +132,7 @@ class AssetRepository:
             )
 
         if len(relationships) == 0:
-            logging.info(
+            logging.debug(
                 f"Asset [ {asset.name} ] has no relationships with [ {owner.name} ] - creating new relationship [ {relationship_type} ] "
             )
             return self.create_relationship(asset, owner, relationship_type)
@@ -140,14 +140,14 @@ class AssetRepository:
         relationship = relationships[0]
 
         if relationship.type == relationship_type:
-            logging.info(
+            logging.debug(
                 f"No relationship change between Asset [ {asset.name} ] and Owner [ {owner.name} ] - only updating last_updated date"
             )
             relationship.last_updated = datetime.now()
             self.db_session.commit()
             return relationship
 
-        logging.info(
+        logging.debug(
             f"Asset [ {asset.name} ] has one relationships with [ {owner.name} ] - updating relationship from [ {relationship.type} ] to new relationship [ {relationship_type} ] "
         )
         relationship.type = relationship_type
@@ -165,11 +165,11 @@ class AssetRepository:
             )
 
         if len(assets) == 0:
-            logging.info(f"No repository found [ {name} ] - creating a new asset...")
+            logging.debug(f"No repository found [ {name} ] - creating a new asset...")
             return self.add_asset(name, "REPOSITORY", data)
 
         asset = assets[0]
-        logging.info(
+        logging.debug(
             f"Found existing respoistory with ID [ {asset.id} ] - updating existing assets data..."
         )
         asset.last_updated = datetime.now()

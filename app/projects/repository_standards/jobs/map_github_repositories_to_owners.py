@@ -53,7 +53,7 @@ def main():
         owner = owners[0]
 
         for repository in repositories:
-            logger.info(f"Mapping Repository [ {repository} ]")
+            logger.debug(f"Mapping Repository [ {repository.basic.name} ]")
 
             asset = asset_service.update_asset_by_name(
                 repository.basic.name, repository.to_dict()

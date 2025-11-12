@@ -36,7 +36,9 @@ INSERT INTO public.assets (id, name, type, last_updated, data) VALUES
   "default_branch_protection":{"allow_force_pushes":false, "enforce_admins":true, "require_code_owner_reviews":true}
   }');
 
-INSERT INTO public.relationships (id, type, assets_id, owners_id, last_updated) VALUES
+INSERT INTO public.relationships
+(id, type, assets_id, owners_id, last_updated)
+VALUES
 (1, 'ADMIN_ACCESS', 1, 6, NOW()),
 (2, 'ADMIN_ACCESS', 1, 8, NOW()),
 (3, 'ADMIN_ACCESS', 3, 3, NOW()),
