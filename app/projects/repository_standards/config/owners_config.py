@@ -72,4 +72,10 @@ owners_config = [
             "github-community",
         ],
     ),
+    Owner(
+        name="Cloud Platform",
+        teams=[
+            "WebOps",
+        ],
+    ),
 ]
