@@ -14,12 +14,12 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: 39fdb480a06768cc41a84ef86959c07ff33091c4  # frozen: v8.28.0
+    rev: 3683f1700eef4d855cd549ccbbde4cd0f9e55321  # frozen: v8.29.0
     hooks:
       - id: gitleaks
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: 5fee7cc03a2498e0ce36a18f36dfb558a30a426c  # frozen: v1.12.1
+    rev: 86ee5ea442ee969842e00913c6b76c060a7aa8ef  # frozen: v1.16.3
     hooks:
       - id: zizmor
 
