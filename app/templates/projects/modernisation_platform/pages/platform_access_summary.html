@@ -13,15 +13,31 @@
     Consult our <a class="govuk-link" href="https://user-guide.modernisation-platform.service.justice.gov.uk/user-guide/platform-user-roles.html">documentation</a> for more information on platform user roles.
   </p>
 
-  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+  <!-- Chart Section -->
+  <section class="govuk-!-margin-bottom-6">
     <h2 class="govuk-heading-m">Access Role Usage</h2>
-    {% for role, count in role_counts.items() %}
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">{{ role }}</dt>
-      <dd class="govuk-summary-list__value">{{ count }}</dd>
+    <p class="govuk-body-s">Each count represents one role assigned to one environment, regardless of how many teams have that role.</p>
+    <div style="max-width: 800px; margin: 0 auto;">
+      <canvas id="roleUsageChart"></canvas>
     </div>
-    {% endfor %}
   </section>
+
+  <!-- Text Summary (kept for accessibility) -->
+  <details class="govuk-details">
+    <summary class="govuk-details__summary">
+      <span class="govuk-details__summary-text">View detailed role counts</span>
+    </summary>
+    <div class="govuk-details__text">
+      <dl class="govuk-summary-list">
+        {% for role, count in role_counts.items() %}
+        <div class="govuk-summary-list__row">
+          <dt class="govuk-summary-list__key">{{ role }}</dt>
+          <dd class="govuk-summary-list__value">{{ count }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </div>
+  </details>
 
   <section>
     <h2 class="govuk-heading-m">All Environments and Access</h2>
@@ -33,33 +49,148 @@
           <th class="govuk-table__header">App Name</th>
           <th class="govuk-table__header">Environment</th>
           <th class="govuk-table__header">Access Level</th>
-          <th class="govuk-table__header">Group Name(s)</th>
+          <th class="govuk-table__header">Group Name</th>
         </tr>
       </thead>
       <tbody id="access-table-body">
         {% for item in access_items %}
+          {% if item.access_details|length > 0 %}
+            {% for detail in item.access_details %}
         <tr>
-          <td class="govuk-table__cell">{{ item.app_name }}</td>
-          <td class="govuk-table__cell">{{ item.environment }}</td>
-          <td class="govuk-table__cell">{{ item.access_level }}</td>
-          <td class="govuk-table__cell">{% for group in item.groups %}{{ group }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+          {% if loop.first %}
+          <td class="govuk-table__cell" rowspan="{{ item.access_details|length }}">{{ item.app_name }}</td>
+          {% endif %}
+          <td class="govuk-table__cell">{{ detail.environment }}</td>
+          <td class="govuk-table__cell">{{ detail.access_level }}</td>
+          <td class="govuk-table__cell"><a class="govuk-link" href="{{ detail.group_url }}" target="_blank" rel="noopener noreferrer">{{ detail.group_name }}</a></td>
         </tr>
+            {% endfor %}
+          {% endif %}
         {% endfor %}
       </tbody>
     </table>
   </section>
+
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
   <script>
+    // Search functionality - filter individual rows and adjust rowspan
     document.getElementById('access-search').addEventListener('input', function() {
       const query = this.value.toLowerCase().trim();
       const terms = query.split(/\s+/);
       const rows = document.querySelectorAll('#access-table-body tr');
-      rows.forEach(row => {
-        // Gather text from all cells
-        const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
-        // Show row if all terms match
-        const match = terms.every(term => text.includes(term));
-        row.style.display = match ? '' : 'none';
+      
+      let currentAppRows = [];
+      let currentAppName = null;
+      
+      rows.forEach((row) => {
+        // Check if this row has app name cell (first row of an app group)
+        const hasAppName = row.cells[0].hasAttribute('rowspan');
+        
+        if (hasAppName) {
+          // Process previous app group
+          if (currentAppRows.length > 0) {
+            processAppGroup(currentAppRows, currentAppName);
+          }
+          
+          // Start new app group - store app name info
+          currentAppName = row.cells[0].cloneNode(true);
+          currentAppRows = [row];
+        } else {
+          // This is a continuation row for the same app
+          currentAppRows.push(row);
+        }
       });
+      
+      // Process last app group
+      if (currentAppRows.length > 0) {
+        processAppGroup(currentAppRows, currentAppName);
+      }
+      
+      function processAppGroup(appRows, appNameCell) {
+        // Check which rows match the search
+        const matchingRows = appRows.filter(row => {
+          const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+          return terms.every(term => text.includes(term));
+        });
+        
+        if (matchingRows.length === 0) {
+          // Hide all rows for this app
+          appRows.forEach(r => r.style.display = 'none');
+        } else {
+          // Show only matching rows
+          appRows.forEach(r => r.style.display = 'none');
+          matchingRows.forEach(r => r.style.display = '');
+          
+          // Update the first visible row to have the app name cell with correct rowspan
+          const firstVisibleRow = matchingRows[0];
+          
+          if (firstVisibleRow.cells[0].hasAttribute('rowspan')) {
+            firstVisibleRow.cells[0].setAttribute('rowspan', matchingRows.length);
+          } else {
+            const newAppNameCell = appNameCell.cloneNode(true);
+            newAppNameCell.setAttribute('rowspan', matchingRows.length);
+            firstVisibleRow.insertBefore(newAppNameCell, firstVisibleRow.firstChild);
+          }
+        }
+      }
+    });
+
+    // Chart.js visualization
+    const ctx = document.getElementById('roleUsageChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: {{ role_counts.keys() | list | tojson }},
+        datasets: [{
+          label: 'Number of Environments',
+          data: {{ role_counts.values() | list | tojson }},
+          backgroundColor: [
+            '#1d70b8', // GOV.UK blue
+            '#d4351c', // GOV.UK red
+            '#00703c', // GOV.UK green
+            '#f47738', // GOV.UK orange
+            '#5694ca', // GOV.UK light blue
+            '#912b88', // GOV.UK purple
+            '#ffdd00', // GOV.UK yellow
+            '#b1b4b6'  // GOV.UK grey
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        indexAxis: 'y', // This makes it horizontal
+        plugins: {
+          legend: {
+            display: false
+          },
+          title: {
+            display: false
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            title: {
+              display: true,
+              text: 'Count'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Access Role'
+            }
+          }
+        }
+      }
     });
   </script>
   

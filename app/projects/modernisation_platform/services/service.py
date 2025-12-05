@@ -3,12 +3,17 @@ import concurrent.futures
 import os
 import time
 import json
+import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 GITHUB_API_URL = "https://api.github.com/repos/{org}/{repo}/contents/{directory}"
 RAW_URL_TEMPLATE = "https://raw.githubusercontent.com/{org}/{repo}/{branch}/{path}"
 
 # File-based cache that all workers can share
 CACHE_FILE = "/tmp/github_modernisation_cache.json"
+README_CACHE_FILE = "/tmp/github_modernisation_readme_cache.json"
 CACHE_TTL = 900  # 15 minutes
 
 def get_all_json_data(org, repo, branch, directory):
@@ -64,3 +69,155 @@ def fetch_json_file_with_filename(args):
     json_data = response.json()
     json_data["_filename"] = file_info["name"].replace(".json", "")
     return json_data
+
+def get_readme_incident_info(org, repo, branch, app_names):
+    """
+    Fetch README files for apps and extract incident response information.
+    Returns a dict mapping app_name to incident info.
+    """
+    now = time.time()
+    
+    # Try to load from file cache
+    cache_data = None
+    cache_age = float('inf')
+    
+    if os.path.exists(README_CACHE_FILE):
+        try:
+            with open(README_CACHE_FILE, 'r') as f:
+                cache_data = json.load(f)
+                cache_age = now - cache_data.get('timestamp', 0)
+        except (json.JSONDecodeError, IOError):
+            pass
+    
+    if cache_data and cache_age < CACHE_TTL:
+        return cache_data['data']
+    
+    args_list = [(org, repo, branch, app_name) for app_name in app_names]
+    
+    # Fetch READMEs concurrently
+    with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+        results = list(executor.map(fetch_readme_incident_info, args_list))
+    
+    # Convert to dict
+    incident_info = {app_name: info for app_name, info in results if info}
+    
+    # Save to file cache
+    try:
+        with open(README_CACHE_FILE, 'w') as f:
+            json.dump({
+                'data': incident_info,
+                'timestamp': now
+            }, f)
+    except IOError:
+        pass
+    
+    return incident_info
+
+def fetch_readme_incident_info(args):
+    """
+    Fetch a single README and extract incident response info.
+    Returns tuple (app_name, {incident_hours, incident_contact})
+    """
+    org, repo, branch, app_name = args
+    
+    # Try common README naming variations
+    readme_paths = [
+        f"terraform/environments/{app_name}/README.md",
+        f"terraform/environments/{app_name}/ReadMe.md",
+        f"terraform/environments/{app_name}/readme.md"
+    ]
+    
+    for path in readme_paths:
+        try:
+            raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
+            response = requests.get(raw_url, timeout=5)
+            
+            if response.status_code == 200:
+                content = response.text
+                incident_hours = extract_section(content, "Incident response hours")
+                incident_contact = extract_section(content, "Incident contact details")
+                
+                logger.debug(f"README found for {app_name}: hours={bool(incident_hours)}, contact={bool(incident_contact)}")
+                
+                return (app_name, {
+                    'incident_hours': incident_hours or 'N/A',
+                    'incident_contact': incident_contact or 'N/A'
+                })
+        except Exception as e:
+            logger.debug(f"Error fetching README for {app_name}: {e}")
+            continue
+    
+    logger.debug(f"No README found for {app_name}")
+    return (app_name, None)
+
+def extract_section(markdown_content, heading):
+    """
+    Extract content under a specific heading in markdown.
+    Returns the content until the next heading or end of file.
+    """
+    # Pattern to match the heading (case-insensitive, flexible whitespace)
+    # Match any level of heading (one or more #) followed by optional **
+    pattern = rf'^#+\s*\*?\*?{re.escape(heading)}:?\*?\*?\s*$'
+    
+    lines = markdown_content.split('\n')
+    in_section = False
+    section_lines = []
+    
+    for line in lines:
+        if re.match(pattern, line.strip(), re.IGNORECASE):
+            in_section = True
+            continue
+        
+        if in_section:
+            # Stop at next heading (any level)
+            if re.match(r'^#+\s+', line.strip()):
+                break
+            section_lines.append(line)
+    
+    # Clean up the content
+    content = '\n'.join(section_lines).strip()
+    
+    # Remove excessive newlines
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    
+    # Remove HTML comments
+    content = re.sub(r'<!--.*?-->', '', content, flags=re.DOTALL)
+    
+    # Clean up again after removing comments
+    content = content.strip()
+    content = re.sub(r'\n{3,}', '\n\n', content)
+    
+    return content if content else None
+
+def get_collaborators_data(org, repo, branch):
+    """
+    Fetch collaborators.json file.
+    Returns the collaborators data with line numbers for each user.
+    """
+    path = "collaborators.json"
+    raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
+    
+    try:
+        response = requests.get(raw_url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Also fetch the raw text to find line numbers
+        text_response = requests.get(raw_url, timeout=10)
+        lines = text_response.text.split('\n')
+        
+        # Find line number for each username
+        users = data.get("users", [])
+        for user in users:
+            username = user.get("username", "")
+            if username:
+                # Search for the line containing this username
+                for line_num, line in enumerate(lines, 1):
+                    if f'"username": "{username}"' in line:
+                        user["_line_number"] = line_num
+                        break
+        
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching collaborators data: {e}")
+        return {"users": []}

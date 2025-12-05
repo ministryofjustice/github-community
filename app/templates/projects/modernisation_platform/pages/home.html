@@ -26,6 +26,12 @@
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
         <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('modernisation_platform_main.platform_environments_summary') }}">Platform Environments Summary</a>
+        </h3>
+        <p class="govuk-body-s">Dashboard view of key platform statistics and metrics.</p>
+      </div>
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
           <a class="govuk-link" href="{{ url_for('modernisation_platform_main.platform_access_summary') }}">Platform Access Summary</a>
         </h3>
         <p class="govuk-body-s">View all access roles and their usage across environments.</p>
@@ -35,6 +41,20 @@
           <a class="govuk-link" href="{{ url_for('modernisation_platform_main.sandbox_summary') }}">Sandbox Access Summary</a>
         </h3>
         <p class="govuk-body-s">See a summary of sandbox access for Modernisation Platform users.</p>
+      </div>
+    </div>
+    <div class="govuk-grid-row govuk-!-margin-top-3">
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('modernisation_platform_main.platform_contact_details') }}">Platform Contact Details</a>
+        </h3>
+        <p class="govuk-body-s">View contact information for all platform applications.</p>
+      </div>
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('modernisation_platform_main.collaborators_summary') }}">Collaborators Summary</a>
+        </h3>
+        <p class="govuk-body-s">View individual collaborators and their environment access.</p>
       </div>
     </div>
   </section>

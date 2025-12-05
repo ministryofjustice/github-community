@@ -1,0 +1,209 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Collaborators Summary
+{% endblock %}
+
+{% block content %}
+<h1 class="govuk-heading-l">Collaborators Summary</h1>
+  <p class="govuk-body">
+    This page details individual collaborators with direct access to Modernisation Platform environments.
+  </p>
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-m">Summary</h2>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Collaborators</dt>
+      <dd class="govuk-summary-list__value">{{ total_collaborators }}</dd>
+    </div>
+  </section>
+
+  <!-- Chart Section -->
+  <section class="govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-m">Top 10 Environments by Collaborator Count</h2>
+    <p class="govuk-body-s">Showing the environments with the most individual collaborators.</p>
+    <div style="max-width: 600px; margin: 0 auto;">
+      <canvas id="envCollaboratorsChart"></canvas>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="govuk-heading-m">All Collaborators</h2>
+
+    <input type="text" id="collaborator-search" class="govuk-input" placeholder="Search username, github username, environment, role..." style="margin-bottom: 1em;">
+    <table class="govuk-table">
+      <thead>
+        <tr>
+          <th class="govuk-table__header">Username</th>
+          <th class="govuk-table__header">GitHub Username</th>
+          <th class="govuk-table__header">Environment</th>
+          <th class="govuk-table__header">Role</th>
+        </tr>
+      </thead>
+      <tbody id="collaborator-table-body">
+        {% for collaborator in collaborators %}
+          {% if collaborator.env_role_pairs|length > 0 %}
+            {% for pair in collaborator.env_role_pairs %}
+        <tr>
+          {% if loop.first %}
+          <td class="govuk-table__cell" rowspan="{{ collaborator.env_role_pairs|length }}">
+            <a class="govuk-link" href="{{ collaborator.json_link }}" target="_blank" rel="noopener noreferrer">{{ collaborator.username }}</a>
+          </td>
+          <td class="govuk-table__cell" rowspan="{{ collaborator.env_role_pairs|length }}">
+            {% if collaborator.github_username != 'N/A' and collaborator.github_username != 'no-value-supplied' %}
+              <a class="govuk-link" href="https://github.com/{{ collaborator.github_username }}" target="_blank" rel="noopener noreferrer">{{ collaborator.github_username }}</a>
+            {% else %}
+              {{ collaborator.github_username }}
+            {% endif %}
+          </td>
+          {% endif %}
+          <td class="govuk-table__cell">{{ pair.environment }}</td>
+          <td class="govuk-table__cell">{{ pair.role }}</td>
+        </tr>
+            {% endfor %}
+          {% else %}
+        <tr>
+          <td class="govuk-table__cell">
+            <a class="govuk-link" href="{{ collaborator.json_link }}" target="_blank" rel="noopener noreferrer">{{ collaborator.username }}</a>
+          </td>
+          <td class="govuk-table__cell">
+            {% if collaborator.github_username != 'N/A' and collaborator.github_username != 'no-value-supplied' %}
+              <a class="govuk-link" href="https://github.com/{{ collaborator.github_username }}" target="_blank" rel="noopener noreferrer">{{ collaborator.github_username }}</a>
+            {% else %}
+              {{ collaborator.github_username }}
+            {% endif %}
+          </td>
+          <td class="govuk-table__cell" colspan="2">No environments</td>
+        </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <script>
+    // Search functionality - filter individual rows and adjust rowspan
+    document.getElementById('collaborator-search').addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      const terms = query.split(/\s+/);
+      const rows = document.querySelectorAll('#collaborator-table-body tr');
+      
+      let currentUserRows = [];
+      let currentUsername = null;
+      let currentGithubUsername = null;
+      let currentJsonLink = null;
+      
+      rows.forEach((row) => {
+        // Check if this row has username cell (first row of a user group)
+        const hasUsername = row.cells[0].hasAttribute('rowspan');
+        
+        if (hasUsername) {
+          // Process previous user group
+          if (currentUserRows.length > 0) {
+            processUserGroup(currentUserRows, currentUsername, currentGithubUsername, currentJsonLink);
+          }
+          
+          // Start new user group - store username info
+          currentUsername = row.cells[0].cloneNode(true);
+          currentGithubUsername = row.cells[1].cloneNode(true);
+          currentJsonLink = row.cells[0].querySelector('a')?.href || '';
+          currentUserRows = [row];
+        } else {
+          // This is a continuation row for the same user
+          currentUserRows.push(row);
+        }
+      });
+      
+      // Process last user group
+      if (currentUserRows.length > 0) {
+        processUserGroup(currentUserRows, currentUsername, currentGithubUsername, currentJsonLink);
+      }
+      
+      function processUserGroup(userRows, usernameCell, githubUsernameCell, jsonLink) {
+        // Check which rows match the search
+        const matchingRows = userRows.filter(row => {
+          const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+          return terms.every(term => text.includes(term));
+        });
+        
+        if (matchingRows.length === 0) {
+          // Hide all rows for this user
+          userRows.forEach(r => r.style.display = 'none');
+        } else {
+          // Show only matching rows
+          userRows.forEach(r => r.style.display = 'none');
+          matchingRows.forEach(r => r.style.display = '');
+          
+          // Update the first visible row to have the username cells with correct rowspan
+          const firstVisibleRow = matchingRows[0];
+          
+          // Remove old username cells if they exist
+          if (firstVisibleRow.cells[0].hasAttribute('rowspan')) {
+            // Already has username cells, just update rowspan
+            firstVisibleRow.cells[0].setAttribute('rowspan', matchingRows.length);
+            firstVisibleRow.cells[1].setAttribute('rowspan', matchingRows.length);
+          } else {
+            // Need to add username cells
+            const newUsernameCell = usernameCell.cloneNode(true);
+            const newGithubCell = githubUsernameCell.cloneNode(true);
+            newUsernameCell.setAttribute('rowspan', matchingRows.length);
+            newGithubCell.setAttribute('rowspan', matchingRows.length);
+            firstVisibleRow.insertBefore(newGithubCell, firstVisibleRow.firstChild);
+            firstVisibleRow.insertBefore(newUsernameCell, firstVisibleRow.firstChild);
+          }
+        }
+      }
+    });
+
+    // Chart.js visualization
+    const ctx = document.getElementById('envCollaboratorsChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: {{ env_counts.keys() | list | tojson }},
+        datasets: [{
+          label: 'Number of Collaborators',
+          data: {{ env_counts.values() | list | tojson }},
+          backgroundColor: [
+            '#1d70b8', // GOV.UK blue
+            '#d4351c', // GOV.UK red
+            '#00703c', // GOV.UK green
+            '#f47738', // GOV.UK orange
+            '#5694ca', // GOV.UK light blue
+            '#912b88', // GOV.UK purple
+            '#ffdd00', // GOV.UK yellow
+            '#b1b4b6', // GOV.UK grey
+            '#2e358b', // GOV.UK dark blue
+            '#801650'  // GOV.UK dark pink
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'right',
+            labels: {
+              boxWidth: 15,
+              font: {
+                size: 11
+              },
+              padding: 10
+            }
+          },
+          title: {
+            display: false
+          }
+        }
+      }
+    });
+  </script>
+  
+  {% endblock %}
