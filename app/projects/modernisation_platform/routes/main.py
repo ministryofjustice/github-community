@@ -14,6 +14,7 @@ def index():
     return render_template("projects/modernisation_platform/pages/home.html")
 
 @modernisation_platform_main.route("/sandbox-summary")
+@requires_auth
 def sandbox_summary():
     org = "ministryofjustice"
     repo = "modernisation-platform"
@@ -47,6 +48,7 @@ def sandbox_summary():
     return render_template("projects/modernisation_platform/pages/sandbox_summary.html", apps=result)
 
 @modernisation_platform_main.route("/platform-access-summary")
+@requires_auth
 def platform_access_summary():
     org = "ministryofjustice"
     repo = "modernisation-platform"
@@ -126,6 +128,7 @@ def platform_access_summary():
     )
 
 @modernisation_platform_main.route("/platform-contact-details")
+@requires_auth
 def platform_contact_details():
     org = "ministryofjustice"
     repo = "modernisation-platform"
@@ -175,6 +178,7 @@ def platform_contact_details():
     )
 
 @modernisation_platform_main.route("/collaborators-summary")
+@requires_auth
 def collaborators_summary():
     org = "ministryofjustice"
     repo = "modernisation-platform"
@@ -229,6 +233,7 @@ def collaborators_summary():
     )
 
 @modernisation_platform_main.route("/platform-environments-summary")
+@requires_auth
 def platform_environments_summary():
     org = "ministryofjustice"
     repo = "modernisation-platform"
