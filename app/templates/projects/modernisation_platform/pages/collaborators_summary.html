@@ -7,7 +7,9 @@
 {% block content %}
 <h1 class="govuk-heading-l">Collaborators Summary</h1>
   <p class="govuk-body">
-    This page details individual collaborators with direct access to Modernisation Platform environments.
+    This page details individual collaborators with direct access to Modernisation Platform environments.<br><br>
+    <i>Collaborators</i> are users who are external to the organisation who have been granted access to MoJ AWS environments and GitHub repositories.<br><br>
+    For more information on collaborators and access management, please refer to our <a class="govuk-link" href="https://user-guide.modernisation-platform.service.justice.gov.uk/user-guide/working-as-a-collaborator.html">documentation</a>.
   </p>
 
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
@@ -22,7 +24,7 @@
   <section class="govuk-!-margin-bottom-6">
     <h2 class="govuk-heading-m">Top 10 Environments by Collaborator Count</h2>
     <p class="govuk-body-s">Showing the environments with the most individual collaborators.</p>
-    <div style="max-width: 600px; margin: 0 auto;">
+    <div style="max-width: 800px; margin: 0 auto;">
       <canvas id="envCollaboratorsChart"></canvas>
     </div>
   </section>
@@ -123,36 +125,57 @@
       }
       
       function processUserGroup(userRows, usernameCell, githubUsernameCell, jsonLink) {
-        // Check which rows match the search
-        const matchingRows = userRows.filter(row => {
-          const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
-          return terms.every(term => text.includes(term));
-        });
+        // Get username text for matching
+        const username = usernameCell.textContent.toLowerCase();
+        const githubUsername = githubUsernameCell.textContent.toLowerCase();
         
-        if (matchingRows.length === 0) {
-          // Hide all rows for this user
-          userRows.forEach(r => r.style.display = 'none');
+        // Check if username/github username matches any search term
+        const usernameMatches = terms.some(term => 
+          username.includes(term) || githubUsername.includes(term)
+        );
+        
+        if (usernameMatches) {
+          // If username matches, show all rows for this user
+          userRows.forEach(r => r.style.display = '');
+          
+          // Ensure first row has correct rowspan
+          const firstRow = userRows[0];
+          if (firstRow.cells[0].hasAttribute('rowspan')) {
+            firstRow.cells[0].setAttribute('rowspan', userRows.length);
+            firstRow.cells[1].setAttribute('rowspan', userRows.length);
+          }
         } else {
-          // Show only matching rows
-          userRows.forEach(r => r.style.display = 'none');
-          matchingRows.forEach(r => r.style.display = '');
+          // Username doesn't match, check which individual rows match (env/role search)
+          const matchingRows = userRows.filter(row => {
+            const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+            return terms.every(term => text.includes(term));
+          });
           
-          // Update the first visible row to have the username cells with correct rowspan
-          const firstVisibleRow = matchingRows[0];
-          
-          // Remove old username cells if they exist
-          if (firstVisibleRow.cells[0].hasAttribute('rowspan')) {
-            // Already has username cells, just update rowspan
-            firstVisibleRow.cells[0].setAttribute('rowspan', matchingRows.length);
-            firstVisibleRow.cells[1].setAttribute('rowspan', matchingRows.length);
+          if (matchingRows.length === 0) {
+            // Hide all rows for this user
+            userRows.forEach(r => r.style.display = 'none');
           } else {
-            // Need to add username cells
-            const newUsernameCell = usernameCell.cloneNode(true);
-            const newGithubCell = githubUsernameCell.cloneNode(true);
-            newUsernameCell.setAttribute('rowspan', matchingRows.length);
-            newGithubCell.setAttribute('rowspan', matchingRows.length);
-            firstVisibleRow.insertBefore(newGithubCell, firstVisibleRow.firstChild);
-            firstVisibleRow.insertBefore(newUsernameCell, firstVisibleRow.firstChild);
+            // Show only matching rows
+            userRows.forEach(r => r.style.display = 'none');
+            matchingRows.forEach(r => r.style.display = '');
+            
+            // Update the first visible row to have the username cells with correct rowspan
+            const firstVisibleRow = matchingRows[0];
+            
+            // Remove old username cells if they exist
+            if (firstVisibleRow.cells[0].hasAttribute('rowspan')) {
+              // Already has username cells, just update rowspan
+              firstVisibleRow.cells[0].setAttribute('rowspan', matchingRows.length);
+              firstVisibleRow.cells[1].setAttribute('rowspan', matchingRows.length);
+            } else {
+              // Need to add username cells
+              const newUsernameCell = usernameCell.cloneNode(true);
+              const newGithubCell = githubUsernameCell.cloneNode(true);
+              newUsernameCell.setAttribute('rowspan', matchingRows.length);
+              newGithubCell.setAttribute('rowspan', matchingRows.length);
+              firstVisibleRow.insertBefore(newGithubCell, firstVisibleRow.firstChild);
+              firstVisibleRow.insertBefore(newUsernameCell, firstVisibleRow.firstChild);
+            }
           }
         }
       }
@@ -161,45 +184,45 @@
     // Chart.js visualization
     const ctx = document.getElementById('envCollaboratorsChart').getContext('2d');
     new Chart(ctx, {
-      type: 'pie',
+      type: 'bar',
       data: {
         labels: {{ env_counts.keys() | list | tojson }},
         datasets: [{
           label: 'Number of Collaborators',
           data: {{ env_counts.values() | list | tojson }},
-          backgroundColor: [
-            '#1d70b8', // GOV.UK blue
-            '#d4351c', // GOV.UK red
-            '#00703c', // GOV.UK green
-            '#f47738', // GOV.UK orange
-            '#5694ca', // GOV.UK light blue
-            '#912b88', // GOV.UK purple
-            '#ffdd00', // GOV.UK yellow
-            '#b1b4b6', // GOV.UK grey
-            '#2e358b', // GOV.UK dark blue
-            '#801650'  // GOV.UK dark pink
-          ],
-          borderColor: '#ffffff',
-          borderWidth: 2
+          backgroundColor: '#1d70b8', // GOV.UK blue
+          borderColor: '#003078',
+          borderWidth: 1
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: true,
+        indexAxis: 'y', // This makes it horizontal
         plugins: {
           legend: {
-            display: true,
-            position: 'right',
-            labels: {
-              boxWidth: 15,
-              font: {
-                size: 11
-              },
-              padding: 10
-            }
+            display: false
           },
           title: {
             display: false
+          }
+        },
+        scales: {
+          x: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            title: {
+              display: true,
+              text: 'Number of Collaborators'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Environment'
+            }
           }
         }
       }

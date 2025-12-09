@@ -13,39 +13,6 @@ modernisation_platform_main = Blueprint("modernisation_platform_main", __name__)
 def index():
     return render_template("projects/modernisation_platform/pages/home.html")
 
-@modernisation_platform_main.route("/api/apps-with-sandbox")
-def apps_with_sandbox():
-    org = "ministryofjustice"
-    repo = "modernisation-platform"
-    branch = "main"
-    directory = "environments"
-    data = get_all_json_data(org, repo, branch, directory)
-    result = []
-    seen = set()
-    for app in data:
-        for env in app.get("environments", []):
-            sandbox_groups = [
-                access.get("sso_group_name", "")
-                for access in env.get("access", [])
-                if access.get("level") == "sandbox"
-            ]
-            if sandbox_groups:
-                key = (app["_filename"], env["name"])
-                if key not in seen:
-                    seen.add(key)
-                    nuke_status = env.get("nuke", "")
-                    if env["name"].lower() == "test":
-                        nuke_status = "exclude"
-                    elif nuke_status not in ["exclude", "rebuild"]:
-                        nuke_status = "include"
-                    result.append({
-                        "app_name": app["_filename"],
-                        "environment": env["name"],
-                        "nuke": nuke_status,
-                        "groups": sandbox_groups
-                    })
-    return jsonify(result)
-
 @modernisation_platform_main.route("/sandbox-summary")
 def sandbox_summary():
     org = "ministryofjustice"
@@ -89,13 +56,13 @@ def platform_access_summary():
     
     # Track role counts and collect access items grouped by app
     role_counts = {}
-    app_access_map = {}  # Map of app_name -> list of access details
+    app_access_map = {}  # Map of app_name -> dict of (env, access_level) -> list of groups
     seen_role_counts = set()  # Track unique (app, env, role) for counting
     
     for app in data:
         app_name = app["_filename"]
         if app_name not in app_access_map:
-            app_access_map[app_name] = []
+            app_access_map[app_name] = {}
         
         for env in app.get("environments", []):
             for access in env.get("access", []):
@@ -109,28 +76,44 @@ def platform_access_summary():
                         seen_role_counts.add(count_key)
                         role_counts[access_level] = role_counts.get(access_level, 0) + 1
                 
-                # Collect access details with group links
+                # Group access details by environment and access level
                 if access_level and sso_group:
+                    key = (env["name"], access_level)
+                    if key not in app_access_map[app_name]:
+                        app_access_map[app_name][key] = []
+                    
                     # Generate link - Azure groups go to Azure portal, others to GitHub
                     if "azure" in sso_group.lower():
                         group_url = "https://portal.azure.com/#view/Microsoft_AAD_IAM/GroupsManagementMenuBlade/~/AllGroups"
                     else:
                         group_url = f"https://github.com/orgs/ministryofjustice/teams/{sso_group}"
                     
-                    app_access_map[app_name].append({
-                        "environment": env["name"],
-                        "access_level": access_level,
+                    app_access_map[app_name][key].append({
                         "group_name": sso_group,
                         "group_url": group_url
                     })
+    
+    # Define environment order for sorting
+    def env_sort_key(item):
+        env_name = item[0][0].lower()  # First element of tuple (environment, access_level)
+        order = {"development": 0, "dev": 0, "test": 1, "preproduction": 2, "pre-production": 2, "preprod": 2, "production": 3}
+        return (order.get(env_name, 999), env_name)  # Unknown environments go last, then alphabetically
     
     # Convert map to list of apps with their access details
     access_items = []
     for app_name in sorted(app_access_map.keys()):
         if app_access_map[app_name]:  # Only include apps with access
+            access_details = []
+            for (environment, access_level), groups in sorted(app_access_map[app_name].items(), key=env_sort_key):
+                access_details.append({
+                    "environment": environment,
+                    "access_level": access_level,
+                    "groups": groups
+                })
+            
             access_items.append({
                 "app_name": app_name,
-                "access_details": app_access_map[app_name]
+                "access_details": access_details
             })
     
     # Sort role counts by count (descending) for better display

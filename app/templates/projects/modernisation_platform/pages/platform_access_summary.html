@@ -49,20 +49,24 @@
           <th class="govuk-table__header">App Name</th>
           <th class="govuk-table__header">Environment</th>
           <th class="govuk-table__header">Access Level</th>
-          <th class="govuk-table__header">Group Name</th>
+          <th class="govuk-table__header">Group Name(s)</th>
         </tr>
       </thead>
       <tbody id="access-table-body">
         {% for item in access_items %}
           {% if item.access_details|length > 0 %}
             {% for detail in item.access_details %}
-        <tr>
+        <tr data-app-name="{{ item.app_name }}">
           {% if loop.first %}
-          <td class="govuk-table__cell" rowspan="{{ item.access_details|length }}">{{ item.app_name }}</td>
+          <td class="govuk-table__cell" rowspan="{{ item.access_details|length }}" data-is-app-cell="true">{{ item.app_name }}</td>
           {% endif %}
           <td class="govuk-table__cell">{{ detail.environment }}</td>
           <td class="govuk-table__cell">{{ detail.access_level }}</td>
-          <td class="govuk-table__cell"><a class="govuk-link" href="{{ detail.group_url }}" target="_blank" rel="noopener noreferrer">{{ detail.group_name }}</a></td>
+          <td class="govuk-table__cell">
+            {% for group in detail.groups %}
+              <a class="govuk-link" href="{{ group.group_url }}" target="_blank" rel="noopener noreferrer">{{ group.group_name }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          </td>
         </tr>
             {% endfor %}
           {% endif %}
@@ -111,8 +115,28 @@
       function processAppGroup(appRows, appNameCell) {
         // Check which rows match the search
         const matchingRows = appRows.filter(row => {
-          const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
-          return terms.every(term => text.includes(term));
+          // Get individual cell values (excluding app name which may have rowspan)
+          const cells = row.cells;
+          const cellIndex = cells[0].hasAttribute('rowspan') ? 0 : -1;
+          
+          const appName = (cellIndex === 0 ? cells[0] : appNameCell).textContent.toLowerCase();
+          const environment = cells[cellIndex + 1].textContent.toLowerCase();
+          const accessLevel = cells[cellIndex + 2].textContent.toLowerCase();
+          const groupName = cells[cellIndex + 3].textContent.toLowerCase();
+          
+          // Check if all search terms match
+          return terms.every(term => {
+            // For group names, require exact match
+            if (groupName === term) {
+              return true;
+            }
+            // For environment, use word boundary matching to prevent "production" matching "preproduction"
+            const envMatch = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(environment);
+            // For other fields, use contains matching
+            return appName.includes(term) || 
+                   envMatch || 
+                   accessLevel.includes(term);
+          });
         });
         
         if (matchingRows.length === 0) {
