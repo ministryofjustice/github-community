@@ -1,0 +1,86 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Platform Contact Details
+{% endblock %}
+
+{% block content %}
+<h1 class="govuk-heading-l">Platform Contact Details</h1>
+  <p class="govuk-body">
+    This page provides contact information for all applications on the Modernisation Platform.
+  </p>
+
+  <section>
+    <h2 class="govuk-heading-m">Application Contacts</h2>
+
+    <input type="text" id="contact-search" class="govuk-input" placeholder="Search app name, business unit, email, slack channel..." style="margin-bottom: 1em;">
+    <div style="overflow-x: auto;">
+      <table class="govuk-table" style="table-layout: fixed; width: 100%; min-width: 1400px;">
+        <thead>
+          <tr>
+            <th class="govuk-table__header" style="width: 16%;">App Name</th>
+            <th class="govuk-table__header" style="width: 10%;">Business Unit</th>
+            <th class="govuk-table__header" style="width: 20%;">Contact Email</th>
+            <th class="govuk-table__header" style="width: 16%;">Slack Channel</th>
+            <th class="govuk-table__header" style="width: 18%;">Incident Response Hours</th>
+            <th class="govuk-table__header" style="width: 20%;">Incident Contact Details</th>
+          </tr>
+        </thead>
+        <tbody id="contact-table-body">
+          {% for app in apps %}
+          <tr>
+            <td class="govuk-table__cell" style="word-wrap: break-word;">{{ app.app_name }}</td>
+            <td class="govuk-table__cell" style="word-wrap: break-word;">{{ app.business_unit }}</td>
+            <td class="govuk-table__cell" style="word-wrap: break-word;">{{ app.contact_email }}</td>
+            <td class="govuk-table__cell" style="word-wrap: break-word;">{{ app.slack_channel }}</td>
+            <td class="govuk-table__cell" style="word-wrap: break-word;">{{ app.incident_hours }}</td>
+            <td class="govuk-table__cell" style="word-wrap: break-word;" data-raw-content="{{ app.incident_contact }}">{{ app.incident_contact }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <script>
+    // Convert email addresses in incident contact cells to clickable mailto links
+    document.addEventListener('DOMContentLoaded', function() {
+      const contactCells = document.querySelectorAll('#contact-table-body tr td:nth-child(6)');
+      contactCells.forEach(cell => {
+        const rawContent = cell.getAttribute('data-raw-content');
+        if (rawContent && rawContent !== 'N/A') {
+          // Create a temporary div to safely handle text content
+          const tempDiv = document.createElement('div');
+          tempDiv.textContent = rawContent; // This escapes any HTML
+          const escapedContent = tempDiv.innerHTML;
+          
+          // Match email addresses in angle brackets or standalone
+          const emailRegex = /<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>|([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
+          let formattedContent = escapedContent.replace(emailRegex, function(match, email1, email2) {
+            const email = email1 || email2;
+            // Escape email for use in HTML
+            const escapedEmail = email.replace(/[&<>"']/g, function(char) {
+              const escapeMap = {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'};
+              return escapeMap[char];
+            });
+            return `<a class="govuk-link" href="mailto:${escapedEmail}">${escapedEmail}</a>`;
+          });
+          cell.innerHTML = formattedContent.replace(/\n/g, '<br>');
+        }
+      });
+    });
+
+    document.getElementById('contact-search').addEventListener('input', function() {
+      const query = this.value.toLowerCase().trim();
+      const terms = query.split(/\s+/);
+      const rows = document.querySelectorAll('#contact-table-body tr');
+      rows.forEach(row => {
+        // Gather text from all cells
+        const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+        // Show row if all terms match
+        const match = terms.every(term => text.includes(term));
+        row.style.display = match ? '' : 'none';
+      });
+    });
+  </script>
+  
+  {% endblock %}

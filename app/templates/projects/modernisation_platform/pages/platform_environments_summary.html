@@ -1,0 +1,362 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Platform Environments Summary
+{% endblock %}
+
+{% block content %}
+<h1 class="govuk-heading-l">Platform Environments Summary</h1>
+  <p class="govuk-body">
+    Key statistics and metrics for the Modernisation Platform at a glance.
+  </p>
+
+  <!-- Key Metrics Cards -->
+  <div class="govuk-grid-row govuk-!-margin-bottom-6">
+    <div class="govuk-grid-column-one-third">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #1d70b8;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ total_apps }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Applications</p>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #00703c;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ cni_count }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Critical National Infrastructure (CNI)<br>Apps</p>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-third">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #912b88;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ total_accounts }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Total Accounts</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="govuk-grid-row govuk-!-margin-bottom-6">
+    <div class="govuk-grid-column-one-quarter">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #d4351c;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ env_type_counts.production }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Production Accounts</p>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #f47738;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ env_type_counts.preproduction }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Pre-Production Accounts</p>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #5694ca;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ env_type_counts.test }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Test Accounts</p>
+      </div>
+    </div>
+    <div class="govuk-grid-column-one-quarter">
+      <div style="background-color: #f3f2f1; padding: 20px; text-align: center; border-left: 5px solid #ffdd00;">
+        <h2 class="govuk-heading-xl govuk-!-margin-bottom-2">{{ env_type_counts.development }}</h2>
+        <p class="govuk-body-s govuk-!-margin-bottom-0">Development Accounts</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts Section -->
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-one-half">
+      <section class="govuk-!-margin-bottom-6">
+        <h2 class="govuk-heading-m">Environment Type Breakdown</h2>
+        <div style="max-width: 500px; margin: 0 auto;">
+          <canvas id="envTypeChart"></canvas>
+        </div>
+      </section>
+    </div>
+    <div class="govuk-grid-column-one-half">
+      <section class="govuk-!-margin-bottom-6">
+        <h2 class="govuk-heading-m">Account Type Distribution</h2>
+        <div style="max-width: 500px; margin: 0 auto;">
+          <canvas id="accountTypeChart"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+      <section class="govuk-!-margin-bottom-6">
+        <h2 class="govuk-heading-m">Business Unit Distribution</h2>
+        <p class="govuk-body-s">Number of accounts per business unit.</p>
+        <div style="max-width: 1000px; margin: 0 auto;">
+          <canvas id="businessUnitChart"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Detailed Data Table -->
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-full">
+      <section class="govuk-!-margin-bottom-6">
+        <h2 class="govuk-heading-m">Environment Details</h2>
+        <p class="govuk-body-s">Search and filter through all environments and their details.</p>
+        
+        <!-- Search Bar -->
+        <div class="govuk-form-group">
+          <label class="govuk-label" for="search-input">
+            Search
+          </label>
+          <div class="govuk-hint">
+            Search by application name, environment type, business unit, etc. Use spaces to search for multiple terms.
+          </div>
+          <input class="govuk-input" id="search-input" name="search" type="text" placeholder="Search by application name, environment, business unit...">
+        </div>
+
+        <p class="govuk-body-s" id="results-count">Showing {{ app_details|length }} of {{ app_details|length }} applications</p>
+
+        <table class="govuk-table" id="environments-table">
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Application Name</th>
+              <th scope="col" class="govuk-table__header">Environment Type</th>
+              <th scope="col" class="govuk-table__header">Business Unit</th>
+              <th scope="col" class="govuk-table__header">Account Type</th>
+              <th scope="col" class="govuk-table__header">CNI</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for detail in app_details %}
+            <tr class="govuk-table__row" data-app="{{ detail.app_name }}" data-env-types="{{ detail.env_types|join(' ') }}" data-bu="{{ detail.business_unit }}" data-account-type="{{ detail.account_type }}" data-cni="{{ detail.is_cni }}">
+              <td class="govuk-table__cell">{{ detail.app_name }}</td>
+              <td class="govuk-table__cell">{% for env_type in detail.env_types %}{{ env_type }}{% if not loop.last %}<br>{% endif %}{% endfor %}</td>
+              <td class="govuk-table__cell">{{ detail.business_unit }}</td>
+              <td class="govuk-table__cell">{{ detail.account_type }}</td>
+              <td class="govuk-table__cell">{{ detail.is_cni }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </div>
+
+  <!-- Chart.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+  <script>
+    // Environment Type Pie Chart
+    const envTypeCtx = document.getElementById('envTypeChart').getContext('2d');
+    new Chart(envTypeCtx, {
+      type: 'pie',
+      data: {
+        labels: ['Production', 'Pre-Production', 'Test', 'Development'],
+        datasets: [{
+          data: [
+            {{ env_type_counts.production }},
+            {{ env_type_counts.preproduction }},
+            {{ env_type_counts.test }},
+            {{ env_type_counts.development }}
+          ],
+          backgroundColor: [
+            '#d4351c', // GOV.UK red - Production
+            '#f47738', // GOV.UK orange - Pre-Production
+            '#5694ca', // GOV.UK light blue - Test
+            '#ffdd00'  // GOV.UK yellow - Development
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          }
+        }
+      }
+    });
+
+    // Account Type Pie Chart
+    const accountTypeCtx = document.getElementById('accountTypeChart').getContext('2d');
+    new Chart(accountTypeCtx, {
+      type: 'pie',
+      data: {
+        labels: {{ account_type_counts.keys() | list | tojson }},
+        datasets: [{
+          data: {{ account_type_counts.values() | list | tojson }},
+          backgroundColor: [
+            '#1d70b8', // GOV.UK blue
+            '#d4351c', // GOV.UK red
+            '#00703c', // GOV.UK green
+            '#f47738', // GOV.UK orange
+            '#5694ca', // GOV.UK light blue
+            '#912b88', // GOV.UK purple
+            '#ffdd00', // GOV.UK yellow
+            '#b1b4b6'  // GOV.UK grey
+          ],
+          borderColor: '#ffffff',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom'
+          }
+        }
+      }
+    });
+
+    // Business Unit Bar Chart
+    const businessUnitCtx = document.getElementById('businessUnitChart').getContext('2d');
+    new Chart(businessUnitCtx, {
+      type: 'bar',
+      data: {
+        labels: {{ business_unit_counts.keys() | list | tojson }},
+        datasets: [{
+          label: 'Number of Accounts',
+          data: {{ business_unit_counts.values() | list | tojson }},
+          backgroundColor: '#1d70b8', // GOV.UK blue
+          borderColor: '#003078',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            display: false
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1
+            },
+            title: {
+              display: true,
+              text: 'Count'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Business Unit'
+            }
+          }
+        }
+      }
+    });
+
+    // Search and filter functionality with dynamic environment type filtering
+    const searchInput = document.getElementById('search-input');
+    const table = document.getElementById('environments-table');
+    const rows = table.querySelectorAll('tbody tr');
+    const resultsCount = document.getElementById('results-count');
+    const totalRows = rows.length;
+
+    searchInput.addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase();
+      const searchTerms = searchTerm.trim().split(/\s+/).filter(term => term.length > 0);
+      let visibleCount = 0;
+
+      rows.forEach(row => {
+        const appName = row.dataset.app.toLowerCase();
+        const envTypesRaw = row.dataset.envTypes; // Keep original case for display
+        const envTypes = envTypesRaw.toLowerCase().split(' ');
+        const bu = row.dataset.bu.toLowerCase();
+        const accountType = row.dataset.accountType.toLowerCase();
+        const cni = row.dataset.cni.toLowerCase();
+
+        // If no search terms, show all original environment types
+        if (searchTerms.length === 0) {
+          const envCell = row.cells[1];
+          envCell.innerHTML = row.getAttribute('data-original-env-html') || envCell.innerHTML;
+          if (!row.getAttribute('data-original-env-html')) {
+            row.setAttribute('data-original-env-html', envCell.innerHTML);
+          }
+          row.style.display = '';
+          visibleCount++;
+          return;
+        }
+
+        // Separate env type terms from other search terms
+        const envTypeTerms = [];
+        const otherTerms = [];
+        
+        searchTerms.forEach(term => {
+          // Check for exact or strict environment type matches
+          const matchesEnvType = envTypes.some(env => {
+            // For "production", only match if it's exactly "production" (not "pre-production")
+            if (term === 'production' || term === 'prod') {
+              return env === 'production';
+            }
+            // For "preproduction" or "pre-production", match variants
+            if (term === 'preproduction' || term === 'pre-production' || term === 'preprod') {
+              return env === 'pre-production' || env === 'preproduction';
+            }
+            // For other terms, use contains logic
+            return env.includes(term);
+          });
+          
+          if (matchesEnvType) {
+            envTypeTerms.push(term);
+          } else {
+            otherTerms.push(term);
+          }
+        });
+
+        // Check if row matches all terms
+        const rowText = `${appName} ${envTypesRaw.toLowerCase()} ${bu} ${accountType} ${cni}`;
+        const matches = searchTerms.every(term => rowText.includes(term));
+
+        if (matches) {
+          const envCell = row.cells[1];
+          if (!row.getAttribute('data-original-env-html')) {
+            row.setAttribute('data-original-env-html', envCell.innerHTML);
+          }
+          
+          // Only filter environment types if there are specific env type search terms
+          if (envTypeTerms.length > 0) {
+            const originalEnvTypes = envTypesRaw.split(' ');
+            const filteredEnvTypes = originalEnvTypes.filter(envType => {
+              const envLower = envType.toLowerCase();
+              return envTypeTerms.some(term => {
+                // Strict matching for production vs pre-production
+                if (term === 'production' || term === 'prod') {
+                  return envLower === 'production';
+                }
+                if (term === 'preproduction' || term === 'pre-production' || term === 'preprod') {
+                  return envLower === 'pre-production' || envLower === 'preproduction';
+                }
+                return envLower.includes(term);
+              });
+            });
+
+            if (filteredEnvTypes.length > 0) {
+              envCell.innerHTML = filteredEnvTypes.join('<br>');
+            } else {
+              envCell.innerHTML = row.getAttribute('data-original-env-html');
+            }
+          } else {
+            // No env type filtering needed, show all
+            envCell.innerHTML = row.getAttribute('data-original-env-html');
+          }
+
+          row.style.display = '';
+          visibleCount++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      resultsCount.textContent = `Showing ${visibleCount} of ${totalRows} applications`;
+    });
+  </script>
+  
+  {% endblock %}
