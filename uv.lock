@@ -356,8 +356,8 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = "==2.9.11" },
     { name = "pygithub", specifier = "==2.8.1" },
     { name = "sentry-sdk", specifier = "==2.41.0" },
-    { name = "urllib3", specifier = ">=2.6.0" },
-    { name = "werkzeug", specifier = ">=3.1.4" },
+    { name = "urllib3", specifier = "==2.6.1" },
+    { name = "werkzeug", specifier = "==3.1.4" },
 ]
 
 [package.metadata.requires-dev]
