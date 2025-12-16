@@ -1,0 +1,393 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+   Workflow Failures
+{% endblock %}
+
+{% block content %}
+
+  {{ govukBreadcrumbs({
+      "items": [
+        {
+          "text": "Home",
+          "href": "/"
+        },
+        {
+          "text": "Modernisation Platform",
+          "href": url_for('modernisation_platform_main.index')
+        },
+        {
+          "text": "Workflow Failures"
+        }
+      ]
+    }) }}
+
+  <h1 class="govuk-heading-xl">GitHub Actions Workflow Failures</h1>
+
+  <div class="govuk-form-group govuk-!-margin-bottom-6">
+    <label class="govuk-label govuk-label--s" for="time-range">
+      Select time range
+    </label>
+    <select class="govuk-select" id="time-range" name="time-range" onchange="window.location.href='{{ url_for('modernisation_platform_main.workflow_failures') }}?time_range=' + this.value">
+      <option value="24h" {% if time_range == '24h' %}selected{% endif %}>Last 24 hours</option>
+      <option value="48h" {% if time_range == '48h' %}selected{% endif %}>Last 48 hours</option>
+      <option value="7d" {% if time_range == '7d' %}selected{% endif %}>Last 7 days</option>
+      <option value="14d" {% if time_range == '14d' %}selected{% endif %}>Last 14 days</option>
+      <option value="30d" {% if time_range == '30d' %}selected{% endif %}>Last 30 days</option>
+    </select>
+  </div>
+
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Repository</dt>
+      <dd class="govuk-summary-list__value">
+        <a href="{{ repo_url }}/actions" class="govuk-link" target="_blank">modernisation-platform</a>
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Branch</dt>
+      <dd class="govuk-summary-list__value">main</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Time Period</dt>
+      <dd class="govuk-summary-list__value">{{ time_range_label }}</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Runs</dt>
+      <dd class="govuk-summary-list__value">{{ total_runs }}</dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Success Rate</dt>
+      <dd class="govuk-summary-list__value">
+        {% if success_rate >= 90 %}
+          <strong class="govuk-tag govuk-tag--green">{{ success_rate }}%</strong>
+        {% elif success_rate >= 70 %}
+          <strong class="govuk-tag govuk-tag--yellow">{{ success_rate }}%</strong>
+        {% else %}
+          <strong class="govuk-tag govuk-tag--red">{{ success_rate }}%</strong>
+        {% endif %}
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Total Failures</dt>
+      <dd class="govuk-summary-list__value">
+        {% if total_failures > 0 %}
+          <strong class="govuk-tag govuk-tag--red">{{ total_failures }}</strong>
+        {% else %}
+          <strong class="govuk-tag govuk-tag--green">0</strong>
+        {% endif %}
+      </dd>
+    </div>
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Avg Recovery Time</dt>
+      <dd class="govuk-summary-list__value">
+        {% if avg_mttr_hours > 0 or avg_mttr_minutes > 0 %}
+          {{ avg_mttr_hours }}h {{ avg_mttr_minutes }}m
+        {% else %}
+          N/A
+        {% endif %}
+      </dd>
+    </div>
+  </section>
+
+  <!-- Visualizations Section -->
+  <section class="govuk-!-margin-bottom-9">
+    <h2 class="govuk-heading-l">Workflow Analytics</h2>
+    
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-full">
+        <h3 class="govuk-heading-m">Workflow Runs Over Time</h3>
+        <div style="position: relative; height: 300px;">
+          <canvas id="timelineChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="govuk-grid-row govuk-!-margin-top-6">
+      <div class="govuk-grid-column-one-half">
+        <h3 class="govuk-heading-m">Success Rate Distribution</h3>
+        <div style="position: relative; height: 300px;">
+          <canvas id="successRateChart"></canvas>
+        </div>
+      </div>
+      <div class="govuk-grid-column-one-half">
+        <h3 class="govuk-heading-m">Failure Rate by Workflow</h3>
+        <div style="position: relative; height: 300px; overflow-y: auto;">
+          <canvas id="workflowBreakdownChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if total_failures == 0 %}
+    <div class="govuk-panel govuk-panel--confirmation">
+      <h2 class="govuk-panel__title">
+        No failures found
+      </h2>
+      <div class="govuk-panel__body">
+        All workflows on the main branch have passed in the {{ time_range_label | lower }}.
+      </div>
+    </div>
+  {% else %}
+    <section>
+      <h2 class="govuk-heading-m">Failed Workflow Runs</h2>
+      <p class="govuk-body-s">Showing {{ total_failures }} failed workflow run(s) from the {{ time_range_label | lower }}.</p>
+
+      <input type="text" id="workflow-search" class="govuk-input govuk-!-margin-bottom-3" placeholder="Search by workflow name, commit message, actor...">
+
+      {% for workflow_name, runs in workflow_groups.items() %}
+        <div class="workflow-group govuk-!-margin-bottom-6">
+          <h3 class="govuk-heading-s govuk-!-margin-bottom-2">
+            {{ workflow_name }} 
+            <span class="govuk-tag govuk-tag--red">{{ runs|length }}</span>
+          </h3>
+          
+          <table class="govuk-table">
+            <thead class="govuk-table__head">
+              <tr class="govuk-table__row">
+                <th scope="col" class="govuk-table__header">Run</th>
+                <th scope="col" class="govuk-table__header">Title</th>
+                <th scope="col" class="govuk-table__header">Triggered By</th>
+                <th scope="col" class="govuk-table__header">Event</th>
+                <th scope="col" class="govuk-table__header">Commit</th>
+                <th scope="col" class="govuk-table__header">Failed At</th>
+                <th scope="col" class="govuk-table__header">Link</th>
+              </tr>
+            </thead>
+            <tbody class="govuk-table__body workflow-table-body">
+              {% for run in runs %}
+                <tr class="govuk-table__row">
+                  <td class="govuk-table__cell">#{{ run.run_number }}</td>
+                  <td class="govuk-table__cell">{{ run.display_title }}</td>
+                  <td class="govuk-table__cell">{{ run.actor }}</td>
+                  <td class="govuk-table__cell">{{ run.event }}</td>
+                  <td class="govuk-table__cell">
+                    <details class="govuk-details govuk-!-margin-bottom-0" data-module="govuk-details">
+                      <summary class="govuk-details__summary">
+                        <span class="govuk-details__summary-text">
+                          View commit
+                        </span>
+                      </summary>
+                      <div class="govuk-details__text">
+                        <strong>Message:</strong> {{ run.head_commit.message[:100] }}{% if run.head_commit.message|length > 100 %}...{% endif %}<br>
+                        <strong>Author:</strong> {{ run.head_commit.author }}
+                      </div>
+                    </details>
+                  </td>
+                  <td class="govuk-table__cell">
+                    <time datetime="{{ run.updated_at }}">
+                      {{ run.updated_at | replace('T', ' ') | replace('Z', '') | truncate(19, True, '') }}
+                    </time>
+                  </td>
+                  <td class="govuk-table__cell">
+                    <a href="{{ run.html_url }}" class="govuk-link" target="_blank">View run</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endfor %}
+    </section>
+
+    <script>
+      document.getElementById('workflow-search').addEventListener('input', function() {
+        const query = this.value.toLowerCase().trim();
+        const terms = query.split(/\s+/);
+        const groups = document.querySelectorAll('.workflow-group');
+        
+        groups.forEach(group => {
+          const rows = group.querySelectorAll('.workflow-table-body tr');
+          let visibleCount = 0;
+          
+          rows.forEach(row => {
+            const text = Array.from(row.cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+            const match = terms.every(term => text.includes(term));
+            row.style.display = match ? '' : 'none';
+            if (match) visibleCount++;
+          });
+          
+          // Hide entire group if no rows match
+          group.style.display = visibleCount > 0 ? '' : 'none';
+        });
+      });
+    </script>
+  {% endif %}
+
+  <!-- Load Chart.js and render charts -->
+  <script src="{{ url_for('static', filename='javascript/chart.min.js') }}"></script>
+  <script>
+    // Timeline Chart
+    const timelineCtx = document.getElementById('timelineChart');
+    if (timelineCtx) {
+      new Chart(timelineCtx, {
+        type: 'bar',
+        data: {
+          labels: {{ timeline_labels | tojson }},
+          datasets: [
+            {
+              label: 'Success',
+              data: {{ timeline_success | tojson }},
+              backgroundColor: 'rgba(0, 112, 60, 0.8)',
+              borderColor: 'rgb(0, 112, 60)',
+              borderWidth: 1
+            },
+            {
+              label: 'Failure',
+              data: {{ timeline_failure | tojson }},
+              backgroundColor: 'rgba(212, 53, 28, 0.8)',
+              borderColor: 'rgb(212, 53, 28)',
+              borderWidth: 1
+            },
+            {
+              label: 'Cancelled',
+              data: {{ timeline_cancelled | tojson }},
+              backgroundColor: 'rgba(118, 118, 118, 0.8)',
+              borderColor: 'rgb(118, 118, 118)',
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              stacked: true,
+              title: {
+                display: true,
+                text: 'Date'
+              }
+            },
+            y: {
+              stacked: true,
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Number of Runs'
+              },
+              ticks: {
+                precision: 0
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top'
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          }
+        }
+      });
+    }
+
+    // Success Rate Chart (Doughnut)
+    const successRateCtx = document.getElementById('successRateChart');
+    if (successRateCtx) {
+      new Chart(successRateCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Success', 'Failure'],
+          datasets: [{
+            data: [{{ total_success }}, {{ total_failures }}],
+            backgroundColor: [
+              'rgba(0, 112, 60, 0.8)',
+              'rgba(212, 53, 28, 0.8)'
+            ],
+            borderColor: [
+              'rgb(0, 112, 60)',
+              'rgb(212, 53, 28)'
+            ],
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: true,
+              position: 'bottom'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const label = context.label || '';
+                  const value = context.parsed || 0;
+                  const total = {{ total_runs }};
+                  const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                  return label + ': ' + value + ' (' + percentage + '%)';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Workflow Breakdown Chart
+    const workflowCtx = document.getElementById('workflowBreakdownChart');
+    if (workflowCtx) {
+      const workflowData = {{ workflow_failure_rates | tojson }};
+      const topWorkflows = workflowData.slice(0, 10); // Show top 10
+      
+      new Chart(workflowCtx, {
+        type: 'bar',
+        data: {
+          labels: topWorkflows.map(w => w.name),
+          datasets: [{
+            label: 'Failure Rate (%)',
+            data: topWorkflows.map(w => w.failure_rate),
+            backgroundColor: topWorkflows.map(w => {
+              if (w.failure_rate > 50) return 'rgba(212, 53, 28, 0.8)';
+              if (w.failure_rate > 20) return 'rgba(255, 193, 7, 0.8)';
+              return 'rgba(0, 112, 60, 0.8)';
+            }),
+            borderColor: topWorkflows.map(w => {
+              if (w.failure_rate > 50) return 'rgb(212, 53, 28)';
+              if (w.failure_rate > 20) return 'rgb(255, 193, 7)';
+              return 'rgb(0, 112, 60)';
+            }),
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              beginAtZero: true,
+              max: 100,
+              title: {
+                display: true,
+                text: 'Failure Rate (%)'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  const workflow = topWorkflows[context.dataIndex];
+                  return [
+                    'Failure Rate: ' + workflow.failure_rate + '%',
+                    'Failures: ' + workflow.failures + '/' + workflow.total
+                  ];
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  </script>
+
+{% endblock %}

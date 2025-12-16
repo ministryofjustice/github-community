@@ -1,6 +1,8 @@
 import logging
 from flask import Blueprint, render_template, jsonify
-from app.projects.modernisation_platform.services.service import get_all_json_data, get_readme_incident_info, get_collaborators_data
+from app.projects.modernisation_platform.services.service import get_all_json_data, get_readme_incident_info, get_collaborators_data, get_failed_workflow_runs, get_all_workflow_runs
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 from app.shared.middleware.auth import requires_auth
 
@@ -230,6 +232,150 @@ def collaborators_summary():
         collaborators=collaborators,
         total_collaborators=len(collaborators),
         env_counts=env_counts_sorted
+    )
+
+@modernisation_platform_main.route("/workflow-failures")
+@requires_auth
+def workflow_failures():
+    from flask import request
+    
+    org = "ministryofjustice"
+    repo = "modernisation-platform"
+    branch = "main"
+    
+    # Get time range from query parameter, default to 24 hours
+    time_range = request.args.get('time_range', '24h')
+    
+    # Convert time range to hours
+    time_range_map = {
+        '24h': (24, 'Last 24 hours'),
+        '48h': (48, 'Last 48 hours'),
+        '7d': (7 * 24, 'Last 7 days'),
+        '14d': (14 * 24, 'Last 14 days'),
+        '30d': (30 * 24, 'Last 30 days')
+    }
+    
+    hours, time_range_label = time_range_map.get(time_range, (24, 'Last 24 hours'))
+    
+    # Get all workflow runs for charts and metrics
+    all_runs = get_all_workflow_runs(org, repo, branch, hours)
+    
+    # Filter failed runs
+    failed_runs = [run for run in all_runs if run.get('conclusion') == 'failure']
+    
+    # Calculate metrics
+    total_runs = len(all_runs)
+    total_failures = len(failed_runs)
+    total_success = len([r for r in all_runs if r.get('conclusion') == 'success'])
+    success_rate = round((total_success / total_runs * 100) if total_runs > 0 else 0, 1)
+    
+    # Group failures by workflow name
+    workflow_groups = {}
+    for run in failed_runs:
+        workflow_name = run['name']
+        if workflow_name not in workflow_groups:
+            workflow_groups[workflow_name] = []
+        workflow_groups[workflow_name].append(run)
+    
+    # Sort each group by created_at (most recent first)
+    for workflow_name in workflow_groups:
+        workflow_groups[workflow_name].sort(
+            key=lambda x: x['created_at'], 
+            reverse=True
+        )
+    
+    # Prepare data for timeline chart (group by day)
+    timeline_data = defaultdict(lambda: {'success': 0, 'failure': 0, 'cancelled': 0, 'other': 0})
+    for run in all_runs:
+        # Extract date from created_at
+        date_str = run.get('created_at', '')[:10]  # Get YYYY-MM-DD
+        conclusion = run.get('conclusion', 'other')
+        
+        if conclusion == 'success':
+            timeline_data[date_str]['success'] += 1
+        elif conclusion == 'failure':
+            timeline_data[date_str]['failure'] += 1
+        elif conclusion == 'cancelled':
+            timeline_data[date_str]['cancelled'] += 1
+        else:
+            timeline_data[date_str]['other'] += 1
+    
+    # Sort timeline data by date
+    sorted_timeline = sorted(timeline_data.items())
+    timeline_labels = [date for date, _ in sorted_timeline]
+    timeline_success = [data['success'] for _, data in sorted_timeline]
+    timeline_failure = [data['failure'] for _, data in sorted_timeline]
+    timeline_cancelled = [data['cancelled'] for _, data in sorted_timeline]
+    timeline_other = [data['other'] for _, data in sorted_timeline]
+    
+    # Prepare data for workflow breakdown chart
+    workflow_stats = defaultdict(lambda: {'total': 0, 'failures': 0})
+    for run in all_runs:
+        workflow_name = run['name']
+        workflow_stats[workflow_name]['total'] += 1
+        if run.get('conclusion') == 'failure':
+            workflow_stats[workflow_name]['failures'] += 1
+    
+    # Calculate failure rates and sort
+    workflow_failure_rates = []
+    for workflow_name, stats in workflow_stats.items():
+        failure_rate = (stats['failures'] / stats['total'] * 100) if stats['total'] > 0 else 0
+        workflow_failure_rates.append({
+            'name': workflow_name,
+            'failure_rate': round(failure_rate, 1),
+            'failures': stats['failures'],
+            'total': stats['total']
+        })
+    
+    workflow_failure_rates.sort(key=lambda x: x['failure_rate'], reverse=True)
+    
+    # Calculate MTTR (Mean Time To Recovery)
+    # Find pairs of failures followed by successes for the same workflow
+    mttr_values = []
+    workflow_runs_by_name = defaultdict(list)
+    
+    for run in all_runs:
+        workflow_runs_by_name[run['name']].append(run)
+    
+    for workflow_name, runs in workflow_runs_by_name.items():
+        # Sort by created_at
+        sorted_runs = sorted(runs, key=lambda x: x['created_at'])
+        
+        for i in range(len(sorted_runs) - 1):
+            if sorted_runs[i].get('conclusion') == 'failure' and sorted_runs[i + 1].get('conclusion') == 'success':
+                try:
+                    failure_time = datetime.strptime(sorted_runs[i]['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                    success_time = datetime.strptime(sorted_runs[i + 1]['created_at'], '%Y-%m-%dT%H:%M:%SZ')
+                    recovery_time = (success_time - failure_time).total_seconds() / 60  # in minutes
+                    mttr_values.append(recovery_time)
+                except (ValueError, KeyError):
+                    continue
+    
+    avg_mttr = round(sum(mttr_values) / len(mttr_values)) if mttr_values else 0
+    mttr_hours = avg_mttr // 60
+    mttr_minutes = avg_mttr % 60
+    
+    return render_template(
+        "projects/modernisation_platform/pages/workflow_failures.html",
+        failed_runs=failed_runs,
+        workflow_groups=workflow_groups,
+        total_runs=total_runs,
+        total_failures=total_failures,
+        total_success=total_success,
+        success_rate=success_rate,
+        hours=hours,
+        time_range=time_range,
+        time_range_label=time_range_label,
+        repo_url=f"https://github.com/{org}/{repo}",
+        # Chart data
+        timeline_labels=timeline_labels,
+        timeline_success=timeline_success,
+        timeline_failure=timeline_failure,
+        timeline_cancelled=timeline_cancelled,
+        timeline_other=timeline_other,
+        workflow_failure_rates=workflow_failure_rates,
+        avg_mttr_hours=mttr_hours,
+        avg_mttr_minutes=mttr_minutes
     )
 
 @modernisation_platform_main.route("/platform-environments-summary")
