@@ -48,6 +48,7 @@ owners_config = [
             "data-platform",
             "data-and-analytics-engineering",
             "observability-platform",
+            "dev-sec-ops"
         ],
     ),
     Owner(
