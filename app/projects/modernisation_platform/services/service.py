@@ -199,7 +199,7 @@ def _get_github_headers():
     """
     headers = {}
     if app_config.github.token:
-        headers['Authorization'] = f'token {app_config.github.token}'
+        headers['Authorization'] = f'Bearer {app_config.github.token}'
     return headers
 
 def get_collaborators_data(org, repo, branch):
