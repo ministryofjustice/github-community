@@ -1,10 +1,11 @@
-import requests
+import base64
 import concurrent.futures
-import os
-import time
 import json
-import re
 import logging
+import os
+import re
+import requests
+import time
 
 from app.projects.repository_standards.clients.github_client import create_installation_token
 
@@ -213,7 +214,6 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         response.raise_for_status()
         
         # GitHub API returns base64-encoded content
-        import base64
         file_data = response.json()
         content = base64.b64decode(file_data['content']).decode('utf-8')
         data = json.loads(content)
