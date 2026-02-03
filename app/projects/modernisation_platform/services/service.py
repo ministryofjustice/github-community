@@ -6,6 +6,7 @@ import json
 import re
 import logging
 from app.shared.config.app_config import app_config
+from app.projects.repository_standards.clients.github_client import create_installation_token
 
 logger = logging.getLogger(__name__)
 
@@ -195,11 +196,19 @@ def extract_section(markdown_content, heading):
 
 def _get_github_headers():
     """
-    Get GitHub API headers with authentication if token is available.
+    Get GitHub API headers with authentication using GitHub App.
     """
     headers = {}
-    if app_config.github.token:
-        headers['Authorization'] = f'Bearer {app_config.github.token}'
+    if app_config.github.app.client_id and app_config.github.app.private_key and app_config.github.app.installation_id:
+        try:
+            token_data = create_installation_token(
+                app_config.github.app.client_id,
+                app_config.github.app.private_key,
+                app_config.github.app.installation_id,
+            )
+            headers['Authorization'] = f'token {token_data["token"]}'
+        except Exception as e:
+            logger.warning(f"Failed to create GitHub App token: {e}")
     return headers
 
 def get_collaborators_data(org, repo, branch):
