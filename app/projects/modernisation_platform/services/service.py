@@ -210,7 +210,6 @@ def _get_github_headers():
                 app_config.github.app.private_key,
                 app_config.github.app.installation_id,
             )
-            token = None
             if isinstance(token_data, dict):
                 token = token_data.get("token")
             else:
@@ -218,12 +217,13 @@ def _get_github_headers():
                     "Unexpected token data type from create_installation_token: %s",
                     type(token_data).__name__,
                 )
+                token = None
             if token:
-                headers['Authorization'] = f'token {token}'
+                headers['Authorization'] = f'Bearer {token}'
             else:
                 logger.warning("GitHub App token not found in token data; proceeding without Authorization header.")
         except (requests.RequestException, ValueError, KeyError) as e:
-            logger.warning(f"Failed to create GitHub App token: {e}")
+            logger.warning("Failed to create GitHub App token: %s", e)
     return headers
 
 def get_collaborators_data(org, repo, branch):
@@ -240,9 +240,8 @@ def get_collaborators_data(org, repo, branch):
         response.raise_for_status()
         data = response.json()
         
-        # Also fetch the raw text to find line numbers
-        text_response = requests.get(raw_url, headers=headers, timeout=10)
-        lines = text_response.text.split('\n')
+        # Use the text from the same response to find line numbers
+        lines = response.text.split('\n')
         
         # Find line number for each username
         users = data.get("users", [])
