@@ -181,7 +181,7 @@ def platform_contact_details():
 @requires_auth
 def collaborators_summary():
     org = "ministryofjustice"
-    repo = "modernisation-platform"
+    repo = "modernisation-platform-github"
     branch = "main"
     
     data = get_collaborators_data(org, repo, branch)

@@ -5,6 +5,7 @@ import time
 import json
 import re
 import logging
+from app.shared.config.app_config import app_config
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,8 @@ def get_all_json_data(org, repo, branch, directory):
 
 def list_json_files(org, repo, directory):
     url = GITHUB_API_URL.format(org=org, repo=repo, directory=directory)
-    response = requests.get(url)
+    headers = _get_github_headers()
+    response = requests.get(url, headers=headers)
     response.raise_for_status()
     files = response.json()
     return [f for f in files if f['name'].endswith('.json')]
@@ -63,8 +65,9 @@ def list_json_files(org, repo, directory):
 def fetch_json_file_with_filename(args):
     org, repo, branch, file_info = args
     raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=file_info['path'])
+    headers = _get_github_headers()
     
-    response = requests.get(raw_url)
+    response = requests.get(raw_url, headers=headers)
     response.raise_for_status()
     json_data = response.json()
     json_data["_filename"] = file_info["name"].replace(".json", "")
@@ -130,7 +133,8 @@ def fetch_readme_incident_info(args):
     for path in readme_paths:
         try:
             raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
-            response = requests.get(raw_url, timeout=5)
+            headers = _get_github_headers()
+            response = requests.get(raw_url, headers=headers, timeout=5)
             
             if response.status_code == 200:
                 content = response.text
@@ -189,6 +193,15 @@ def extract_section(markdown_content, heading):
     
     return content if content else None
 
+def _get_github_headers():
+    """
+    Get GitHub API headers with authentication if token is available.
+    """
+    headers = {}
+    if app_config.github.token:
+        headers['Authorization'] = f'token {app_config.github.token}'
+    return headers
+
 def get_collaborators_data(org, repo, branch):
     """
     Fetch collaborators.json file.
@@ -196,14 +209,15 @@ def get_collaborators_data(org, repo, branch):
     """
     path = "collaborators.json"
     raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
+    headers = _get_github_headers()
     
     try:
-        response = requests.get(raw_url, timeout=10)
+        response = requests.get(raw_url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
         
         # Also fetch the raw text to find line numbers
-        text_response = requests.get(raw_url, timeout=10)
+        text_response = requests.get(raw_url, headers=headers, timeout=10)
         lines = text_response.text.split('\n')
         
         # Find line number for each username
