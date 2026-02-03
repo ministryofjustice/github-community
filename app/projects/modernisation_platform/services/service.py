@@ -223,7 +223,7 @@ def _get_github_headers():
             else:
                 logger.warning("GitHub App token not found in token data; proceeding without Authorization header.")
         except (requests.RequestException, ValueError, KeyError) as e:
-            logger.warning("Failed to create GitHub App token: %s", e)
+            logger.warning("Failed to create GitHub App token: %s; proceeding without authentication", e)
     return headers
 
 def get_collaborators_data(org, repo, branch):
