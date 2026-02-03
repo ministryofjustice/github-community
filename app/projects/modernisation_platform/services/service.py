@@ -6,6 +6,8 @@ import json
 import re
 import logging
 
+from app.projects.repository_standards.clients.github_client import create_installation_token
+
 logger = logging.getLogger(__name__)
 
 GITHUB_API_URL = "https://api.github.com/repos/{org}/{repo}/contents/{directory}"
@@ -189,24 +191,35 @@ def extract_section(markdown_content, heading):
     
     return content if content else None
 
-def get_collaborators_data(org, repo, branch):
+def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_key=None, app_installation_id=None):
     """
-    Fetch collaborators.json file.
+    Fetch collaborators.json file from a private repository using GitHub App authentication.
     Returns the collaborators data with line numbers for each user.
     """
     path = "collaborators.json"
-    raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
     
     try:
-        response = requests.get(raw_url, timeout=10)
+        # Get GitHub App token if credentials are provided
+        headers = {}
+        if app_client_id and app_private_key and app_installation_id:
+            token_data = create_installation_token(
+                app_client_id, app_private_key, app_installation_id
+            )
+            headers["Authorization"] = f"token {token_data['token']}"
+        
+        # Use GitHub API to fetch file content from private repo
+        api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
+        response = requests.get(api_url, headers=headers, timeout=10)
         response.raise_for_status()
-        data = response.json()
         
-        # Also fetch the raw text to find line numbers
-        text_response = requests.get(raw_url, timeout=10)
-        lines = text_response.text.split('\n')
+        # GitHub API returns base64-encoded content
+        import base64
+        file_data = response.json()
+        content = base64.b64decode(file_data['content']).decode('utf-8')
+        data = json.loads(content)
         
-        # Find line number for each username
+        # Find line numbers for each username
+        lines = content.split('\n')
         users = data.get("users", [])
         for user in users:
             username = user.get("username", "")
