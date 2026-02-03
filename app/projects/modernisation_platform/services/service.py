@@ -199,15 +199,30 @@ def _get_github_headers():
     Get GitHub API headers with authentication using GitHub App.
     """
     headers = {}
-    if app_config.github.app.client_id and app_config.github.app.private_key and app_config.github.app.installation_id:
+    if (
+        app_config.github.app.client_id not in (None, "")
+        and app_config.github.app.private_key not in (None, "")
+        and app_config.github.app.installation_id not in (None, "")
+    ):
         try:
             token_data = create_installation_token(
                 app_config.github.app.client_id,
                 app_config.github.app.private_key,
                 app_config.github.app.installation_id,
             )
-            headers['Authorization'] = f'token {token_data["token"]}'
-        except Exception as e:
+            token = None
+            if isinstance(token_data, dict):
+                token = token_data.get("token")
+            else:
+                logger.warning(
+                    "Unexpected token data type from create_installation_token: %s",
+                    type(token_data).__name__,
+                )
+            if token:
+                headers['Authorization'] = f'token {token}'
+            else:
+                logger.warning("GitHub App token not found in token data; proceeding without Authorization header.")
+        except (requests.RequestException, ValueError, KeyError) as e:
             logger.warning(f"Failed to create GitHub App token: {e}")
     return headers
 
