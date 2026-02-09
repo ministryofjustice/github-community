@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
   "alembic==1.17.0",
-  "authlib==1.6.5",
+  "authlib==1.6.6",
   "flask==3.1.2",
   "flask-cors==6.0.1",
   "flask-limiter==4.0.0",
@@ -15,9 +15,10 @@ dependencies = [
   "gunicorn==23.0.0",
   "psycopg2-binary==2.9.11",
   "pygithub==2.8.1",
+  "pynacl==1.6.2",
   "sentry-sdk==2.41.0",
   "urllib3==2.6.3",
-  "werkzeug==3.1.4",
+  "werkzeug==3.1.5",
 ]
 
 [dependency-groups]
