@@ -203,10 +203,13 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         # Get GitHub App token if credentials are provided
         headers = {}
         if app_client_id and app_private_key and app_installation_id:
+            logger.info(f"Using GitHub App authentication (client_id: {app_client_id[:10]}..., installation_id: {app_installation_id})")
             token_data = create_installation_token(
                 app_client_id, app_private_key, app_installation_id
             )
             headers["Authorization"] = f"token {token_data['token']}"
+        else:
+            logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
         
         # Use GitHub API to fetch file content from private repo
         api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
@@ -232,5 +235,5 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         
         return data
     except Exception as e:
-        logger.error(f"Error fetching collaborators data: {e}")
+        logger.error(f"Error fetching collaborators data: {e}", exc_info=True)
         return {"users": []}
