@@ -215,6 +215,7 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         # Use GitHub API to fetch file content from private repo
         api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
         response = requests.get(api_url, headers=headers, timeout=10)
+        logger.error(f"GitHub API response: {response.status_code} - {response.json()}")
         response.raise_for_status()
         
         # GitHub API returns base64-encoded content
