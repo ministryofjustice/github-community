@@ -7,7 +7,7 @@ import re
 import requests
 import time
 
-from github import Auth, Github
+from github import Auth, Github, GithubIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -204,11 +204,9 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         if app_client_id and app_private_key and app_installation_id:
             logger.info(f"Using GitHub App authentication (client_id: {app_client_id[:10]}..., installation_id: {app_installation_id})")
             
-            # Create authenticated GitHub client using PyGithub (proven to work)
             auth = Auth.AppAuth(app_client_id, app_private_key)
-            app_client = Github(auth=auth)
-            installation = app_client.get_installation(int(app_installation_id))
-            token = installation.get_access_token().token
+            gi = GithubIntegration(auth=auth)
+            token = gi.get_access_token(int(app_installation_id)).token
             headers = {"Authorization": f"token {token}"}
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
