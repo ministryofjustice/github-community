@@ -207,11 +207,8 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
             # Create authenticated GitHub client using PyGithub (proven to work)
             auth = Auth.AppAuth(app_client_id, app_private_key)
             app_client = Github(auth=auth)
-            installation = app_client.get_app().get_installation(int(app_installation_id))
-            
-            # Get installation token
+            installation = app_client.get_installation(int(app_installation_id))
             token = installation.get_access_token().token
-            
             headers = {"Authorization": f"token {token}"}
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
