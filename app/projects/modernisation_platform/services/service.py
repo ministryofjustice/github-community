@@ -1,10 +1,13 @@
-import requests
+import base64
 import concurrent.futures
-import os
-import time
 import json
-import re
 import logging
+import os
+import re
+import requests
+import time
+
+from app.shared.services.github_app_auth_service import get_github_app_auth_headers
 
 logger = logging.getLogger(__name__)
 
@@ -189,24 +192,32 @@ def extract_section(markdown_content, heading):
     
     return content if content else None
 
-def get_collaborators_data(org, repo, branch):
+def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_key=None, app_installation_id=None):
     """
-    Fetch collaborators.json file.
+    Fetch collaborators.json file from a private repository using GitHub App authentication.
     Returns the collaborators data with line numbers for each user.
     """
     path = "collaborators.json"
-    raw_url = RAW_URL_TEMPLATE.format(org=org, repo=repo, branch=branch, path=path)
     
     try:
-        response = requests.get(raw_url, timeout=10)
+        if app_client_id and app_private_key and app_installation_id:
+            headers = get_github_app_auth_headers(app_client_id, app_private_key, app_installation_id)
+        else:
+            logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
+            headers = {}
+        
+        # Use GitHub API to fetch file content from private repo
+        api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
+        response = requests.get(api_url, headers=headers, timeout=10)
         response.raise_for_status()
-        data = response.json()
         
-        # Also fetch the raw text to find line numbers
-        text_response = requests.get(raw_url, timeout=10)
-        lines = text_response.text.split('\n')
+        # GitHub API returns base64-encoded content
+        file_data = response.json()
+        content = base64.b64decode(file_data['content']).decode('utf-8')
+        data = json.loads(content)
         
-        # Find line number for each username
+        # Find line numbers for each username
+        lines = content.split('\n')
         users = data.get("users", [])
         for user in users:
             username = user.get("username", "")
@@ -219,5 +230,5 @@ def get_collaborators_data(org, repo, branch):
         
         return data
     except Exception as e:
-        logger.error(f"Error fetching collaborators data: {e}")
+        logger.error(f"Error fetching collaborators data: {e}", exc_info=True)
         return {"users": []}

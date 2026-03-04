@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, jsonify
 from app.projects.modernisation_platform.services.service import get_all_json_data, get_readme_incident_info, get_collaborators_data
 
 from app.shared.middleware.auth import requires_auth
+from app.shared.config.app_config import app_config
 
 logger = logging.getLogger(__name__)
 
@@ -181,10 +182,17 @@ def platform_contact_details():
 @requires_auth
 def collaborators_summary():
     org = "ministryofjustice"
-    repo = "modernisation-platform"
+    repo = "modernisation-platform-github"
     branch = "main"
     
-    data = get_collaborators_data(org, repo, branch)
+    data = get_collaborators_data(
+        org, 
+        repo, 
+        branch,
+        app_client_id=app_config.github.app.client_id,
+        app_private_key=app_config.github.app.private_key,
+        app_installation_id=app_config.github.app.installation_id
+    )
     users = data.get("users", [])
     
     # Process collaborators data
