@@ -208,23 +208,6 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
             gi = GithubIntegration(auth=auth)
             token = gi.get_access_token(int(app_installation_id)).token
             headers = {"Authorization": f"token {token}"}
-            
-            # Temporary debug - check what repos the token can see
-            page = 1
-            while True:
-                debug_response = requests.get(
-                    f"https://api.github.com/installation/repositories?per_page=100&page={page}",
-                    headers=headers
-                )
-                data = debug_response.json()
-                repos = [r['full_name'] for r in data.get('repositories', [])]
-                if 'ministryofjustice/modernisation-platform-github' in repos:
-                    logger.info("✅ modernisation-platform-github IS accessible")
-                    break
-                if len(repos) < 100:
-                    logger.warning("❌ modernisation-platform-github NOT found in installation repos")
-                    break
-                page += 1
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
             headers = {}
@@ -232,7 +215,7 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         # Use GitHub API to fetch file content from private repo
         api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
         response = requests.get(api_url, headers=headers, timeout=10)
-        logger.error(f"GitHub API response: {response.status_code} - {response.json()}")
+        logger.info(f"GitHub API response: {response.status_code}")
         response.raise_for_status()
         
         # GitHub API returns base64-encoded content
