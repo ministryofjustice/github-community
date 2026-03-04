@@ -208,6 +208,10 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
             gi = GithubIntegration(auth=auth)
             token = gi.get_access_token(int(app_installation_id)).token
             headers = {"Authorization": f"token {token}"}
+            
+            # Temporary debug - check what repos the token can see
+            debug_response = requests.get("https://api.github.com/installation/repositories", headers=headers)
+            logger.info(f"Token accessible repos: {[r['full_name'] for r in debug_response.json().get('repositories', [])]}")
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
             headers = {}
