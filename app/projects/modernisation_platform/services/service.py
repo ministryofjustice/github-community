@@ -7,7 +7,7 @@ import re
 import requests
 import time
 
-from github import Auth, Github, GithubIntegration
+from app.shared.services.github_app_auth_service import get_github_app_auth_headers
 
 logger = logging.getLogger(__name__)
 
@@ -200,14 +200,8 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
     path = "collaborators.json"
     
     try:
-        # Use PyGithub with App authentication (same as GithubService)
         if app_client_id and app_private_key and app_installation_id:
-            logger.info(f"Using GitHub App authentication (client_id: {app_client_id[:10]}..., installation_id: {app_installation_id})")
-            
-            auth = Auth.AppAuth(app_client_id, app_private_key)
-            gi = GithubIntegration(auth=auth)
-            token = gi.get_access_token(int(app_installation_id)).token
-            headers = {"Authorization": f"token {token}"}
+            headers = get_github_app_auth_headers(app_client_id, app_private_key, app_installation_id)
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
             headers = {}
@@ -215,7 +209,6 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
         # Use GitHub API to fetch file content from private repo
         api_url = f"https://api.github.com/repos/{org}/{repo}/contents/{path}?ref={branch}"
         response = requests.get(api_url, headers=headers, timeout=10)
-        logger.info(f"GitHub API response: {response.status_code}")
         response.raise_for_status()
         
         # GitHub API returns base64-encoded content
