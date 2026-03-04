@@ -211,7 +211,9 @@ def get_collaborators_data(org, repo, branch, app_client_id=None, app_private_ke
             
             # Temporary debug - check what repos the token can see
             debug_response = requests.get("https://api.github.com/installation/repositories", headers=headers)
-            logger.info(f"Token accessible repos: {[r['full_name'] for r in debug_response.json().get('repositories', [])]}")
+            data = debug_response.json()
+            logger.info(f"Total repos accessible: {data.get('total_count', 'unknown')}")
+            logger.info(f"Contains target repo: {'modernisation-platform-github' in str(data)}")
         else:
             logger.warning(f"GitHub App credentials missing - client_id: {bool(app_client_id)}, private_key: {bool(app_private_key)}, installation_id: {bool(app_installation_id)}")
             headers = {}
