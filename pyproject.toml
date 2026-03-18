@@ -5,29 +5,29 @@ description = "Passionate engineers delivering great services"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "alembic==1.17.0",
-  "authlib==1.6.6",
+  "alembic==1.18.4",
+  "authlib==1.6.9",
   "flask==3.1.3",
-  "flask-cors==6.0.1",
-  "flask-limiter==4.0.0",
+  "flask-cors==6.0.2",
+  "flask-limiter==4.1.1",
   "flask-sqlalchemy==3.1.1",
   "govuk-frontend-jinja==3.8.0",
   "gunicorn==23.0.0",
   "psycopg2-binary==2.9.11",
   "pygithub==2.8.1",
   "pynacl==1.6.2",
-  "sentry-sdk==2.41.0",
+  "sentry-sdk==2.54.0",
   "urllib3==2.6.3",
   "werkzeug==3.1.6",
 ]
 
 [dependency-groups]
 dev = [
-  "coverage==7.10.7",
-  "pre-commit==4.3.0",
+  "coverage==7.13.4",
+  "pre-commit==4.5.1",
   "pytest==8.4.2",
-  "ruff==0.14.0",
-  "zizmor==1.14.2",
+  "ruff==0.15.4",
+  "zizmor==1.22.0",
 ]
 
 [tool.sqlfluff.core]
