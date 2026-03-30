@@ -26,7 +26,7 @@ dev = [
   "coverage==7.13.4",
   "pre-commit==4.5.1",
   "pytest==9.0.2",
-  "ruff==0.15.5",
+  "ruff==0.15.6",
   "zizmor==1.23.1",
 ]
 
