@@ -2,45 +2,45 @@ from app.projects.repository_standards.models.owner import Owner
 
 owners_config = [
     # Business Units
-    Owner(name="HMPPS", teams=["HMPPS Developers"], prefix="hmpps-"),
+    Owner(name="HMPPS", teams=["hmpps-developers"], prefix="hmpps-"),
     Owner(
         name="LAA",
         teams=[
-            "LAA Admins",
-            "LAA Technical Architects",
-            "LAA Developers",
-            "LAA Crime Apps team",
-            "LAA Crime Apply",
+            "laa-admins",
+            "laa-technical-architects",
+            "laa-developers",
+            "laa-crime-apps-team",
+            "laa-crime-apply",
             "laa-eligibility-platform",
-            "LAA Get Access",
-            "LAA Payments and Billing",
+            "laa-get-access",
+            "laa-payments-and-billing",
             "payforlegalaid",
         ],
         prefix="laa-",
     ),
-    Owner(name="OPG", teams=["OPG"], prefix="opg-"),
-    Owner(name="CICA", teams=["CICA"], prefix="cica-"),
+    Owner(name="OPG", teams=["opg"], prefix="opg-"),
+    Owner(name="CICA", teams=["cica"], prefix="cica-"),
     Owner(
         name="Central Digital",
         teams=[
-            "Central Digital Product Team",
+            "central-digital-product-team",
             "tactical-products",
-            "Form Builder",
-            "Hale platform",
-            "JOTW Content Devs",
-            "MOJDS Maintainers",
-            "MOJDS Admins",
+            "form-builder",
+            "hale-platform",
+            "jotw-content-devs",
+            "mojds-maintainers",
+            "mojds-admins",
         ],
         prefix="bichard7",
     ),
     Owner(
         name="Platforms",
         teams=[
-            "Platforms",
+            "platforms",
             "hosting-migrations",
             "aws-root-account-admin-team",
-            "WebOps",
-            "Studio Webops",
+            "webops",
+            "studio-webops",
             "analytical-platform",
             "data-engineering",
             "analytics-hq",
@@ -48,7 +48,7 @@ owners_config = [
             "data-platform",
             "data-and-analytics-engineering",
             "observability-platform",
-            "dev-sec-ops"
+            "dev-sec-ops",
         ],
     ),
     Owner(
@@ -76,7 +76,7 @@ owners_config = [
     Owner(
         name="Cloud Platform",
         teams=[
-            "WebOps",
+            "webops",
         ],
     ),
 ]

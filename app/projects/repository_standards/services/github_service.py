@@ -39,19 +39,19 @@ class GithubService:
     def __get_all_parents_team_names_of_team(
         self, team: Team, team_parent_cache: dict[str, List[str]] = {}
     ) -> list[str]:
-        if team.name in team_parent_cache:
+        if team.slug in team_parent_cache:
             logging.debug("Teams parents cache hit!")
-            return team_parent_cache[team.name]
+            return team_parent_cache[team.slug]
 
         parents = []
         team_to_check = team
 
         while team_to_check and team_to_check.parent:
-            parent_name = team_to_check.parent.name
+            parent_name = team_to_check.parent.slug
             parents.append(parent_name)
             team_to_check = team_to_check.parent
 
-        team_parent_cache[team.name] = parents
+        team_parent_cache[team.slug] = parents
         return parents
 
     @retries_github_rate_limit_exception_at_next_reset_once
@@ -68,8 +68,8 @@ class GithubService:
         teams_with_any_access_parents = []
 
         for team in list(repository.get_teams()):
-            logger.debug(f"Processing Team: [ {team.name} ]")
-            if team.name in teams_to_ignore:
+            logger.debug(f"Processing Team: [ {team.slug} ]")
+            if team.slug in teams_to_ignore:
                 logging.debug("Team specified to ignore, skipping...")
                 continue
             permissions = team.permissions
@@ -77,7 +77,7 @@ class GithubService:
                 team, team_parent_cache
             )
             if permissions and permissions.admin:
-                teams_with_admin_access.append(team.name)
+                teams_with_admin_access.append(team.slug)
                 teams_with_admin_access_parents.extend(team_parents)
             if permissions and (
                 permissions.admin
