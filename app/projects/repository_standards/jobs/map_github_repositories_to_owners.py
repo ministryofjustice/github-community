@@ -48,9 +48,7 @@ def main():
         logger.info("No owners found, exitting early")
         return
 
-    repositories: List[RepositoryInfo] = github_service.get_repositories(
-        repo_name=".devcontainer"
-    )
+    repositories: List[RepositoryInfo] = github_service.get_repositories()
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
