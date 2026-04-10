@@ -37,6 +37,11 @@ class OwnerService:
         if owner:
             return OwnerView.from_owner(owner)
 
+    def find_all(self) -> List[OwnerView] | None:
+        owners = self.__owner_repository.find_all()
+
+        return [OwnerView.from_owner(owner) for owner in owners]
+
 
 def get_owner_service() -> OwnerService:
     if "owner_service" not in g:

@@ -29,6 +29,11 @@ class OwnerRepository:
     def __init__(self, db_session: scoped_session = db.session):
         self.db_session = db_session
 
+    def find_all(self) -> List[Owner]:
+        owners = self.db_session.query(Owner).all()
+
+        return owners
+
     def find_all_by_type_id(self, type_id: int) -> List[Owner]:
         owners = self.db_session.query(Owner).filter(Owner.type_id == type_id).all()
 
