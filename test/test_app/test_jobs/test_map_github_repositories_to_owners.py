@@ -303,6 +303,57 @@ class TestMain(unittest.TestCase):
             [call(mock_asset, mock_owner, "OTHER")]
         )
 
+    def test_when_no_matches_then_no_relationships_created(
+        self,
+        mock_owner_service: MagicMock,
+        mock_asset_service: MagicMock,
+        mock_github_service: MagicMock,
+    ):
+        mock_repository = RepositoryInfo(
+            basic=BasicRepositoryInfo(
+                name="NOTHING MATCHES THIS",
+                visibility="public",
+                delete_branch_on_merge=False,
+                default_branch_name="main",
+                description="Test Description",
+            ),
+            access=RepositoryAccess(
+                teams_with_admin=[],
+                teams_with_admin_parents=[],
+                teams=["NO TEAM MATCHES THIS"],
+                teams_parents=[],
+            ),
+        )
+
+        mock_github_service.return_value.get_all_repositories.return_value = [
+            mock_repository
+        ]
+        mock_owner_service.return_value.find_all.return_value = [
+            OwnerView(
+                id=1,
+                name="Test Owners",
+                type="1",
+                config=OwnerConfig(
+                    name="Test Owners", teams=["Test Team"], prefix="test-prefix"
+                ),
+            )
+        ]
+        mock_asset = MagicMock()
+        mock_owner = MagicMock()
+        mock_owner_service.return_value.find_by_name.return_value = [mock_owner]
+        mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+
+        with self.app.app_context():
+            main()
+
+        mock_owner_service.return_value.find_by_name.assert_has_calls(
+            [call("Test Owners")]
+        )
+        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
+            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        )
+        mock_asset_service.return_value.update_relationships_with_owner.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
