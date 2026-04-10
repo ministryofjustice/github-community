@@ -96,8 +96,9 @@ class GithubService:
         )
 
     @retries_github_rate_limit_exception_at_next_reset_once
-    def get_all_repositories(
+    def get_repositories(
         self,
+        repo_name: str,
         limit: int = 1100,
         teams_to_ignore: List[str] = [
             "organisation-security-auditor",
@@ -107,11 +108,19 @@ class GithubService:
     ) -> List[RepositoryInfo]:
         response = []
         team_parent_cache = {}
-        repositories = list(
-            self.github_client_core_api.get_organization(
-                self.organisation_name
-            ).get_repos(type="public")
-        )
+        repositories: list
+        if not repo_name:
+            repositories = list(
+                self.github_client_core_api.get_organization(
+                    self.organisation_name
+                ).get_repos(type="public")
+            )
+        else:
+            repositories = [
+                self.github_client_core_api.get_organization(
+                    self.organisation_name
+                ).get_repo(name=repo_name)
+            ]
         repositories_to_check = [
             repository
             for repository in repositories

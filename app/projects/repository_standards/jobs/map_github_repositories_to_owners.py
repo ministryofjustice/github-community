@@ -48,7 +48,9 @@ def main():
         logger.info("No owners found, exitting early")
         return
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    repositories: List[RepositoryInfo] = github_service.get_repositories(
+        repo_name=".devcontainer"
+    )
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
@@ -68,7 +70,7 @@ def main():
 
             repository_name_starts_with_prefix = (
                 repository.basic.name.startswith(owner_config.config.prefix)
-                if owner_config.config.prefix is not None
+                if owner_config.config.prefix
                 else False
             )
 
