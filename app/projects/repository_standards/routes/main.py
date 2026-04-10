@@ -75,7 +75,7 @@ def business_units_owner(owner_id: str):
     filtrated_repositories = [
         repo
         for repo in repositories
-        if owner.name == repo.authorative_business_unit_owner
+        if owner.name in repo.authorative_business_unit_owners
     ]
 
     return render_template(
@@ -119,7 +119,7 @@ def teams_owner(owner_id: str):
     repositories = repository_compliance_service.get_all_repositories()
 
     filtrated_repositories = [
-        repo for repo in repositories if owner.name == repo.authorative_team_owner
+        repo for repo in repositories if owner.name in repo.authorative_team_owners
     ]
 
     return render_template(
@@ -218,8 +218,8 @@ def unowned_repositories():
     filtrated_repositories = [
         repo
         for repo in repositories
-        if repo.authorative_business_unit_owner is None
-        and repo.authorative_team_owner is None
+        if not repo.authorative_business_unit_owners
+        and not repo.authorative_team_owners
     ]
 
     return render_template(

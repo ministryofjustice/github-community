@@ -22,9 +22,9 @@ class RepositoryComplianceService:
     def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
-    def __get_authorative_owner(
+    def __get_authorative_owners(
         self, repository: RepositoryView, owners_to_check: List[str]
-    ) -> str | None:
+    ) -> List[str]:
         authorative_owners = [
             owner
             for owner in owners_to_check
@@ -32,24 +32,21 @@ class RepositoryComplianceService:
                 repository, owner
             )
         ]
-        authorative_owner = (
-            authorative_owners[0] if len(authorative_owners) > 0 else None
-        )
 
-        return authorative_owner
+        return authorative_owners
 
     def __get_repository_compliance_report(
         self,
         repository: RepositoryView,
     ) -> RepositoryComplianceReportView:
-        authorative_business_unit_owner = self.__get_authorative_owner(
+        authorative_business_unit_owners = self.__get_authorative_owners(
             repository, repository.business_unit_owners_names
         )
-        authorative_team_owner = self.__get_authorative_owner(
+        authorative_team_owners = self.__get_authorative_owners(
             repository, repository.team_owners_names
         )
         checks = get_all_compliance_checks(
-            repository, authorative_business_unit_owner or authorative_team_owner
+            repository, authorative_business_unit_owners or authorative_team_owners
         )
 
         compliance_status = (
@@ -77,8 +74,8 @@ class RepositoryComplianceService:
         return RepositoryComplianceReportView(
             name=repository.name,
             compliance_status=compliance_status,
-            authorative_business_unit_owner=authorative_business_unit_owner,
-            authorative_team_owner=authorative_team_owner,
+            authorative_business_unit_owners=authorative_business_unit_owners,
+            authorative_team_owners=authorative_team_owners,
             maturity_level=maturity_level,
             checks=checks,
             description=repository.data.basic.description,
