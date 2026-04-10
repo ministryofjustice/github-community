@@ -1,13 +1,17 @@
 import logging
 
-from flask import Blueprint, render_template
-from app.projects.repository_standards.services.repository_compliance_service import (
-    get_repository_compliance_service,
-)
+from flask import Blueprint, redirect, render_template, request, url_for
+
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )
+from app.projects.repository_standards.services.repository_compliance_service import (
+    get_repository_compliance_service,
+)
 
+from app.projects.repository_standards.services.owner_service import (
+    get_owner_service,
+)
 from app.shared.middleware.auth import requires_auth
 
 logger = logging.getLogger(__name__)
@@ -49,23 +53,29 @@ def repositories():
 @requires_auth
 def business_units():
     owner_repository = get_owner_repository()
-    business_unit_names = owner_repository.find_all_business_unit_names()
+    business_units = owner_repository.find_all_business_units()
 
     return render_template(
         "projects/repository_standards/pages/business_units.html",
-        business_unit_names=business_unit_names,
+        business_unit_names=business_units,
     )
 
 
-@repository_standards_main.route("/business-units/<owner>", methods=["GET"])
+@repository_standards_main.route("/business-units/<owner_id>", methods=["GET"])
 @requires_auth
-def business_units_owner(owner: str):
+def business_units_owner(owner_id: str):
     repository_compliance_service = get_repository_compliance_service()
+    owner_service = get_owner_service()
 
+    owner = owner_service.get_by_id(owner_id)
+    if owner is None:
+        return "Owner not found", 404
     repositories = repository_compliance_service.get_all_repositories()
 
     filtrated_repositories = [
-        repo for repo in repositories if owner == repo.authorative_business_unit_owner
+        repo
+        for repo in repositories
+        if owner.name == repo.authorative_business_unit_owner
     ]
 
     return render_template(
@@ -88,23 +98,28 @@ def business_units_owner(owner: str):
 @requires_auth
 def teams():
     owner_repository = get_owner_repository()
-    team_names = owner_repository.find_all_team_names()
+    teams = owner_repository.find_all_teams()
 
     return render_template(
         "projects/repository_standards/pages/teams.html",
-        team_names=team_names,
+        teams=teams,
     )
 
 
-@repository_standards_main.route("/teams/<owner>", methods=["GET"])
+@repository_standards_main.route("/teams/<owner_id>", methods=["GET"])
 @requires_auth
-def teams_owner(owner: str):
+def teams_owner(owner_id: str):
     repository_compliance_service = get_repository_compliance_service()
+    owner_service = get_owner_service()
+
+    owner = owner_service.get_by_id(owner_id)
+    if owner is None:
+        return "Owner not found", 404
 
     repositories = repository_compliance_service.get_all_repositories()
 
     filtrated_repositories = [
-        repo for repo in repositories if owner == repo.authorative_team_owner
+        repo for repo in repositories if owner.name == repo.authorative_team_owner
     ]
 
     return render_template(
@@ -120,6 +135,76 @@ def teams_owner(owner: str):
             repo for repo in filtrated_repositories if repo.maturity_level >= 3
         ],
         owner=owner,
+    )
+
+
+@repository_standards_main.route("/teams/<owner_id>/edit", methods=["GET", "POST"])
+@requires_auth
+def edit_team(owner_id: str):
+    owner_service = get_owner_service()
+
+    owner = owner_service.get_by_id(owner_id)
+    if owner is None:
+        return "Owner not found", 404
+
+    team_name = owner.name
+    github_teams = owner.config.teams
+    if request.method == "POST":
+        form_team_name = str(request.form.get("name"))
+        form_github_teams = str(request.form.get("teams"))
+
+        github_teams = [
+            team.strip() for team in form_github_teams.split(",") if team.strip()
+        ]
+
+        if github_teams and form_team_name:
+            logger.info("hit")
+            owner_service.update_by_id(owner_id, form_team_name, github_teams)
+
+        return redirect(
+            url_for("repository_standards_main.teams_owner", owner_id=owner.id)
+        )
+
+    return render_template(
+        "projects/repository_standards/pages/team_edit.html",
+        owner=owner,
+        team_name=team_name,
+        github_teams=github_teams,
+    )
+
+
+@repository_standards_main.route("/teams/add-team", methods=["GET", "POST"])
+@requires_auth
+def add_team():
+    owner_service = get_owner_service()
+
+    team_name = None
+    github_teams = None
+    if request.method == "POST":
+        form_team_name = str(request.form.get("name"))
+        form_github_teams = str(request.form.get("teams"))
+
+        existing_owners = owner_service.find_by_name(form_team_name)
+        existing_owners_names = [owner.name.lower() for owner in existing_owners]
+        team_name = (
+            form_team_name
+            if len(existing_owners) == 0
+            and form_team_name.lower() not in existing_owners_names
+            else None
+        )
+
+        github_teams = [
+            team.strip() for team in form_github_teams.split(",") if team.strip()
+        ]
+
+        if github_teams and team_name:
+            owner_service.add_team_owner(team_name, github_teams)
+
+        return redirect(url_for("repository_standards_main.teams"))
+
+    return render_template(
+        "projects/repository_standards/pages/team_add_new.html",
+        data={"team_name": team_name, "github_teams": github_teams},
     )
 
 

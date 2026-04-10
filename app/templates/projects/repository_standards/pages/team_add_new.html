@@ -1,0 +1,55 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Add a Team
+{% endblock %}
+
+{% block content %}
+  {% set breadcrumbs = {
+    "items": [
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": "Teams", "href": "/repository-standards/teams" },
+      { "text": "Add a Team" }
+    ]
+  } %}
+  {{ govukBreadcrumbs(breadcrumbs) }}
+
+  <h1 class="govuk-heading-xl">Add a Team</h1>
+
+  <section>
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-two-thirds">
+        <form method="post">
+
+          {{ govukInput({
+            "id": "name",
+            "name": "name",
+            "label": {
+              "html": "Team Name",
+              "classes": "govuk-!-font-weight-bold"
+            }
+          }) }}
+
+          {{ govukInput({
+            "id": "teams",
+            "name": "teams",
+            "label": {
+              "html": "GitHub Teams",
+              "classes": "govuk-!-font-weight-bold"
+            },
+            "hint": {
+              "text": "Seperate teams by commas e.g. team-1,team-2. Also use slugs and not names i.e. my-team not My Team"
+            }
+          }) }}
+
+          <div class="moj-button-action">
+            {{ govukButton({
+            "text" : "Submit"
+            }) }}
+        </form>
+        </div>
+      </div>
+    </div>
+
+{% endblock %}

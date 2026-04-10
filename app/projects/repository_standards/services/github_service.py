@@ -86,7 +86,7 @@ class GithubService:
                 or permissions.pull
                 or permissions.triage
             ):
-                teams_with_any_access.append(team.name)
+                teams_with_any_access.append(team.slug)
                 teams_with_any_access_parents.extend(team_parents)
         return (
             teams_with_admin_access,

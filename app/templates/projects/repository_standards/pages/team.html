@@ -1,7 +1,7 @@
 {% extends "shared/components/base.html" %}
 
 {% block pageTitle %}
-  {{ owner }}
+  {{ owner.name }}
 {% endblock %}
 
 {% block content %}
@@ -10,13 +10,21 @@
       { "text": "Home", "href": "/" },
       { "text": "Repository Standards", "href": "/repository-standards" },
       { "text": "Teams", "href": "/repository-standards/teams" },
-      { "text": owner }
+      { "text": owner.name }
     ]
   } %}
   {{ govukBreadcrumbs(breadcrumbs) }}
 
-  <h1 class="govuk-heading-xl">{{ owner }}</h1>
 
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-xl">{{ owner.name }}</h1>
+    </div>
+
+    <div class="govuk-grid-column-one-third">
+      <p class="govuk-body govuk-!-text-align-right govuk-!-margin-top-4"><a class="govuk-link " href="/repository-standards/teams/{{ owner.id }}/edit">Edit</a></p>
+    </div>
+  </div>
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <h2 class="govuk-heading-l">Summary Statistics</h2>
 
@@ -76,10 +84,22 @@
       </dd>
     </div>
 
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">GitHub Teams<br /><p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p></dt>
+      <dd class="govuk-summary-list__value">
+        {% for team in owner.config.teams %}
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" target="_blank">{{ team }}</a>
+        {% endfor %}
+      </dd>
+    </div>
+
   </section>
 
   <section>
     <h2 class="govuk-heading-l">Repositories</h2>
+    {% if not repositories %}
+    <p class="govuk-body-s">If you have only just added this team, you will need to wait until the next scheduled run to see your repostiroes in this list.</p>
+    {% else %}
     <table class="govuk-table" data-module="moj-sortable-table">
       <thead class="govuk-table__head">
         <tr class="govuk-table__row">
@@ -109,6 +129,7 @@
         {% endfor %}
       </tbody>
     </table>
+    {% endif %}
   </section>
 
 {% endblock %}

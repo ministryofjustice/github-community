@@ -1,7 +1,7 @@
 {% extends "shared/components/base.html" %}
 
 {% block pageTitle %}
-  {{ owner }}
+  {{ owner.name }}
 {% endblock %}
 
 {% block content %}
@@ -10,12 +10,12 @@
       { "text": "Home", "href": "/" },
       { "text": "Repository Standards", "href": "/repository-standards" },
       { "text": "Business Units", "href": "/repository-standards/business-units" },
-      { "text": owner }
+      { "text": owner.name }
     ]
   } %}
   {{ govukBreadcrumbs(breadcrumbs) }}
 
-  <h1 class="govuk-heading-xl">{{ owner }}</h1>
+  <h1 class="govuk-heading-xl">{{ owner.name }}</h1>
 
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <h2 class="govuk-heading-l">Summary Statistics</h2>
@@ -76,6 +76,14 @@
       </dd>
     </div>
 
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">GitHub Teams<br /><p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p></dt>
+      <dd class="govuk-summary-list__value">
+        {% for team in owner.config.teams %}
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" target="_blank">{{ team }}</a>
+        {% endfor %}
+      </dd>
+    </div>
   </section>
 
   <section>

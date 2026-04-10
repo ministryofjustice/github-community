@@ -9,6 +9,9 @@ from app.projects.repository_standards.repositories.asset_repository import (
 from app.projects.repository_standards.repositories.owner_repository import (
     OwnerRepository,
 )
+from app.projects.repository_standards.services.owner_service import (
+    OwnerService,
+)
 from app.projects.repository_standards.services.asset_service import AssetService
 from app.projects.repository_standards.services.github_service import GithubService
 from app.shared.config.app_config import app_config
@@ -34,19 +37,19 @@ def main():
     logger.info("Running...")
 
     asset_service = AssetService(AssetRepository())
-    owner_repository = OwnerRepository()
+    owner_service = OwnerService(OwnerRepository())
     github_service = GithubService(
         app_config.github.app.client_id,
         app_config.github.app.private_key,
         app_config.github.app.installation_id,
     )
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    repositories: List[RepositoryInfo] = github_service.get_all_repositories(limit=10)
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
 
-        owners = owner_repository.find_by_name(owner_config.name)
+        owners = owner_service.find_by_name(owner_config.name)
         if not owners or len(owners) == 0:
             logger.error(f"Owner [ {owner_config.name} ] not found")
             continue

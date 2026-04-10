@@ -18,6 +18,7 @@ class Owner(db.Model):
         "Relationship", back_populates="owner"
     )
     type: Mapped["OwnerTypes"] = relationship("OwnerTypes")
+    config: Mapped[dict] = mapped_column(JSON)
 
     def __repr__(self):
         return f"<Owner id={self.id}, name={self.name}>"

@@ -23,15 +23,17 @@
 
 
   <h1 class="govuk-heading-xl">Teams</h1>
-  <p class="govuk-body-s">View compliance reports for Teams within the Ministry of Justice.</p>
+  <p class="govuk-body-s">
+    View compliance reports for Teams within the Ministry of Justice or <a class="govuk-link govuk-link--no-underline" href="/repository-standards/teams/add-team">Add a New Team</a>.</p>
+
   <section>
     <div class="govuk-grid-row">
-      {% for team in team_names %}
+      {% for team in teams %}
       <div class="govuk-grid-column-one-third">
         <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
-          <a class="govuk-link" href="/repository-standards/teams/{{ team }}">{{ team }}</a>
+          <a class="govuk-link" href="/repository-standards/teams/{{ team.id }}">{{ team.name }}</a>
         </h2>
-        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ team }}.</p>
+        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ team.name }}.</p>
       </div>
       {% endfor %}
     </div>
