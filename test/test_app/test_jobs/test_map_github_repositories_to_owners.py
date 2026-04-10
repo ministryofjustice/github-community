@@ -24,10 +24,6 @@ test_owner_id = 1
 )
 @patch("app.projects.repository_standards.services.asset_service.AssetService.__new__")
 @patch("app.projects.repository_standards.services.owner_service.OwnerService.__new__")
-# @patch(
-#     "app.projects.repository_standards.jobs.map_github_repositories_to_owners.owners_config",
-#     [Owner(name="Test Owners", teams=["Test Team"], prefix="test-prefix")],
-# )
 class TestMain(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
