@@ -56,7 +56,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [
@@ -109,7 +109,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [
@@ -162,7 +162,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [
@@ -215,7 +215,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [
@@ -268,7 +268,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [
@@ -321,7 +321,7 @@ class TestMain(unittest.TestCase):
             ),
         )
 
-        mock_github_service.return_value.get_all_repositories.return_value = [
+        mock_github_service.return_value.get_repositories.return_value = [
             mock_repository
         ]
         mock_owner_service.return_value.find_all.return_value = [

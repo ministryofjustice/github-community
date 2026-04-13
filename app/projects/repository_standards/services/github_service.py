@@ -37,7 +37,7 @@ class GithubService:
 
     @retries_github_rate_limit_exception_at_next_reset_once
     def __get_all_parents_team_names_of_team(
-        self, team: Team, team_parent_cache: dict[str, List[str]] = {}
+        self, team: Team, team_parent_cache: dict[str, List[str]]
     ) -> list[str]:
         if team.slug in team_parent_cache:
             logging.debug("Teams parents cache hit!")
@@ -60,7 +60,7 @@ class GithubService:
         repository: Repository,
         teams_to_ignore: List[str],
         team: Team,
-        team_parent_cache: dict[str, List[str]] = {},
+        team_parent_cache: dict[str, List[str]],
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         teams_with_admin_access = []
         teams_with_admin_access_parents = []
