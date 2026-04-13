@@ -47,8 +47,8 @@ class GithubService:
         team_to_check = team
 
         while team_to_check and team_to_check.parent:
-            parent_name = team_to_check.parent.slug
-            parents.append(parent_name)
+            parent_slug = team_to_check.parent.slug
+            parents.append(parent_slug)
             team_to_check = team_to_check.parent
 
         team_parent_cache[team.slug] = parents
