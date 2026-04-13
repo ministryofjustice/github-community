@@ -45,11 +45,10 @@ def main():
 
     owners_config = owner_service.find_all()
     if not owners_config:
-        logger.info("No owners found, exitting early")
+        logger.info("No owners found, exiting early")
         return
 
     repositories: List[RepositoryInfo] = github_service.get_repositories()
-    logger.info(repositories[0].to_dict())
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
@@ -61,7 +60,7 @@ def main():
         owner = owners[0]
 
         for repository in repositories:
-            logger.info(f"Mapping Repository [ {repository.basic.name} ]")
+            logger.debug(f"Mapping Repository [ {repository.basic.name} ]")
 
             asset = asset_service.update_asset_by_name(
                 repository.basic.name, repository.to_dict()
