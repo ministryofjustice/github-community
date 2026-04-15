@@ -198,7 +198,7 @@ def get_all_compliance_checks(
         get_secret_scanning_push_protection_enabled_check(repository),
         get_branch_protection_enforced_for_admins_check(repository),
         get_default_branch_protection_requires_signed_commits_check(repository),
-        get_default_branch_protection_requires_code_owner_reviews_check(repository),
+        # get_default_branch_protection_requires_code_owner_reviews_check(repository),
         get_default_branch_pull_requests_dismiss_stale_reviews_check(repository),
         get_default_branch_protection_requires_atleast_one_review_check(repository),
         get_has_authorative_owner_check(authorative_owner),
