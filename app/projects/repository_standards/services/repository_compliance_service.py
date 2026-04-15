@@ -104,7 +104,7 @@ class RepositoryComplianceService:
 
         return repository_compliance_report
 
-    def get_repository_complaince_badge_shield_url_by_name(
+    def get_repository_compliance_badge_shield_url_by_name(
         self, repository_name: str, style: str = "for-the-badge"
     ) -> str:
         repository = self.get_repository_by_name(repository_name)
@@ -133,8 +133,8 @@ class RepositoryComplianceService:
 
 
 def get_repository_compliance_service() -> RepositoryComplianceService:
-    if "repository_compliance_serivce" not in g:
-        g.repository_compliance_serivce = RepositoryComplianceService(
+    if "repository_compliance_service" not in g:
+        g.repository_compliance_service = RepositoryComplianceService(
             get_asset_service()
         )
-    return g.repository_compliance_serivce
+    return g.repository_compliance_service

@@ -26,4 +26,10 @@ class OwnerConfig:
 
     @classmethod
     def from_dict(cls, data: dict) -> "OwnerConfig":
+        if (
+            data.get("name") is None
+            or data.get("teams") is None
+            or data.get("prefix") is None
+        ):
+            raise ValueError("Owner conifig is missing attributes")
         return cls(name=data["name"], teams=data["teams"], prefix=data["prefix"])

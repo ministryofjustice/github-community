@@ -80,7 +80,7 @@
       <dt class="govuk-summary-list__key">GitHub Teams<br /><p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p></dt>
       <dd class="govuk-summary-list__value">
         {% for team in owner.config.teams %}
-        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" target="_blank">{{ team }}</a>
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>
         {% endfor %}
       </dd>
     </div>

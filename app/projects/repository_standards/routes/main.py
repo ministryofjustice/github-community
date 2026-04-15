@@ -67,7 +67,7 @@ def business_units_owner(owner_id: str):
     repository_compliance_service = get_repository_compliance_service()
     owner_service = get_owner_service()
 
-    owner = owner_service.get_by_id(owner_id)
+    owner = owner_service.find_by_id(owner_id)
     if owner is None:
         return "Owner not found", 404
     repositories = repository_compliance_service.get_all_repositories()
@@ -112,7 +112,7 @@ def teams_owner(owner_id: str):
     repository_compliance_service = get_repository_compliance_service()
     owner_service = get_owner_service()
 
-    owner = owner_service.get_by_id(owner_id)
+    owner = owner_service.find_by_id(owner_id)
     if owner is None:
         return "Owner not found", 404
 
@@ -143,7 +143,7 @@ def teams_owner(owner_id: str):
 def edit_team(owner_id: str):
     owner_service = get_owner_service()
 
-    owner = owner_service.get_by_id(owner_id)
+    owner = owner_service.find_by_id(owner_id)
     if owner is None:
         return "Owner not found", 404
 
@@ -184,23 +184,22 @@ def add_team():
         form_team_name = str(request.form.get("name"))
         form_github_teams = str(request.form.get("teams"))
 
-        existing_owners = owner_service.find_by_name(form_team_name)
-        existing_owners_names = [owner.name.lower() for owner in existing_owners]
-        team_name = (
-            form_team_name
-            if len(existing_owners) == 0
-            and form_team_name.lower() not in existing_owners_names
-            else None
-        )
+        existing_owners_with_same_name = owner_service.find_by_name(form_team_name)
+        team_name = form_team_name if len(existing_owners_with_same_name) == 0 else None
 
         github_teams = [
             team.strip() for team in form_github_teams.split(",") if team.strip()
         ]
 
         if github_teams and team_name:
-            owner_service.add_team_owner(team_name, github_teams)
+            team = owner_service.add_team_owner(team_name, github_teams)
 
-        return redirect(url_for("repository_standards_main.teams"))
+            if team is None:
+                raise ValueError("Failed to add team")
+
+            return redirect(
+                url_for("repository_standards_main.teams_owner", owner_id=team.id)
+            )
 
     return render_template(
         "projects/repository_standards/pages/team_add_new.html",

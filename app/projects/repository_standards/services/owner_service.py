@@ -13,7 +13,7 @@ class OwnerService:
     def __init__(self, owner_repository: OwnerRepository):
         self.__owner_repository = owner_repository
 
-    def get_by_id(self, id: str) -> OwnerView | None:
+    def find_by_id(self, id: str) -> OwnerView | None:
         owner = self.__owner_repository.find_by_id(id)
 
         if owner:
