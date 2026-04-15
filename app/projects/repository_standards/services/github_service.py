@@ -59,7 +59,6 @@ class GithubService:
         self,
         repository: Repository,
         teams_to_ignore: List[str],
-        team: Team,
         team_parent_cache: dict[str, List[str]],
     ) -> tuple[list[str], list[str], list[str], list[str]]:
         teams_with_admin_access = []
