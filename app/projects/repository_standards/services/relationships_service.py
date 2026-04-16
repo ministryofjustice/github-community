@@ -24,14 +24,7 @@ class RelationshipsService:
     def __contains_one_or_more(
         self, values: List[str], list_to_check: List[str]
     ) -> bool:
-        found = False
-
-        for value in values:
-            if value in list_to_check:
-                found = True
-
-        return found
-
+        return any(value in list_to_check for value in values)
     def update_relationship_for_owner(self, owner: OwnerView) -> None:
         logger.info(f"Mapping Repositories for Owner [ {owner.name} ]")
 
