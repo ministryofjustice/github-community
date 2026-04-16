@@ -2,11 +2,14 @@ from typing import List
 
 from flask import g
 
-from app.projects.repository_standards.db_models import Asset, Owner
+from app.projects.repository_standards.db_models import Asset
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
     RepositoryView,
     get_asset_repository,
+)
+from app.projects.repository_standards.repositories.owner_repository import (
+    OwnerView,
 )
 
 
@@ -34,7 +37,7 @@ class AssetService:
         return has_authorative_ownership
 
     def update_relationships_with_owner(
-        self, asset: Asset, owner: Owner, relationship_type: str
+        self, asset: Asset, owner: OwnerView, relationship_type: str
     ):
         self.__asset_repository.update_relationship_with_owner(
             asset, owner, relationship_type

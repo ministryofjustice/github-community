@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional
 
 
@@ -18,6 +18,6 @@ class RepositoryComplianceReportView:
     compliance_status: str
     checks: List[RepositoryComplianceCheck]
     maturity_level: int = 0
-    authorative_business_unit_owner: Optional[str] = None
-    authorative_team_owner: Optional[str] = None
+    authorative_business_unit_owners: List[str] = field(default_factory=lambda: [])
+    authorative_team_owners: List[str] = field(default_factory=lambda: [])
     description: Optional[str] = None

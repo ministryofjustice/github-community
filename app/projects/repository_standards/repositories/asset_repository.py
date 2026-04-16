@@ -7,6 +7,9 @@ from sqlalchemy.orm import scoped_session
 
 from app.projects.repository_standards.db_models import Asset, Owner, Relationship, db
 from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from app.projects.repository_standards.repositories.owner_repository import (
+    OwnerView,
+)
 
 
 class RepositoryView:
@@ -102,7 +105,7 @@ class AssetRepository:
         return asset
 
     def create_relationship(
-        self, asset: Asset, owner: Owner, relationship_type: str
+        self, asset: Asset, owner: OwnerView, relationship_type: str
     ) -> Relationship:
         relationship = Relationship()
         relationship.owners_id = owner.id
@@ -118,7 +121,7 @@ class AssetRepository:
         return assets
 
     def update_relationship_with_owner(
-        self, asset: Asset, owner: Owner, relationship_type: str
+        self, asset: Asset, owner: OwnerView, relationship_type: str
     ) -> Relationship:
         relationships = (
             self.db_session.query(Relationship)

@@ -1,0 +1,60 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Edit {{ owner.name }}
+{% endblock %}
+
+{% set owner_url =  "/repository-standards/teams/" + owner.id | string %}
+{% block content %}
+  {% set breadcrumbs = {
+    "items": [
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": "Teams", "href": "/repository-standards/teams" },
+      { "text": owner.name, "href": owner_url },
+      { "text": "Edit" }
+    ]
+  } %}
+  {{ govukBreadcrumbs(breadcrumbs) }}
+
+  <h1 class="govuk-heading-xl">Edit {{ owner.name }}</h1>
+  <section>
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-two-thirds">
+        <form method="post">
+
+          {{ govukInput({
+            "id": "name",
+            "name": "name",
+            "label": {
+              "html": "Team Name",
+              "classes": "govuk-!-font-weight-bold"
+            },
+            "value": team_name
+          }) }}
+
+          {% set teams = github_teams | join(',') %}
+          {{ govukInput({
+            "id": "teams",
+            "name": "teams",
+            "label": {
+              "html": "GitHub Teams",
+              "classes": "govuk-!-font-weight-bold"
+            },
+            "hint": {
+              "text": "Separate teams by commas e.g. team-1,team-2. Also use slugs and not names i.e. my-team not My Team"
+            },
+            "value": teams
+          }) }}
+
+          <div class="moj-button-action">
+            {{ govukButton({
+            "text" : "Submit"
+            }) }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+{% endblock %}

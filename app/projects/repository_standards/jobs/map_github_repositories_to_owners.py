@@ -9,11 +9,13 @@ from app.projects.repository_standards.repositories.asset_repository import (
 from app.projects.repository_standards.repositories.owner_repository import (
     OwnerRepository,
 )
+from app.projects.repository_standards.services.owner_service import (
+    OwnerService,
+)
 from app.projects.repository_standards.services.asset_service import AssetService
 from app.projects.repository_standards.services.github_service import GithubService
 from app.shared.config.app_config import app_config
 from app.shared.config.logging_config import configure_logging
-from app.projects.repository_standards.config.owners_config import owners_config
 
 logger = logging.getLogger(__name__)
 
@@ -34,19 +36,24 @@ def main():
     logger.info("Running...")
 
     asset_service = AssetService(AssetRepository())
-    owner_repository = OwnerRepository()
+    owner_service = OwnerService(OwnerRepository())
     github_service = GithubService(
         app_config.github.app.client_id,
         app_config.github.app.private_key,
         app_config.github.app.installation_id,
     )
 
-    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    owners_config = owner_service.find_all()
+    if not owners_config:
+        logger.info("No owners found, exiting early")
+        return
+
+    repositories: List[RepositoryInfo] = github_service.get_repositories()
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
 
-        owners = owner_repository.find_by_name(owner_config.name)
+        owners = owner_service.find_by_name(owner_config.name)
         if not owners or len(owners) == 0:
             logger.error(f"Owner [ {owner_config.name} ] not found")
             continue
@@ -60,13 +67,13 @@ def main():
             )
 
             repository_name_starts_with_prefix = (
-                repository.basic.name.startswith(owner_config.prefix)
-                if owner_config.prefix is not None
+                repository.basic.name.startswith(owner_config.config.prefix)
+                if owner_config.config.prefix
                 else False
             )
 
             if contains_one_or_more(
-                owner_config.teams,
+                owner_config.config.teams,
                 [
                     repository.access.teams_with_admin,
                     repository.access.teams_with_admin_parents,
@@ -77,7 +84,7 @@ def main():
                 )
             elif (
                 contains_one_or_more(
-                    owner_config.teams,
+                    owner_config.config.teams,
                     [
                         repository.access.teams,
                         repository.access.teams_parents,

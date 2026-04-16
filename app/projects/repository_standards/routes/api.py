@@ -19,7 +19,7 @@ def get_repository_badge(repository_name: str):
         else default_badge_style
     )
     repository_compliance_service = get_repository_compliance_service()
-    shields_url = repository_compliance_service.get_repository_complaince_badge_shield_url_by_name(
+    shields_url = repository_compliance_service.get_repository_compliance_badge_shield_url_by_name(
         repository_name, style
     )
     shields_response = requests.get(shields_url, stream=True)
