@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, call, patch
+from types import SimpleNamespace
 from app.projects.repository_standards.jobs.map_github_repositories_to_owners import (
     main,
 )
@@ -23,6 +24,9 @@ test_owner_id = 1
     "app.projects.repository_standards.repositories.owner_repository.OwnerRepository.__new__"
 )
 @patch(
+    "app.projects.repository_standards.services.repository_compliance_service.RepositoryComplianceService.__new__"
+)
+@patch(
     "app.projects.repository_standards.jobs.map_github_repositories_to_owners.owners_config",
     [Owner(name="Test Owners", teams=["Test Team"], prefix="test-prefix")],
 )
@@ -38,6 +42,7 @@ class TestMain(unittest.TestCase):
 
     def test_when_team_has_direct_admin_access_then_admin_relationship_created(
         self,
+        mock_repository_compliance_service: MagicMock,
         mock_owner_repository: MagicMock,
         mock_asset_service: MagicMock,
         mock_github_service: MagicMock,
@@ -65,6 +70,9 @@ class TestMain(unittest.TestCase):
         mock_owner = MagicMock()
         mock_owner_repository.return_value.find_by_name.return_value = [mock_owner]
         mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+        mock_repository_compliance_service.return_value.get_repository_by_name.return_value = (
+            SimpleNamespace(maturity_level=1)
+        )
 
         with self.app.app_context():
             main()
@@ -72,15 +80,20 @@ class TestMain(unittest.TestCase):
         mock_owner_repository.return_value.find_by_name.assert_has_calls(
             [call("Test Owners")]
         )
-        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        self.assertEqual(
+            mock_asset_service.return_value.update_asset_by_name.call_count,
+            2,
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
         )
+        mock_github_service.return_value.set_repository_standard_custom_property.assert_has_calls(
+            [call(mock_repository.basic.name, "baseline")]
+        )
 
     def test_when_parent_team_has_admin_access_then_admin_relationship_created(
         self,
+        mock_repository_compliance_service: MagicMock,
         mock_owner_repository: MagicMock,
         mock_asset_service: MagicMock,
         mock_github_service: MagicMock,
@@ -108,6 +121,9 @@ class TestMain(unittest.TestCase):
         mock_owner = MagicMock()
         mock_owner_repository.return_value.find_by_name.return_value = [mock_owner]
         mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+        mock_repository_compliance_service.return_value.get_repository_by_name.return_value = (
+            SimpleNamespace(maturity_level=1)
+        )
 
         with self.app.app_context():
             main()
@@ -115,8 +131,9 @@ class TestMain(unittest.TestCase):
         mock_owner_repository.return_value.find_by_name.assert_has_calls(
             [call("Test Owners")]
         )
-        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        self.assertEqual(
+            mock_asset_service.return_value.update_asset_by_name.call_count,
+            2,
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
@@ -124,6 +141,7 @@ class TestMain(unittest.TestCase):
 
     def test_when_team_has_any_access_then_default_relationship_created(
         self,
+        mock_repository_compliance_service: MagicMock,
         mock_owner_repository: MagicMock,
         mock_asset_service: MagicMock,
         mock_github_service: MagicMock,
@@ -151,6 +169,9 @@ class TestMain(unittest.TestCase):
         mock_owner = MagicMock()
         mock_owner_repository.return_value.find_by_name.return_value = [mock_owner]
         mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+        mock_repository_compliance_service.return_value.get_repository_by_name.return_value = (
+            SimpleNamespace(maturity_level=2)
+        )
 
         with self.app.app_context():
             main()
@@ -158,15 +179,20 @@ class TestMain(unittest.TestCase):
         mock_owner_repository.return_value.find_by_name.assert_has_calls(
             [call("Test Owners")]
         )
-        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        self.assertEqual(
+            mock_asset_service.return_value.update_asset_by_name.call_count,
+            2,
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
         )
+        mock_github_service.return_value.set_repository_standard_custom_property.assert_has_calls(
+            [call(mock_repository.basic.name, "standard")]
+        )
 
     def test_when_parent_team_has_any_access_then_default_relationship_created(
         self,
+        mock_repository_compliance_service: MagicMock,
         mock_owner_repository: MagicMock,
         mock_asset_service: MagicMock,
         mock_github_service: MagicMock,
@@ -194,6 +220,9 @@ class TestMain(unittest.TestCase):
         mock_owner = MagicMock()
         mock_owner_repository.return_value.find_by_name.return_value = [mock_owner]
         mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+        mock_repository_compliance_service.return_value.get_repository_by_name.return_value = (
+            SimpleNamespace(maturity_level=1)
+        )
 
         with self.app.app_context():
             main()
@@ -201,8 +230,9 @@ class TestMain(unittest.TestCase):
         mock_owner_repository.return_value.find_by_name.assert_has_calls(
             [call("Test Owners")]
         )
-        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        self.assertEqual(
+            mock_asset_service.return_value.update_asset_by_name.call_count,
+            2,
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
@@ -210,6 +240,7 @@ class TestMain(unittest.TestCase):
 
     def test_when_prefix_matches_repository_name_then_default_relationship_created(
         self,
+        mock_repository_compliance_service: MagicMock,
         mock_owner_repository: MagicMock,
         mock_asset_service: MagicMock,
         mock_github_service: MagicMock,
@@ -237,6 +268,9 @@ class TestMain(unittest.TestCase):
         mock_owner = MagicMock()
         mock_owner_repository.return_value.find_by_name.return_value = [mock_owner]
         mock_asset_service.return_value.update_asset_by_name.return_value = mock_asset
+        mock_repository_compliance_service.return_value.get_repository_by_name.return_value = (
+            SimpleNamespace(maturity_level=0)
+        )
 
         with self.app.app_context():
             main()
@@ -244,12 +278,14 @@ class TestMain(unittest.TestCase):
         mock_owner_repository.return_value.find_by_name.assert_has_calls(
             [call("Test Owners")]
         )
-        mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+        self.assertEqual(
+            mock_asset_service.return_value.update_asset_by_name.call_count,
+            2,
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
         )
+        mock_github_service.return_value.set_repository_standard_custom_property.assert_not_called()
 
 
 if __name__ == "__main__":
