@@ -5,6 +5,9 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )
+from app.projects.repository_standards.services.relationships_service import (
+    get_relationships_service,
+)
 from app.projects.repository_standards.services.repository_compliance_service import (
     get_repository_compliance_service,
 )
@@ -177,6 +180,7 @@ def edit_team(owner_id: str):
 @requires_auth
 def add_team():
     owner_service = get_owner_service()
+    relationships_service = get_relationships_service()
 
     team_name = None
     github_teams = None
@@ -197,6 +201,7 @@ def add_team():
             if team is None:
                 raise ValueError("Failed to add team")
 
+            relationships_service.update_relationship_for_owner(team)
             return redirect(
                 url_for("repository_standards_main.teams_owner", owner_id=team.id)
             )

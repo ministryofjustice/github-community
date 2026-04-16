@@ -43,6 +43,9 @@ class AssetService:
             asset, owner, relationship_type
         )
 
+    def find_asset_by_id(self, asset_id: int) -> Asset | None:
+        return self.__asset_repository.find_by_id(asset_id)
+
     def update_asset_by_name(self, name: str, data: dict) -> Asset:
         return self.__asset_repository.update_by_name(name, data)
 
