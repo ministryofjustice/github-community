@@ -29,9 +29,9 @@
       {% for business_unit in business_unit_names %}
       <div class="govuk-grid-column-one-third">
         <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
-          <a class="govuk-link" href="/repository-standards/business-units/{{ business_unit }}">{{ business_unit }}</a>
+          <a class="govuk-link" href="/repository-standards/business-units/{{ business_unit.id }}">{{ business_unit.name }}</a>
         </h2>
-        <p class="govuk-body-s">View the compliance status for all active, public repositorys owned by {{ business_unit }}.</p>
+        <p class="govuk-body-s">View the compliance status for all active, public repositories owned by {{ business_unit.name }}.</p>
       </div>
       {% endfor %}
     </div>
