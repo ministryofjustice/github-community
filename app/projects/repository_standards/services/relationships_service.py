@@ -8,23 +8,26 @@ from app.projects.repository_standards.services.asset_service import (
     AssetService,
     get_asset_service,
 )
-from app.projects.repository_standards.services.owner_service import (
-    OwnerService,
-    get_owner_service,
-)
 
 logger = logging.getLogger(__name__)
 
 
 class RelationshipsService:
-    def __init__(self, owner_service: OwnerService, asset_service: AssetService):
-        self.__owner_service = owner_service
+    def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
     def __contains_one_or_more(
-        self, values: List[str], list_to_check: List[str]
+        self, values: List[str], lists_to_check: list[list[str]]
     ) -> bool:
-        return any(value in list_to_check for value in values)
+        found = False
+
+        for value in values:
+            for list_to_check in lists_to_check:
+                if value in list_to_check:
+                    found = True
+
+        return found
+
     def update_relationship_for_owner(self, owner: OwnerView) -> None:
         logger.info(f"Mapping Repositories for Owner [ {owner.name} ]")
 
@@ -45,7 +48,10 @@ class RelationshipsService:
 
             if self.__contains_one_or_more(
                 owner.config.teams,
-                repository.data.access.teams_with_admin,
+                [
+                    repository.data.access.teams_with_admin,
+                    repository.data.access.teams_with_admin_parents,
+                ],
             ):
                 self.__asset_service.update_relationships_with_owner(
                     asset, owner, "ADMIN_ACCESS"
@@ -53,7 +59,10 @@ class RelationshipsService:
             elif (
                 self.__contains_one_or_more(
                     owner.config.teams,
-                    repository.data.access.teams,
+                    [
+                        repository.data.access.teams,
+                        repository.data.access.teams_parents,
+                    ],
                 )
                 or repository_name_starts_with_prefix
             ):
@@ -64,7 +73,6 @@ class RelationshipsService:
 
 def get_relationships_service() -> RelationshipsService:
     if "relationships_service" not in g:
-        g.relationships_service = RelationshipsService(
-            get_owner_service(), get_asset_service()
-        )
+        g.relationships_service = RelationshipsService(get_asset_service())
     return g.relationships_service
+
