@@ -152,7 +152,7 @@ def get_default_branch_protection_requires_atleast_one_review_check(
 
 
 def get_has_authorative_owner_check(
-    authorative_owner: Optional[str], required: bool = False
+    authorative_owner: Optional[List[str]], required: bool = False
 ) -> RepositoryComplianceCheck:
     return RepositoryComplianceCheck(
         name="Has an Authorative Owner",
@@ -191,7 +191,7 @@ def get_default_branch_is_main_check(
 
 
 def get_all_compliance_checks(
-    repository: RepositoryView, authorative_owner: Optional[str]
+    repository: RepositoryView, authorative_owner: Optional[List[str]]
 ) -> List[RepositoryComplianceCheck]:
     return [
         get_secret_scanning_enabled_check(repository),
