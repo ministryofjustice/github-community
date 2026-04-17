@@ -53,6 +53,13 @@
             }) }}
           </div>
         </form>
+
+        <form method="post" action="/repository-standards/teams/{{ owner.id }}/delete">
+          {{ govukButton({
+            "text": "Delete Team",
+            "classes": "govuk-button--warning"
+          }) }}
+        </form>
       </div>
     </div>
   </section>

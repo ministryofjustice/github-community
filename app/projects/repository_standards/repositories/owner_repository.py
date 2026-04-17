@@ -86,6 +86,16 @@ class OwnerRepository:
         self.db_session.commit()
         return owner
 
+    def delete_by_id(self, id: str) -> bool:
+        owner = self.find_by_id(id)
+        if not owner:
+            return False
+        for relationship in owner.relationships:
+            self.db_session.delete(relationship)
+        self.db_session.delete(owner)
+        self.db_session.commit()
+        return True
+
 
 def get_owner_repository() -> OwnerRepository:
     if "owner_repository" not in g:

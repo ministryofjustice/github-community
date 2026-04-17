@@ -37,6 +37,9 @@ class OwnerService:
         if owner:
             return OwnerView.from_owner(owner)
 
+    def delete_by_id(self, id: str) -> bool:
+        return self.__owner_repository.delete_by_id(id)
+
     def find_all(self) -> List[OwnerView] | None:
         owners = self.__owner_repository.find_all()
 
