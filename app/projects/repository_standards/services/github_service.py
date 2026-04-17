@@ -1,5 +1,5 @@
 import logging
-from typing import List
+from typing import List, Optional
 
 from github import Auth, Github
 from github.Repository import Repository
@@ -153,3 +153,18 @@ class GithubService:
             )
             counter += 1
         return response
+
+    def set_repository_standard_custom_property(
+        self, repository_name: str, repository_standard: Optional[str]
+    ) -> None:
+        properties = [
+            {
+                "property_name": "repository-standard",
+                "value": repository_standard,
+            }
+        ]
+
+        self.github_client.update_repository_custom_properties(
+            repository_name,
+            properties,
+        )
