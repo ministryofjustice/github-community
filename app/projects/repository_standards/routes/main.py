@@ -192,6 +192,7 @@ def delete_team(owner_id: str):
 
     deleted = owner_service.delete_by_id(owner_id)
     if not deleted:
+        logger.error(f"Failed to delete owner with id [ {owner_id} ]")
         raise ValueError("Failed to delete owner")
 
     return redirect(url_for("repository_standards_main.teams"))
