@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import List
@@ -15,6 +16,7 @@ from app.projects.repository_standards.repositories.owner_repository import (
 class RepositoryView:
     def __init__(
         self,
+        id: int,
         name: str,
         owner_names: List[str],
         admin_owner_names: List[str],
@@ -24,6 +26,7 @@ class RepositoryView:
         team_admin_owner_names: List[str],
         data: RepositoryInfo,
     ):
+        self.id = id
         self.name = name
         self.admin_owner_names = admin_owner_names
         self.owner_names = owner_names
@@ -43,6 +46,7 @@ class RepositoryView:
         ]
 
         return cls(
+            id=asset.id,
             name=asset.name,
             owner_names=[owner.name for owner in owners],
             admin_owner_names=[owner.name for owner in admin_owners],
@@ -119,6 +123,10 @@ class AssetRepository:
     def find_by_name(self, name: str) -> List[Asset]:
         assets = self.db_session.query(Asset).filter(Asset.name == name).all()
         return assets
+
+    def find_by_id(self, asset_id: int) -> Asset | None:
+        asset = self.db_session.query(Asset).filter(Asset.id == asset_id).first()
+        return asset
 
     def update_relationship_with_owner(
         self, asset: Asset, owner: OwnerView, relationship_type: str
