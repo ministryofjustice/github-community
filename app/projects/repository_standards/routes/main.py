@@ -145,6 +145,7 @@ def teams_owner(owner_id: str):
 @requires_auth
 def edit_team(owner_id: str):
     owner_service = get_owner_service()
+    relationships_service = get_relationships_service()
 
     owner = owner_service.find_by_id(owner_id)
     if owner is None:
@@ -161,8 +162,12 @@ def edit_team(owner_id: str):
         ]
 
         if github_teams and form_team_name:
-            logger.info("hit")
-            owner_service.update_by_id(owner_id, form_team_name, github_teams)
+            updated_owner = owner_service.update_by_id(
+                owner_id, form_team_name, github_teams
+            )
+            if updated_owner is None:
+                raise ValueError("Failed to update owner")
+            relationships_service.update_relationship_for_owner(updated_owner)
 
         return redirect(
             url_for("repository_standards_main.teams_owner", owner_id=owner.id)
