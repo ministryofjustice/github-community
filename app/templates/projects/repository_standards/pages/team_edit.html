@@ -53,6 +53,14 @@
             }) }}
           </div>
         </form>
+
+        <form method="post" action="/repository-standards/teams/{{ owner.id }}/delete">
+          <input type="hidden" name="csrf_token" value="{{ delete_team_csrf_token }}">
+          {{ govukButton({
+            "text": "Delete Team",
+            "classes": "govuk-button--warning"
+          }) }}
+        </form>
       </div>
     </div>
   </section>

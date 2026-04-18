@@ -1,6 +1,7 @@
 import logging
+import secrets
 
-from flask import Blueprint, redirect, render_template, request, url_for
+from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
@@ -20,6 +21,7 @@ from app.shared.middleware.auth import requires_auth
 logger = logging.getLogger(__name__)
 
 repository_standards_main = Blueprint("repository_standards_main", __name__)
+TEAM_OWNER_TYPE = "TEAM"
 
 
 @repository_standards_main.route("/", methods=["GET"])
@@ -173,12 +175,46 @@ def edit_team(owner_id: str):
             url_for("repository_standards_main.teams_owner", owner_id=owner.id)
         )
 
+    delete_team_csrf_token = secrets.token_urlsafe(32)
+    session[f"delete_team_csrf_token_{owner.id}"] = delete_team_csrf_token
+
     return render_template(
         "projects/repository_standards/pages/team_edit.html",
         owner=owner,
         team_name=team_name,
         github_teams=github_teams,
+        delete_team_csrf_token=delete_team_csrf_token,
     )
+
+
+@repository_standards_main.route("/teams/<owner_id>/delete", methods=["POST"])
+@requires_auth
+def delete_team(owner_id: str):
+    owner_service = get_owner_service()
+
+    owner = owner_service.find_by_id(owner_id)
+    if owner is None:
+        return "Owner not found", 404
+
+    owner_type = getattr(owner, "type", None)
+    if owner_type != TEAM_OWNER_TYPE:
+        return "Owner not found", 404
+
+    expected_csrf_token = session.get(f"delete_team_csrf_token_{owner.id}")
+    csrf_token = str(request.form.get("csrf_token", ""))
+    if not expected_csrf_token or not secrets.compare_digest(
+        csrf_token, expected_csrf_token
+    ):
+        return "Forbidden", 403
+
+    session.pop(f"delete_team_csrf_token_{owner.id}", None)
+
+    deleted = owner_service.delete_by_id(owner_id)
+    if not deleted:
+        logger.error(f"Failed to delete owner with id [ {owner_id} ]")
+        raise ValueError("Failed to delete owner")
+
+    return redirect(url_for("repository_standards_main.teams"))
 
 
 @repository_standards_main.route("/teams/add-team", methods=["GET", "POST"])
