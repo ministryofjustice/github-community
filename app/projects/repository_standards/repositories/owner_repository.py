@@ -4,7 +4,7 @@ from flask import g
 from sqlalchemy import func
 from sqlalchemy.orm import scoped_session
 
-from app.projects.repository_standards.db_models import Owner, Relationship, db
+from app.projects.repository_standards.db_models import Owner, db
 from app.projects.repository_standards.models.owner import OwnerConfig
 
 
@@ -90,9 +90,8 @@ class OwnerRepository:
         owner = self.find_by_id(id)
         if not owner:
             return False
-        self.db_session.query(Relationship).filter(
-            Relationship.owners_id == owner.id
-        ).delete(synchronize_session=False)
+        for relationship in owner.relationships:
+            self.db_session.delete(relationship)
         self.db_session.delete(owner)
         self.db_session.commit()
         return True

@@ -1,7 +1,6 @@
 import logging
-import secrets
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, redirect, render_template, request, url_for
 
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
@@ -174,15 +173,11 @@ def edit_team(owner_id: str):
             url_for("repository_standards_main.teams_owner", owner_id=owner.id)
         )
 
-    delete_team_csrf_token = secrets.token_urlsafe(32)
-    session[f"delete_team_csrf_token_{owner.id}"] = delete_team_csrf_token
-
     return render_template(
         "projects/repository_standards/pages/team_edit.html",
         owner=owner,
         team_name=team_name,
         github_teams=github_teams,
-        delete_team_csrf_token=delete_team_csrf_token,
     )
 
 
@@ -194,20 +189,6 @@ def delete_team(owner_id: str):
     owner = owner_service.find_by_id(owner_id)
     if owner is None:
         return "Owner not found", 404
-
-    owner_type = getattr(owner, "type", None)
-    owner_type_id = getattr(owner, "type_id", None)
-    if owner_type != "TEAM" and owner_type_id != 2:
-        return "Owner not found", 404
-
-    expected_csrf_token = session.get(f"delete_team_csrf_token_{owner.id}")
-    csrf_token = str(request.form.get("csrf_token", ""))
-    if not expected_csrf_token or not secrets.compare_digest(
-        csrf_token, expected_csrf_token
-    ):
-        return "Forbidden", 403
-
-    session.pop(f"delete_team_csrf_token_{owner.id}", None)
 
     deleted = owner_service.delete_by_id(owner_id)
     if not deleted:
