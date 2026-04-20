@@ -21,9 +21,6 @@ from app.shared.middleware.auth import requires_auth
 logger = logging.getLogger(__name__)
 
 repository_standards_main = Blueprint("repository_standards_main", __name__)
-# Owner type IDs are seeded in migrations/versions/20250909T190517_repository_standards_add_owner_type.py
-TEAM_OWNER_TYPE = "TEAM"
-TEAM_OWNER_TYPE_ID = 2
 
 
 @repository_standards_main.route("/", methods=["GET"])
@@ -200,11 +197,7 @@ def delete_team(owner_id: str):
 
     owner_type = getattr(owner, "type", None)
     owner_type_id = getattr(owner, "type_id", None)
-    # `find_by_id` usually returns OwnerView (with `type`), but keep `type_id` fallback for compatibility.
-    is_team_owner = (
-        owner_type == TEAM_OWNER_TYPE or owner_type_id == TEAM_OWNER_TYPE_ID
-    )
-    if not is_team_owner:
+    if owner_type != "TEAM" and owner_type_id != 2:
         return "Owner not found", 404
 
     expected_csrf_token = session.get(f"delete_team_csrf_token_{owner.id}")
