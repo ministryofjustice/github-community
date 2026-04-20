@@ -181,6 +181,23 @@ def edit_team(owner_id: str):
     )
 
 
+@repository_standards_main.route("/teams/<owner_id>/delete", methods=["POST"])
+@requires_auth
+def delete_team(owner_id: str):
+    owner_service = get_owner_service()
+
+    owner = owner_service.find_by_id(owner_id)
+    if owner is None:
+        return "Owner not found", 404
+
+    deleted = owner_service.delete_by_id(owner_id)
+    if not deleted:
+        logger.error(f"Failed to delete owner with id [ {owner_id} ]")
+        raise ValueError("Failed to delete owner")
+
+    return redirect(url_for("repository_standards_main.teams"))
+
+
 @repository_standards_main.route("/teams/add-team", methods=["GET", "POST"])
 @requires_auth
 def add_team():
