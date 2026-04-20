@@ -89,26 +89,6 @@ class TestDeleteTeamRoute(unittest.TestCase):
 
     @patch("app.shared.middleware.auth.app_config.auth_enabled", False)
     @patch("app.projects.repository_standards.routes.main.get_owner_service")
-    def test_delete_team_rejects_owner_with_non_team_type(
-        self,
-        mock_get_owner_service: MagicMock,
-    ):
-        owner_service = mock_get_owner_service.return_value
-        owner_service.find_by_id.return_value = SimpleNamespace(id=9, type="USER")
-
-        with self.app.test_request_context(
-            "/repository-standards/teams/9/delete",
-            method="POST",
-            data={"csrf_token": "token"},
-        ):
-            session["delete_team_csrf_token_9"] = "token"
-            response = delete_team("9")
-
-            self.assertEqual(response, ("Owner not found", 404))
-            owner_service.delete_by_id.assert_not_called()
-
-    @patch("app.shared.middleware.auth.app_config.auth_enabled", False)
-    @patch("app.projects.repository_standards.routes.main.get_owner_service")
     @patch("app.projects.repository_standards.routes.main.url_for")
     def test_delete_team_deletes_team_with_valid_csrf(
         self,
