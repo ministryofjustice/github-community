@@ -100,12 +100,57 @@ def business_units_owner(owner_id: str):
 @repository_standards_main.route("/teams", methods=["GET"])
 @requires_auth
 def teams():
+    repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     teams = owner_repository.find_all_teams()
+    repositories = repository_compliance_service.get_all_repositories()
+    team_repository_counts = {
+        team.id: len(
+            [repo for repo in repositories if team.name in repo.authorative_team_owners]
+        )
+        for team in teams
+    }
+    team_baseline_compliant_counts = {
+        team.id: len(
+            [
+                repo
+                for repo in repositories
+                if team.name in repo.authorative_team_owners
+                and repo.maturity_level >= 1
+            ]
+        )
+        for team in teams
+    }
+    team_standard_compliant_counts = {
+        team.id: len(
+            [
+                repo
+                for repo in repositories
+                if team.name in repo.authorative_team_owners
+                and repo.maturity_level >= 2
+            ]
+        )
+        for team in teams
+    }
+    team_exemplar_compliant_counts = {
+        team.id: len(
+            [
+                repo
+                for repo in repositories
+                if team.name in repo.authorative_team_owners
+                and repo.maturity_level >= 3
+            ]
+        )
+        for team in teams
+    }
 
     return render_template(
         "projects/repository_standards/pages/teams.html",
         teams=teams,
+        team_repository_counts=team_repository_counts,
+        team_baseline_compliant_counts=team_baseline_compliant_counts,
+        team_standard_compliant_counts=team_standard_compliant_counts,
+        team_exemplar_compliant_counts=team_exemplar_compliant_counts,
     )
 
 
