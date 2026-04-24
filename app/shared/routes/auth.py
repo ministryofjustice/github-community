@@ -1,5 +1,6 @@
 import logging
 
+from authlib.integrations.base_client.errors import MismatchingStateError
 from flask import Blueprint, current_app, redirect, session, url_for
 
 from app.shared.config.app_config import app_config
@@ -32,7 +33,12 @@ def logout():
 
 @auth_route.route("/callback", methods=["GET", "POST"])
 def callback():
-    session["user"] = auth0_service.get_access_token()
+    try:
+        session["user"] = auth0_service.get_access_token()
+    except MismatchingStateError:
+        logger.warning("MismatchingStateError during OAuth callback; redirecting to login")
+        session.clear()
+        return redirect("/auth/login")
     path = session.pop("post_auth_redirect_path", None)
     if path:
         return redirect(path)
