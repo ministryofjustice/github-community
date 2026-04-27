@@ -72,7 +72,7 @@
           <td class="govuk-table__cell">
             <img src={% if repository.maturity_level > 0 %}"/assets/images/{{ repository.maturity_level }}-badge.svg"{% else %}"/assets/images/fail-badge.svg"{% endif %}  alt="{{ repository.maturity_level }}" />
           </td>
-          {% set owners = repository.authorative_business_unit_owners + repository.authorative_team_owners  %}
+          {% set owners = repository.authoritative_business_unit_owners + repository.authoritative_team_owners  %}
           <td class="govuk-table__cell">{{ owners | join(",") or None }}</td>
           <td class="govuk-table__cell"><a href="/repository-standards/{{ repository.name }}" rel="noreferrer noopener" class="govuk-link">View Compliance Report</a></td>
         </tr>

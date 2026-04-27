@@ -151,12 +151,12 @@ def get_default_branch_protection_requires_atleast_one_review_check(
     )
 
 
-def get_has_authorative_owner_check(
-    authorative_owner: Optional[List[str]], required: bool = False
+def get_has_authoritative_owner_check(
+    authoritative_owner: Optional[List[str]], required: bool = False
 ) -> RepositoryComplianceCheck:
     return RepositoryComplianceCheck(
         name="Has an Authoritative Owner",
-        status=PASS if authorative_owner else FAIL,
+        status=PASS if authoritative_owner else FAIL,
         required=required,
         maturity_level=STANDARD,
         description="Prevents orphaned repositories by having an easily identifiable owner.",
@@ -191,7 +191,7 @@ def get_default_branch_is_main_check(
 
 
 def get_all_compliance_checks(
-    repository: RepositoryView, authorative_owner: Optional[List[str]]
+    repository: RepositoryView, authoritative_owner: Optional[List[str]]
 ) -> List[RepositoryComplianceCheck]:
     return [
         get_secret_scanning_enabled_check(repository),
@@ -201,7 +201,7 @@ def get_all_compliance_checks(
         get_default_branch_protection_requires_code_owner_reviews_check(repository),
         get_default_branch_pull_requests_dismiss_stale_reviews_check(repository),
         get_default_branch_protection_requires_atleast_one_review_check(repository),
-        get_has_authorative_owner_check(authorative_owner),
+        get_has_authoritative_owner_check(authoritative_owner),
         get_licence_is_mit_check(repository),
         get_default_branch_is_main_check(repository),
     ]

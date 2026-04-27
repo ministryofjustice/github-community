@@ -20,13 +20,13 @@
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Owner</dt>
-      <dd class="govuk-summary-list__value">{{ repository.authorative_business_unit_owners | join(",") or None }}</dd>
+      <dd class="govuk-summary-list__value">{{ repository.authoritative_business_unit_owners | join(",") or None }}</dd>
     </div>
 
-    {% if repository.authorative_team_owners %}
+    {% if repository.authoritative_team_owners %}
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Team</dt>
-      <dd class="govuk-summary-list__value">{{ repository.authorative_team_owners | join(",") }}</dd>
+      <dd class="govuk-summary-list__value">{{ repository.authoritative_team_owners | join(",") }}</dd>
     </div>
     {% endif %}
 

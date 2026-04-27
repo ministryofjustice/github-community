@@ -22,10 +22,10 @@ class RepositoryComplianceService:
     def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
-    def __get_authorative_owners(
+    def __get_authoritative_owners(
         self, repository: RepositoryView, owners_to_check: List[str]
     ) -> List[str]:
-        authorative_owners = [
+        authoritative_owners = [
             owner
             for owner in owners_to_check
             if self.__asset_service.is_owner_authoritative_for_repository(
@@ -33,20 +33,20 @@ class RepositoryComplianceService:
             )
         ]
 
-        return authorative_owners
+        return authoritative_owners
 
     def __get_repository_compliance_report(
         self,
         repository: RepositoryView,
     ) -> RepositoryComplianceReportView:
-        authorative_business_unit_owners = self.__get_authorative_owners(
+        authoritative_business_unit_owners = self.__get_authoritative_owners(
             repository, repository.business_unit_owners_names
         )
-        authorative_team_owners = self.__get_authorative_owners(
+        authoritative_team_owners = self.__get_authoritative_owners(
             repository, repository.team_owners_names
         )
         checks = get_all_compliance_checks(
-            repository, authorative_business_unit_owners or authorative_team_owners
+            repository, authoritative_business_unit_owners or authoritative_team_owners
         )
 
         compliance_status = (
@@ -74,8 +74,8 @@ class RepositoryComplianceService:
         return RepositoryComplianceReportView(
             name=repository.name,
             compliance_status=compliance_status,
-            authorative_business_unit_owners=authorative_business_unit_owners,
-            authorative_team_owners=authorative_team_owners,
+            authoritative_business_unit_owners=authoritative_business_unit_owners,
+            authoritative_team_owners=authoritative_team_owners,
             maturity_level=maturity_level,
             checks=checks,
             description=repository.data.basic.description,
