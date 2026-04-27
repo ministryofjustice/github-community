@@ -56,12 +56,50 @@ def repositories():
 @repository_standards_main.route("/business-units", methods=["GET"])
 @requires_auth
 def business_units():
+    repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     business_units = owner_repository.find_all_business_units()
+    repositories = repository_compliance_service.get_all_repositories()
+
+    business_unit_name_to_id = {
+        business_unit.name: business_unit.id for business_unit in business_units
+    }
+
+    business_unit_counts = defaultdict(
+        lambda: {
+            "repo_count": 0,
+            "baseline_compliant_count": 0,
+            "standard_compliant_count": 0,
+            "exemplar_compliant_count": 0,
+        }
+    )
+
+    for repo in repositories:
+        maturity_level = repo.maturity_level
+        business_unit_ids_for_repository = {
+            business_unit_name_to_id[owner_name]
+            for owner_name in repo.authoritative_business_unit_owners
+            if owner_name in business_unit_name_to_id
+        }
+
+        for business_unit_id in business_unit_ids_for_repository:
+            business_unit_counts[business_unit_id]["repo_count"] += 1
+            if maturity_level >= 1:
+                business_unit_counts[business_unit_id]["baseline_compliant_count"] += 1
+            if maturity_level >= 2:
+                business_unit_counts[business_unit_id]["standard_compliant_count"] += 1
+            if maturity_level >= 3:
+                business_unit_counts[business_unit_id]["exemplar_compliant_count"] += 1
+
+    business_unit_counts = {
+        business_unit.id: business_unit_counts[business_unit.id]
+        for business_unit in business_units
+    }
 
     return render_template(
         "projects/repository_standards/pages/business_units.html",
         business_unit_names=business_units,
+        business_unit_counts=business_unit_counts,
     )
 
 
@@ -162,15 +200,6 @@ def teams_owner(owner_id: str):
     return render_template(
         "projects/repository_standards/pages/team.html",
         repositories=filtrated_repositories,
-        baseline_maturity_level_repositories=[
-            repo for repo in filtrated_repositories if repo.maturity_level >= 1
-        ],
-        standard_maturity_level_repositories=[
-            repo for repo in filtrated_repositories if repo.maturity_level >= 2
-        ],
-        exemplar_maturity_level_repositories=[
-            repo for repo in filtrated_repositories if repo.maturity_level >= 3
-        ],
         owner=owner,
     )
 
