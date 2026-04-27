@@ -23,6 +23,51 @@ logger = logging.getLogger(__name__)
 repository_standards_main = Blueprint("repository_standards_main", __name__)
 
 
+def aggregate_owner_counts(entities, repositories, owner_field_name):
+    """
+    Aggregates repository compliance counts by owner (team or business unit).
+
+    Args:
+        entities: List of team or business unit objects with .name and .id attributes
+        repositories: List of repository objects
+        owner_field_name: Repository field to check (e.g., "authoritative_team_owners")
+
+    Returns:
+        Dictionary mapping entity.id to count dict with repo_count, baseline/standard/exemplar_compliant_count
+    """
+    name_to_id = {entity.name: entity.id for entity in entities}
+
+    counts = defaultdict(
+        lambda: {
+            "repo_count": 0,
+            "baseline_compliant_count": 0,
+            "standard_compliant_count": 0,
+            "exemplar_compliant_count": 0,
+        }
+    )
+
+    for repo in repositories:
+        maturity_level = repo.maturity_level
+        owner_names = getattr(repo, owner_field_name, [])
+        entity_ids_for_repository = {
+            name_to_id[owner_name]
+            for owner_name in owner_names
+            if owner_name in name_to_id
+        }
+
+        for entity_id in entity_ids_for_repository:
+            counts[entity_id]["repo_count"] += 1
+            if maturity_level >= 1:
+                counts[entity_id]["baseline_compliant_count"] += 1
+            if maturity_level >= 2:
+                counts[entity_id]["standard_compliant_count"] += 1
+            if maturity_level >= 3:
+                counts[entity_id]["exemplar_compliant_count"] += 1
+
+    return {entity.id: counts[entity.id] for entity in entities}
+
+
+
 @repository_standards_main.route("/", methods=["GET"])
 @requires_auth
 def index():
@@ -61,40 +106,9 @@ def business_units():
     business_units = owner_repository.find_all_business_units()
     repositories = repository_compliance_service.get_all_repositories()
 
-    business_unit_name_to_id = {
-        business_unit.name: business_unit.id for business_unit in business_units
-    }
-
-    business_unit_counts = defaultdict(
-        lambda: {
-            "repo_count": 0,
-            "baseline_compliant_count": 0,
-            "standard_compliant_count": 0,
-            "exemplar_compliant_count": 0,
-        }
+    business_unit_counts = aggregate_owner_counts(
+        business_units, repositories, "authoritative_business_unit_owners"
     )
-
-    for repo in repositories:
-        maturity_level = repo.maturity_level
-        business_unit_ids_for_repository = {
-            business_unit_name_to_id[owner_name]
-            for owner_name in repo.authoritative_business_unit_owners
-            if owner_name in business_unit_name_to_id
-        }
-
-        for business_unit_id in business_unit_ids_for_repository:
-            business_unit_counts[business_unit_id]["repo_count"] += 1
-            if maturity_level >= 1:
-                business_unit_counts[business_unit_id]["baseline_compliant_count"] += 1
-            if maturity_level >= 2:
-                business_unit_counts[business_unit_id]["standard_compliant_count"] += 1
-            if maturity_level >= 3:
-                business_unit_counts[business_unit_id]["exemplar_compliant_count"] += 1
-
-    business_unit_counts = {
-        business_unit.id: business_unit_counts[business_unit.id]
-        for business_unit in business_units
-    }
 
     return render_template(
         "projects/repository_standards/pages/business_units.html",
@@ -144,35 +158,9 @@ def teams():
     teams = owner_repository.find_all_teams()
     repositories = repository_compliance_service.get_all_repositories()
 
-    team_name_to_id = {team.name: team.id for team in teams}
-
-    team_counts = defaultdict(
-        lambda: {
-            "repo_count": 0,
-            "baseline_compliant_count": 0,
-            "standard_compliant_count": 0,
-            "exemplar_compliant_count": 0,
-        }
+    team_counts = aggregate_owner_counts(
+        teams, repositories, "authoritative_team_owners"
     )
-
-    for repo in repositories:
-        maturity_level = repo.maturity_level
-        team_ids_for_repository = {
-            team_name_to_id[owner_name]
-            for owner_name in repo.authoritative_team_owners
-            if owner_name in team_name_to_id
-        }
-
-        for team_id in team_ids_for_repository:
-            team_counts[team_id]["repo_count"] += 1
-            if maturity_level >= 1:
-                team_counts[team_id]["baseline_compliant_count"] += 1
-            if maturity_level >= 2:
-                team_counts[team_id]["standard_compliant_count"] += 1
-            if maturity_level >= 3:
-                team_counts[team_id]["exemplar_compliant_count"] += 1
-
-    team_counts = {team.id: team_counts[team.id] for team in teams}
 
     return render_template(
         "projects/repository_standards/pages/teams.html",
