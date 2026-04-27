@@ -30,16 +30,12 @@
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">
         GitHub Teams
-        <p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p>
+        <p class="govuk-body-s govuk-!-margin-bottom-1">GitHub teams are used to determine repository ownership</p>
       </dt>
       <dd class="govuk-summary-list__value">
-        <ul class="govuk-list">
-          {% for team in owner.config.teams %}
-          <li>
-            <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>
-          </li>
-          {% endfor %}
-        </ul>
+        {% for team in owner.config.teams %}
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>{% if not loop.last %}, {% endif %}
+        {% endfor %}
       </dd>
     </div>
   </section>

@@ -16,45 +16,24 @@
   } %}
   {{ govukBreadcrumbs(breadcrumbs) }}
 
-  <h1 class="govuk-heading-xl">{{ owner.name }}</h1>
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-xl">{{ owner.name }}</h1>
+    </div>
 
+    <div class="govuk-grid-column-one-third">
+      <p class="govuk-body govuk-!-text-align-right govuk-!-margin-top-4"><a class="govuk-link " href="/repository-standards/business-units/{{ owner.id }}/edit">Edit</a></p>
+    </div>
+  </div>
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
-    <h2 class="govuk-heading-l">Summary Statistics</h2>
-
     <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Total Repositories</dt>
-      <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
-    </div>
-
-    {% set compliance_percentage = ((baseline_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Baseline Compliant</dt>
-      <dd class="govuk-summary-list__value">
-        {{ compliance_tag(compliance_percentage, baseline_maturity_level_repositories | length) }}
-      </dd>
-    </div>
-
-    {% set compliance_percentage = ((standard_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Standard Compliant</dt>
-      <dd class="govuk-summary-list__value">
-        {{ compliance_tag(compliance_percentage, standard_maturity_level_repositories | length) }}
-      </dd>
-    </div>
-
-    {% set compliance_percentage = ((exemplar_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">Exemplar Compliant</dt>
-      <dd class="govuk-summary-list__value">
-        {{ compliance_tag(compliance_percentage, exemplar_maturity_level_repositories | length) }}
-      </dd>
-    </div>
-
-    <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">GitHub Teams<br /><p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p></dt>
+      <dt class="govuk-summary-list__key">
+        GitHub Teams
+        <p class="govuk-body-s govuk-!-margin-bottom-1">GitHub teams are used to determine repository ownership</p>
+      </dt>
       <dd class="govuk-summary-list__value">
         {% for team in owner.config.teams %}
-        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>{% if not loop.last %}, {% endif %}
         {% endfor %}
       </dd>
     </div>

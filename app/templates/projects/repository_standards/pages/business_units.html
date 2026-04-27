@@ -25,19 +25,6 @@
 
   <h1 class="govuk-heading-xl">Business Units</h1>
   <p class="govuk-body-s">View compliance reports for Business Units within the Ministry of Justice.</p>
-  <section>
-    <div class="govuk-grid-row">
-      {% for business_unit in business_unit_names %}
-      <div class="govuk-grid-column-one-third">
-        <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
-          <a class="govuk-link" href="/repository-standards/business-units/{{ business_unit.id }}">{{ business_unit.name }}</a>
-        </h2>
-        <p class="govuk-body-s">View the compliance status for all active, public repositories owned by {{ business_unit.name }}.</p>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-
 
   <section>
     <h2 class="govuk-heading-l">Business Units Summary Statistics</h2>
@@ -94,6 +81,5 @@
     </table>
     {% endif %}
   </section>
-
 
 {% endblock %}
