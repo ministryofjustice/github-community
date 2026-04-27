@@ -54,10 +54,11 @@
       </thead>
       <tbody class="govuk-table__body">
         {% for team in teams %}
-        {% set total_repositories = team_repository_counts.get(team.id, 0) %}
-        {% set baseline_compliant_count = team_baseline_compliant_counts.get(team.id, 0) %}
-        {% set standard_compliant_count = team_standard_compliant_counts.get(team.id, 0) %}
-        {% set exemplar_compliant_count = team_exemplar_compliant_counts.get(team.id, 0) %}
+        {% set counts = team_counts.get(team.id, {}) %}
+        {% set total_repositories = counts.get("repo_count", 0) %}
+        {% set baseline_compliant_count = counts.get("baseline_compliant_count", 0) %}
+        {% set standard_compliant_count = counts.get("standard_compliant_count", 0) %}
+        {% set exemplar_compliant_count = counts.get("exemplar_compliant_count", 0) %}
         {% set baseline_compliance_percentage = (baseline_compliant_count / total_repositories) * 100 if total_repositories else 0 %}
         {% set standard_compliance_percentage = (standard_compliant_count / total_repositories) * 100 if total_repositories else 0 %}
         {% set exemplar_compliance_percentage = (exemplar_compliant_count / total_repositories) * 100 if total_repositories else 0 %}

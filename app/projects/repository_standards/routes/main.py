@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
@@ -104,53 +105,41 @@ def teams():
     owner_repository = get_owner_repository()
     teams = owner_repository.find_all_teams()
     repositories = repository_compliance_service.get_all_repositories()
-    team_repository_counts = {
-        team.id: len(
-            [repo for repo in repositories if team.name in repo.authorative_team_owners]
-        )
-        for team in teams
-    }
-    team_baseline_compliant_counts = {
-        team.id: len(
-            [
-                repo
-                for repo in repositories
-                if team.name in repo.authorative_team_owners
-                and repo.maturity_level >= 1
-            ]
-        )
-        for team in teams
-    }
-    team_standard_compliant_counts = {
-        team.id: len(
-            [
-                repo
-                for repo in repositories
-                if team.name in repo.authorative_team_owners
-                and repo.maturity_level >= 2
-            ]
-        )
-        for team in teams
-    }
-    team_exemplar_compliant_counts = {
-        team.id: len(
-            [
-                repo
-                for repo in repositories
-                if team.name in repo.authorative_team_owners
-                and repo.maturity_level >= 3
-            ]
-        )
-        for team in teams
-    }
+
+    team_name_to_id = {team.name: team.id for team in teams}
+
+    team_counts = defaultdict(
+        lambda: {
+            "repo_count": 0,
+            "baseline_compliant_count": 0,
+            "standard_compliant_count": 0,
+            "exemplar_compliant_count": 0,
+        }
+    )
+
+    for repo in repositories:
+        maturity_level = repo.maturity_level
+        team_ids_for_repository = {
+            team_name_to_id[owner_name]
+            for owner_name in repo.authorative_team_owners
+            if owner_name in team_name_to_id
+        }
+
+        for team_id in team_ids_for_repository:
+            team_counts[team_id]["repo_count"] += 1
+            if maturity_level >= 1:
+                team_counts[team_id]["baseline_compliant_count"] += 1
+            if maturity_level >= 2:
+                team_counts[team_id]["standard_compliant_count"] += 1
+            if maturity_level >= 3:
+                team_counts[team_id]["exemplar_compliant_count"] += 1
+
+    team_counts = {team.id: team_counts[team.id] for team in teams}
 
     return render_template(
         "projects/repository_standards/pages/teams.html",
         teams=teams,
-        team_repository_counts=team_repository_counts,
-        team_baseline_compliant_counts=team_baseline_compliant_counts,
-        team_standard_compliant_counts=team_standard_compliant_counts,
-        team_exemplar_compliant_counts=team_exemplar_compliant_counts,
+        team_counts=team_counts,
     )
 
 
