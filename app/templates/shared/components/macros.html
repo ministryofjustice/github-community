@@ -1,0 +1,7 @@
+{% macro compliance_tag(percentage, count) %}
+  {%- if percentage < 60 %}{% set tag_class = "govuk-tag govuk-tag--red" %}
+  {%- elif percentage < 80 %}{% set tag_class = "govuk-tag govuk-tag--yellow" %}
+  {%- elif percentage <= 100 %}{% set tag_class = "govuk-tag govuk-tag--green" %}
+  {%- endif %}
+  <span class="{{ tag_class }}">{{ count }} ({{ percentage | round | int }}%)</span>
+{%- endmacro %}
