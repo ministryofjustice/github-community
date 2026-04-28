@@ -3,5 +3,5 @@
   {%- elif percentage < 80 %}{% set tag_class = "govuk-tag govuk-tag--yellow" %}
   {%- elif percentage <= 100 %}{% set tag_class = "govuk-tag govuk-tag--green" %}
   {%- endif %}
-  <span class="{{ tag_class }}">{{ count }} ({{ percentage | round | int }}%)</span>
+  <span class="{{ tag_class }}">{{ percentage | round | int }}% ({{ count }})</span>
 {%- endmacro %}
