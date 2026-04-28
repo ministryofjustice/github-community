@@ -66,13 +66,13 @@
             <a class="govuk-link govuk-!-font-weight-bold" href="/repository-standards/business-units/{{ business_unit.id }}">{{ business_unit.name }}</a>
           </td>
           <td class="govuk-table__cell">{{ total_repositories }}</td>
-          <td class="govuk-table__cell">
+          <td class="govuk-table__cell" data-sort-value="{{ (baseline_compliance_percentage * 10000 + baseline_compliant_count) | int }}">
             {{ compliance_tag(baseline_compliance_percentage, baseline_compliant_count) }}
           </td>
-          <td class="govuk-table__cell">
+          <td class="govuk-table__cell" data-sort-value="{{ (standard_compliance_percentage * 10000 + standard_compliant_count) | int }}">
             {{ compliance_tag(standard_compliance_percentage, standard_compliant_count) }}
           </td>
-          <td class="govuk-table__cell">
+          <td class="govuk-table__cell" data-sort-value="{{ (exemplar_compliance_percentage * 10000 + exemplar_compliant_count) | int }}">
             {{ compliance_tag(exemplar_compliance_percentage, exemplar_compliant_count) }}
           </td>
         </tr>
