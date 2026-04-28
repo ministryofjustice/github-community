@@ -1,5 +1,4 @@
 import logging
-from collections import defaultdict
 
 from flask import Blueprint, redirect, render_template, request, url_for
 
@@ -21,50 +20,6 @@ from app.shared.middleware.auth import requires_auth
 logger = logging.getLogger(__name__)
 
 repository_standards_main = Blueprint("repository_standards_main", __name__)
-
-
-def aggregate_owner_counts(entities, repositories, owner_field_name):
-    """
-    Aggregates repository compliance counts by owner (team or business unit).
-
-    Args:
-        entities: List of team or business unit objects with .name and .id attributes
-        repositories: List of repository objects
-        owner_field_name: Repository field to check (e.g., "authoritative_team_owners")
-
-    Returns:
-        Dictionary mapping entity.id to count dict with repo_count, baseline/standard/exemplar_compliant_count
-    """
-    name_to_id = {entity.name: entity.id for entity in entities}
-
-    counts = defaultdict(
-        lambda: {
-            "repo_count": 0,
-            "baseline_compliant_count": 0,
-            "standard_compliant_count": 0,
-            "exemplar_compliant_count": 0,
-        }
-    )
-
-    for repo in repositories:
-        maturity_level = repo.maturity_level
-        owner_names = getattr(repo, owner_field_name, [])
-        entity_ids_for_repository = {
-            name_to_id[owner_name]
-            for owner_name in owner_names
-            if owner_name in name_to_id
-        }
-
-        for entity_id in entity_ids_for_repository:
-            counts[entity_id]["repo_count"] += 1
-            if maturity_level >= 1:
-                counts[entity_id]["baseline_compliant_count"] += 1
-            if maturity_level >= 2:
-                counts[entity_id]["standard_compliant_count"] += 1
-            if maturity_level >= 3:
-                counts[entity_id]["exemplar_compliant_count"] += 1
-
-    return {entity.id: counts[entity.id] for entity in entities}
 
 
 
@@ -104,10 +59,9 @@ def business_units():
     repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     business_units = owner_repository.find_all_business_units()
-    repositories = repository_compliance_service.get_all_repositories()
 
-    business_unit_counts = aggregate_owner_counts(
-        business_units, repositories, "authoritative_business_unit_owners"
+    business_unit_counts = repository_compliance_service.aggregate_owner_counts(
+        business_units
     )
 
     return render_template(
@@ -156,10 +110,9 @@ def teams():
     repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     teams = owner_repository.find_all_teams()
-    repositories = repository_compliance_service.get_all_repositories()
 
-    team_counts = aggregate_owner_counts(
-        teams, repositories, "authoritative_team_owners"
+    team_counts = repository_compliance_service.aggregate_owner_counts(
+        teams
     )
 
     return render_template(

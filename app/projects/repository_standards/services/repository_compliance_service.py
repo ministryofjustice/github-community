@@ -1,4 +1,5 @@
 from typing import List
+from collections import defaultdict
 from urllib.parse import quote
 
 from flask import g
@@ -9,6 +10,7 @@ from app.projects.repository_standards.config.repository_compliance_config impor
 from app.projects.repository_standards.models.repository_compliance import (
     RepositoryComplianceReportView,
 )
+from app.projects.repository_standards.db_models import Owner
 from app.projects.repository_standards.repositories.asset_repository import (
     RepositoryView,
 )
@@ -80,6 +82,46 @@ class RepositoryComplianceService:
             checks=checks,
             description=repository.data.basic.description,
         )
+
+    def aggregate_owner_counts(self, entities: List[Owner]) -> dict:
+        repositories = self.get_all_repositories()
+        name_to_id = {entity.name: entity.id for entity in entities}
+
+        if entities and entities[0].type.name == "BUSINESS_UNIT":
+            owner_field_name = "authoritative_business_unit_owners"
+        elif entities and entities[0].type.name == "TEAM":
+            owner_field_name = "authoritative_team_owners"
+        else:
+            raise ValueError(f"Unrecognised owner type: {entities[0].type.name if entities else 'empty list'}")
+
+        counts = defaultdict(
+            lambda: {
+                "repo_count": 0,
+                "baseline_compliant_count": 0,
+                "standard_compliant_count": 0,
+                "exemplar_compliant_count": 0,
+            }
+        )
+
+        for repo in repositories:
+            maturity_level = repo.maturity_level
+            owner_names = getattr(repo, owner_field_name, [])
+            entity_ids_for_repository = {
+                name_to_id[owner_name]
+                for owner_name in owner_names
+                if owner_name in name_to_id
+            }
+
+            for entity_id in entity_ids_for_repository:
+                counts[entity_id]["repo_count"] += 1
+                if maturity_level >= 1:
+                    counts[entity_id]["baseline_compliant_count"] += 1
+                if maturity_level >= 2:
+                    counts[entity_id]["standard_compliant_count"] += 1
+                if maturity_level >= 3:
+                    counts[entity_id]["exemplar_compliant_count"] += 1
+
+        return {entity.id: counts[entity.id] for entity in entities}
 
     def get_all_repositories(self) -> List[RepositoryComplianceReportView]:
         repositories_compliance_reports = []
