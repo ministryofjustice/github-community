@@ -5,3 +5,7 @@
   {%- endif %}
   <span class="{{ tag_class }}">{{ percentage | round | int }}% ({{ count }})</span>
 {%- endmacro %}
+
+{% macro compliance_sort_value(percentage, count) %}
+  {{- '%03d%08d' % (percentage | int, count) }}
+{%- endmacro %}
