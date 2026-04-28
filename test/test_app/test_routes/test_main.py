@@ -1,15 +1,18 @@
 import unittest
 from types import SimpleNamespace
 
-from app.projects.repository_standards.routes.main import aggregate_owner_counts
+from app.projects.repository_standards.services.repository_compliance_service import (
+    RepositoryComplianceService,
+)
 
 
 class TestAggregateOwnerCounts(unittest.TestCase):
     def test_aggregates_counts_by_owner_and_maturity(self):
+        service = RepositoryComplianceService(asset_service=SimpleNamespace())
         entities = [
-            SimpleNamespace(id="team-a", name="Team A"),
-            SimpleNamespace(id="team-b", name="Team B"),
-            SimpleNamespace(id="team-c", name="Team C"),
+            SimpleNamespace(id="team-a", name="Team A", type=SimpleNamespace(name="TEAM")),
+            SimpleNamespace(id="team-b", name="Team B", type=SimpleNamespace(name="TEAM")),
+            SimpleNamespace(id="team-c", name="Team C", type=SimpleNamespace(name="TEAM")),
         ]
 
         repositories = [
@@ -31,11 +34,9 @@ class TestAggregateOwnerCounts(unittest.TestCase):
             ),
         ]
 
-        result = aggregate_owner_counts(
-            entities,
-            repositories,
-            "authoritative_team_owners",
-        )
+        service.get_all_repositories = lambda: repositories
+
+        result = service.aggregate_owner_counts(entities)
 
         self.assertEqual(
             result["team-a"],
@@ -66,7 +67,14 @@ class TestAggregateOwnerCounts(unittest.TestCase):
         )
 
     def test_supports_different_owner_field_names(self):
-        entities = [SimpleNamespace(id="bu-a", name="Business Unit A")]
+        service = RepositoryComplianceService(asset_service=SimpleNamespace())
+        entities = [
+            SimpleNamespace(
+                id="bu-a",
+                name="Business Unit A",
+                type=SimpleNamespace(name="BUSINESS_UNIT"),
+            )
+        ]
         repositories = [
             SimpleNamespace(
                 maturity_level=3,
@@ -74,11 +82,9 @@ class TestAggregateOwnerCounts(unittest.TestCase):
             )
         ]
 
-        result = aggregate_owner_counts(
-            entities,
-            repositories,
-            "authoritative_business_unit_owners",
-        )
+        service.get_all_repositories = lambda: repositories
+
+        result = service.aggregate_owner_counts(entities)
 
         self.assertEqual(
             result["bu-a"],
