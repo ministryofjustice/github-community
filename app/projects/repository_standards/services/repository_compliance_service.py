@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TypedDict
 from collections import defaultdict
 from urllib.parse import quote
 
@@ -21,6 +21,12 @@ from app.projects.repository_standards.services.asset_service import (
 
 
 class RepositoryComplianceService:
+    class OwnerComplianceCounts(TypedDict):
+        repo_count: int
+        baseline_compliant_count: int
+        standard_compliant_count: int
+        exemplar_compliant_count: int
+
     def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
@@ -83,7 +89,9 @@ class RepositoryComplianceService:
             description=repository.data.basic.description,
         )
 
-    def aggregate_owner_counts(self, entities: List[Owner]) -> dict:
+    def aggregate_owner_counts(
+        self, entities: List[Owner]
+    ) -> dict[str, OwnerComplianceCounts]:
         repositories = self.get_all_repositories()
         name_to_id = {entity.name: entity.id for entity in entities}
 
@@ -94,7 +102,9 @@ class RepositoryComplianceService:
         else:
             raise ValueError(f"Unrecognised owner type: {entities[0].type.name if entities else 'empty list'}")
 
-        counts = defaultdict(
+        counts: defaultdict[
+            str, RepositoryComplianceService.OwnerComplianceCounts
+        ] = defaultdict(
             lambda: {
                 "repo_count": 0,
                 "baseline_compliant_count": 0,
