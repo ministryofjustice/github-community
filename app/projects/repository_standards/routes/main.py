@@ -188,9 +188,17 @@ def teams_owner(owner_id: str):
     return render_template(
         "projects/repository_standards/pages/team.html",
         repositories=filtrated_repositories,
+        baseline_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 1
+        ],
+        standard_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 2
+        ],
+        exemplar_maturity_level_repositories=[
+            repo for repo in filtrated_repositories if repo.maturity_level >= 3
+        ],
         owner=owner,
     )
-
 
 @repository_standards_main.route("/teams/<owner_id>/edit", methods=["GET", "POST"])
 @requires_auth

@@ -1,5 +1,4 @@
 {% extends "shared/components/base.html" %}
-{% from "shared/components/macros.html" import compliance_tag %}
 
 {% block pageTitle %}
   {{ owner.name }}
@@ -27,17 +26,73 @@
     </div>
   </div>
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <h2 class="govuk-heading-l">Summary Statistics</h2>
+
     <div class="govuk-summary-list__row">
-      <dt class="govuk-summary-list__key">
-        GitHub Teams
-        <p class="govuk-body-s govuk-!-margin-bottom-1">GitHub teams are used to determine repository ownership</p>
-      </dt>
+      <dt class="govuk-summary-list__key">Total Repositories</dt>
+      <dd class="govuk-summary-list__value">{{ repositories | length }}</dd>
+    </div>
+
+    {% set compliance_percentage = ((baseline_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Baseline Compliant</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ baseline_maturity_level_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+
+    {% set compliance_percentage = ((standard_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Standard Compliant</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ standard_maturity_level_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+
+    {% set compliance_percentage = ((exemplar_maturity_level_repositories | length) / (repositories | length)) * 100 if repositories else 0 %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Exemplar Compliant</dt>
+      <dd class="govuk-summary-list__value">
+        <span class="
+                     {% if compliance_percentage < 60 %} govuk-tag govuk-tag--red
+                     {% elif compliance_percentage < 80 %} govuk-tag govuk-tag--yellow
+                     {% elif compliance_percentage < 100 %} govuk-tag govuk-tag--green
+                     {% else %} govuk-tag govuk-tag--green-dark
+                     {% endif %}
+                     ">
+          {{ exemplar_maturity_level_repositories | length }}
+          ({{ compliance_percentage | round | int }}%)
+        </span>
+      </dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">GitHub Teams<br /><p class="govuk-body-s govuk-!-margin-bottom-1">Teams are used to determine repository ownership</p></dt>
       <dd class="govuk-summary-list__value">
         {% for team in owner.config.teams %}
-        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>{% if not loop.last %}, {% endif %}
+        <a class="govuk-link" href="https://github.com/orgs/ministryofjustice/teams/{{ team }}" rel="noopener noreferrer" target="_blank">{{ team }}</a>
         {% endfor %}
       </dd>
     </div>
+
   </section>
 
   <section>
