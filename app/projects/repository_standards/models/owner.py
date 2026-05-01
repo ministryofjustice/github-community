@@ -31,5 +31,5 @@ class OwnerConfig:
             or data.get("teams") is None
             or data.get("prefix") is None
         ):
-            raise ValueError("Owner conifig is missing attributes")
+            raise ValueError("Owner config is missing attributes")
         return cls(name=data["name"], teams=data["teams"], prefix=data["prefix"])

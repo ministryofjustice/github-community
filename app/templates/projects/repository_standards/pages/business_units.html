@@ -1,4 +1,5 @@
 {% extends "shared/components/base.html" %}
+{% from "shared/components/macros.html" import compliance_tag, compliance_sort_value %}
 
 {% block pageTitle %}
     Business Units
@@ -24,17 +25,61 @@
 
   <h1 class="govuk-heading-xl">Business Units</h1>
   <p class="govuk-body-s">View compliance reports for Business Units within the Ministry of Justice.</p>
+
   <section>
-    <div class="govuk-grid-row">
-      {% for business_unit in business_unit_names %}
-      <div class="govuk-grid-column-one-third">
-        <h2 class="govuk-heading-s govuk-!-margin-bottom-1">
-          <a class="govuk-link" href="/repository-standards/business-units/{{ business_unit.id }}">{{ business_unit.name }}</a>
-        </h2>
-        <p class="govuk-body-s">View the compliance status for all active, public repositories owned by {{ business_unit.name }}.</p>
-      </div>
-      {% endfor %}
-    </div>
+    <h2 class="govuk-heading-l">Business Units Summary Statistics</h2>
+    {% if not business_unit_names %}
+    <p class="govuk-body-s">No business units.</p>
+    {% else %}
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+            Business Unit
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Total Repositories
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Baseline Compliant
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Standard Compliant
+          </th>
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">
+           Exemplar Compliant
+          </th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for business_unit in business_unit_names %}
+        {% set counts = business_unit_counts.get(business_unit.id, {}) %}
+        {% set total_repositories = counts.get("repo_count", 0) %}
+        {% set baseline_compliant_count = counts.get("baseline_compliant_count", 0) %}
+        {% set standard_compliant_count = counts.get("standard_compliant_count", 0) %}
+        {% set exemplar_compliant_count = counts.get("exemplar_compliant_count", 0) %}
+        {% set baseline_compliance_percentage = (baseline_compliant_count / total_repositories) * 100 if total_repositories else 0 %}
+        {% set standard_compliance_percentage = (standard_compliant_count / total_repositories) * 100 if total_repositories else 0 %}
+        {% set exemplar_compliance_percentage = (exemplar_compliant_count / total_repositories) * 100 if total_repositories else 0 %}
+        <tr class="govuk-table__row">
+          <td class="govuk-table__cell">
+            <a class="govuk-link govuk-!-font-weight-bold" href="/repository-standards/business-units/{{ business_unit.id }}">{{ business_unit.name }}</a>
+          </td>
+          <td class="govuk-table__cell">{{ total_repositories }}</td>
+          <td class="govuk-table__cell" data-sort-value="{{ compliance_sort_value(baseline_compliance_percentage, baseline_compliant_count) }}">
+            {{ compliance_tag(baseline_compliance_percentage, baseline_compliant_count) }}
+          </td>
+          <td class="govuk-table__cell" data-sort-value="{{ compliance_sort_value(standard_compliance_percentage, standard_compliant_count) }}">
+            {{ compliance_tag(standard_compliance_percentage, standard_compliant_count) }}
+          </td>
+          <td class="govuk-table__cell" data-sort-value="{{ compliance_sort_value(exemplar_compliance_percentage, exemplar_compliant_count) }}">
+            {{ compliance_tag(exemplar_compliance_percentage, exemplar_compliant_count) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
   </section>
 
 {% endblock %}

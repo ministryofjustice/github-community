@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, TypedDict
+from collections import defaultdict
 from urllib.parse import quote
 
 from flask import g
@@ -9,6 +10,7 @@ from app.projects.repository_standards.config.repository_compliance_config impor
 from app.projects.repository_standards.models.repository_compliance import (
     RepositoryComplianceReportView,
 )
+from app.projects.repository_standards.db_models import Owner
 from app.projects.repository_standards.repositories.asset_repository import (
     RepositoryView,
 )
@@ -19,13 +21,19 @@ from app.projects.repository_standards.services.asset_service import (
 
 
 class RepositoryComplianceService:
+    class OwnerComplianceCounts(TypedDict):
+        repo_count: int
+        baseline_compliant_count: int
+        standard_compliant_count: int
+        exemplar_compliant_count: int
+
     def __init__(self, asset_service: AssetService):
         self.__asset_service = asset_service
 
-    def __get_authorative_owners(
+    def __get_authoritative_owners(
         self, repository: RepositoryView, owners_to_check: List[str]
     ) -> List[str]:
-        authorative_owners = [
+        authoritative_owners = [
             owner
             for owner in owners_to_check
             if self.__asset_service.is_owner_authoritative_for_repository(
@@ -33,20 +41,20 @@ class RepositoryComplianceService:
             )
         ]
 
-        return authorative_owners
+        return authoritative_owners
 
     def __get_repository_compliance_report(
         self,
         repository: RepositoryView,
     ) -> RepositoryComplianceReportView:
-        authorative_business_unit_owners = self.__get_authorative_owners(
+        authoritative_business_unit_owners = self.__get_authoritative_owners(
             repository, repository.business_unit_owners_names
         )
-        authorative_team_owners = self.__get_authorative_owners(
+        authoritative_team_owners = self.__get_authoritative_owners(
             repository, repository.team_owners_names
         )
         checks = get_all_compliance_checks(
-            repository, authorative_business_unit_owners or authorative_team_owners
+            repository, authoritative_business_unit_owners or authoritative_team_owners
         )
 
         compliance_status = (
@@ -74,12 +82,56 @@ class RepositoryComplianceService:
         return RepositoryComplianceReportView(
             name=repository.name,
             compliance_status=compliance_status,
-            authorative_business_unit_owners=authorative_business_unit_owners,
-            authorative_team_owners=authorative_team_owners,
+            authoritative_business_unit_owners=authoritative_business_unit_owners,
+            authoritative_team_owners=authoritative_team_owners,
             maturity_level=maturity_level,
             checks=checks,
             description=repository.data.basic.description,
         )
+
+    def aggregate_owner_counts(
+        self, entities: List[Owner]
+    ) -> dict[str, OwnerComplianceCounts]:
+        repositories = self.get_all_repositories()
+        name_to_id = {entity.name: entity.id for entity in entities}
+
+        if entities and entities[0].type.name == "BUSINESS_UNIT":
+            owner_field_name = "authoritative_business_unit_owners"
+        elif entities and entities[0].type.name == "TEAM":
+            owner_field_name = "authoritative_team_owners"
+        else:
+            raise ValueError(f"Unrecognised owner type: {entities[0].type.name if entities else 'empty list'}")
+
+        counts: defaultdict[
+            str, RepositoryComplianceService.OwnerComplianceCounts
+        ] = defaultdict(
+            lambda: {
+                "repo_count": 0,
+                "baseline_compliant_count": 0,
+                "standard_compliant_count": 0,
+                "exemplar_compliant_count": 0,
+            }
+        )
+
+        for repo in repositories:
+            maturity_level = repo.maturity_level
+            owner_names = getattr(repo, owner_field_name, [])
+            entity_ids_for_repository = {
+                name_to_id[owner_name]
+                for owner_name in owner_names
+                if owner_name in name_to_id
+            }
+
+            for entity_id in entity_ids_for_repository:
+                counts[entity_id]["repo_count"] += 1
+                if maturity_level >= 1:
+                    counts[entity_id]["baseline_compliant_count"] += 1
+                if maturity_level >= 2:
+                    counts[entity_id]["standard_compliant_count"] += 1
+                if maturity_level >= 3:
+                    counts[entity_id]["exemplar_compliant_count"] += 1
+
+        return {entity.id: counts[entity.id] for entity in entities}
 
     def get_all_repositories(self) -> List[RepositoryComplianceReportView]:
         repositories_compliance_reports = []

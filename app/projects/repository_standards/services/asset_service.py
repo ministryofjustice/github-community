@@ -30,11 +30,11 @@ class AssetService:
         owner_has_other_access = bool(owner_to_filter_by in repository.owner_names)
         no_repository_admins = len(repository.admin_owner_names) == 0
 
-        has_authorative_ownership = bool(
+        has_authoritative_ownership = bool(
             owner_has_admin_access or (owner_has_other_access and no_repository_admins)
         )
 
-        return has_authorative_ownership
+        return has_authoritative_ownership
 
     def update_relationships_with_owner(
         self, asset: Asset, owner: OwnerView, relationship_type: str

@@ -18,6 +18,6 @@ class RepositoryComplianceReportView:
     compliance_status: str
     checks: List[RepositoryComplianceCheck]
     maturity_level: int = 0
-    authorative_business_unit_owners: List[str] = field(default_factory=lambda: [])
-    authorative_team_owners: List[str] = field(default_factory=lambda: [])
+    authoritative_business_unit_owners: List[str] = field(default_factory=lambda: [])
+    authoritative_team_owners: List[str] = field(default_factory=lambda: [])
     description: Optional[str] = None

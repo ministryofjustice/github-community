@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 repository_standards_main = Blueprint("repository_standards_main", __name__)
 
 
+
 @repository_standards_main.route("/", methods=["GET"])
 @requires_auth
 def index():
@@ -55,12 +56,18 @@ def repositories():
 @repository_standards_main.route("/business-units", methods=["GET"])
 @requires_auth
 def business_units():
+    repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     business_units = owner_repository.find_all_business_units()
+
+    business_unit_counts = repository_compliance_service.aggregate_owner_counts(
+        business_units
+    )
 
     return render_template(
         "projects/repository_standards/pages/business_units.html",
         business_unit_names=business_units,
+        business_unit_counts=business_unit_counts,
     )
 
 
@@ -78,7 +85,7 @@ def business_units_owner(owner_id: str):
     filtrated_repositories = [
         repo
         for repo in repositories
-        if owner.name in repo.authorative_business_unit_owners
+        if owner.name in repo.authoritative_business_unit_owners
     ]
 
     return render_template(
@@ -100,12 +107,18 @@ def business_units_owner(owner_id: str):
 @repository_standards_main.route("/teams", methods=["GET"])
 @requires_auth
 def teams():
+    repository_compliance_service = get_repository_compliance_service()
     owner_repository = get_owner_repository()
     teams = owner_repository.find_all_teams()
+
+    team_counts = repository_compliance_service.aggregate_owner_counts(
+        teams
+    )
 
     return render_template(
         "projects/repository_standards/pages/teams.html",
         teams=teams,
+        team_counts=team_counts,
     )
 
 
@@ -122,7 +135,7 @@ def teams_owner(owner_id: str):
     repositories = repository_compliance_service.get_all_repositories()
 
     filtrated_repositories = [
-        repo for repo in repositories if owner.name in repo.authorative_team_owners
+        repo for repo in repositories if owner.name in repo.authoritative_team_owners
     ]
 
     return render_template(
@@ -139,7 +152,6 @@ def teams_owner(owner_id: str):
         ],
         owner=owner,
     )
-
 
 @repository_standards_main.route("/teams/<owner_id>/edit", methods=["GET", "POST"])
 @requires_auth
@@ -244,8 +256,8 @@ def unowned_repositories():
     filtrated_repositories = [
         repo
         for repo in repositories
-        if not repo.authorative_business_unit_owners
-        and not repo.authorative_team_owners
+        if not repo.authoritative_business_unit_owners
+        and not repo.authoritative_team_owners
     ]
 
     return render_template(
