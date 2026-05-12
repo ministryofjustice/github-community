@@ -8,7 +8,7 @@
     "ghcr.io/ministryofjustice/devcontainer-feature/aws:1": {},
     "ghcr.io/ministryofjustice/devcontainer-feature/cloud-platform:1": {},
     "ghcr.io/ministryofjustice/devcontainer-feature/container-structure-test:1": {},
-    "ghcr.io/ministryofjustice/devcontainer-feature/static-analysis:1": {}
+    "ghcr.io/ministryofjustice/devcontainer-feature/static-analysis:": {}
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "forwardPorts": [4567, 5432],
