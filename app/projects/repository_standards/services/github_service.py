@@ -98,7 +98,7 @@ class GithubService:
     def get_repositories(
         self,
         repo_name: str | None = None,
-        limit: int = 1100,
+        limit: int = 1500,
         teams_to_ignore: List[str] = [
             "organisation-security-auditor",
             "organisation-security-auditor-external",
