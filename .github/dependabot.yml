@@ -1,20 +1,6 @@
 ---
 version: 2
 
-multi-ecosystem-groups:
-  app-and-infrastructure:
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: ":dependabot: app-and-infrastructure"
-      include: "scope"
-  ci-cd:
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: ":dependabot: ci-cd"
-      include: "scope"
-
 updates:
   - package-ecosystem: "uv"
     directory: "/"
@@ -22,8 +8,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "app-and-infrastructure"
     groups:
       minor-and-patch:
         update-types:
@@ -36,8 +20,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "app-and-infrastructure"
     groups:
       minor-and-patch:
         update-types:
@@ -50,8 +32,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "ci-cd"
     groups:
       minor-and-patch:
         update-types:
@@ -64,8 +44,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "ci-cd"
     groups:
       minor-and-patch:
         update-types:
@@ -78,8 +56,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "ci-cd"
     groups:
       minor-and-patch:
         update-types:
@@ -92,8 +68,6 @@ updates:
       default-days: 14
     schedule:
       interval: "weekly"
-    patterns: ["*"]
-    multi-ecosystem-group: "ci-cd"
     groups:
       minor-and-patch:
         update-types:
