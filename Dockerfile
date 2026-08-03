@@ -8,7 +8,7 @@ FROM ghcr.io/astral-sh/uv:python3.13-alpine@sha256:22cb668a74fe9d4bd5fa2d17883e3
 # Stage: builder
 # From: docker.io/python:3.13-alpine3.22
 ##################################################
-FROM docker.io/python:3.13-alpine3.22@sha256:2fd93799bfc6381d078a8f656a5f45d6092e5d11d16f55889b3d5cbfdc64f045 AS builder
+FROM docker.io/python:3.14.5-alpine3.22@sha256:6b91e66ab2a880ce9ca5a1b91c70f45963ff71ff68268df056336e1a657d5efd AS builder
 
 ARG BUILD_DEV="false"
 
@@ -37,7 +37,7 @@ EOF
 ##################################################
 #checkov:skip=CKV_DOCKER_2: HEALTHCHECK not required - Health checks are implemented in Kubernetes as liveness and readiness probes
 
-FROM docker.io/python:3.13-alpine3.22@sha256:2fd93799bfc6381d078a8f656a5f45d6092e5d11d16f55889b3d5cbfdc64f045 AS final
+FROM docker.io/python:3.14.5-alpine3.22@sha256:6b91e66ab2a880ce9ca5a1b91c70f45963ff71ff68268df056336e1a657d5efd AS final
 
 LABEL org.opencontainers.image.vendor="Ministry of Justice" \
   org.opencontainers.image.authors="GitHub Community <github-community@digital.justice.gov.uk>" \
