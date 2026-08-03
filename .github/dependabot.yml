@@ -51,7 +51,7 @@ updates:
     schedule:
       interval: "weekly"
     patterns: ["*"]
-    multi-ecosystem-group: "app-and-infrastructure"
+    multi-ecosystem-group: "ci-cd"
     groups:
       minor-and-patch:
         update-types:
