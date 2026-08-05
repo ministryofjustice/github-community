@@ -16,7 +16,7 @@ dependencies = [
   "psycopg2-binary==2.9.12",
   "pygithub==2.9.1",
   "pynacl==1.6.2",
-  "sentry-sdk==2.66.0",
+  "sentry-sdk==2.66.1",
   "urllib3==2.7.0",
   "werkzeug==3.1.8",
 ]
@@ -24,10 +24,10 @@ dependencies = [
 [dependency-groups]
 dev = [
   "coverage==7.15.2",
-  "pre-commit==4.6.0",
+  "pre-commit==4.6.1",
   "pytest==9.1.1",
   "ruff==0.15.22",
-  "zizmor==1.26.1",
+  "zizmor==1.28.0",
 ]
 
 [tool.sqlfluff.core]
