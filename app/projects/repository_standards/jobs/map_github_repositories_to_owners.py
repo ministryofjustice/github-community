@@ -3,6 +3,9 @@ from typing import List
 
 from app.app import create_app
 from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from app.projects.repository_standards.services.repository_compliance_service import (
+    RepositoryComplianceService,
+)
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
 )
@@ -14,6 +17,9 @@ from app.projects.repository_standards.services.owner_service import (
 )
 from app.projects.repository_standards.services.asset_service import AssetService
 from app.projects.repository_standards.services.github_service import GithubService
+from app.projects.repository_standards.config.repository_compliance_config import (
+    get_repository_standard_from_maturity_level,
+)
 from app.shared.config.app_config import app_config
 from app.shared.config.logging_config import configure_logging
 
@@ -36,13 +42,25 @@ def main():
     logger.info("Running...")
 
     asset_service = AssetService(AssetRepository())
+<<<<<<< HEAD
+    repository_compliance_service = RepositoryComplianceService(asset_service)
+    owner_repository = OwnerRepository()
+=======
     owner_service = OwnerService(OwnerRepository())
+>>>>>>> e8947039dc28c0d2962f2b72f6100ba28e7d522b
     github_service = GithubService(
         app_config.github.app.client_id,
         app_config.github.app.private_key,
         app_config.github.app.installation_id,
     )
 
+<<<<<<< HEAD
+    repositories: List[RepositoryInfo] = github_service.get_all_repositories()
+    owner_by_config_name = {}
+
+    for owner_config in owners_config:
+        owners = owner_repository.find_by_name(owner_config.name)
+=======
     owners_config = owner_service.find_all()
     if not owners_config:
         logger.info("No owners found, exiting early")
@@ -54,17 +72,72 @@ def main():
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
 
         owners = owner_service.find_by_name(owner_config.name)
+>>>>>>> e8947039dc28c0d2962f2b72f6100ba28e7d522b
         if not owners or len(owners) == 0:
             logger.error(f"Owner [ {owner_config.name} ] not found")
             continue
-        owner = owners[0]
+        owner_by_config_name[owner_config.name] = owners[0]
 
-        for repository in repositories:
-            logger.debug(f"Mapping Repository [ {repository.basic.name} ]")
+    custom_property_update_counters = {
+        "attempted_updates": 0,
+        "successful_updates": 0,
+        "failed_updates": 0,
+        "skipped_updates": 0,
+    }
 
-            asset = asset_service.update_asset_by_name(
-                repository.basic.name, repository.to_dict()
+    for repository in repositories:
+        logger.debug(f"Mapping Repository [ {repository.basic.name} ]")
+
+        asset = asset_service.update_asset_by_name(
+            repository.basic.name, repository.to_dict()
+        )
+
+        compliance_report = repository_compliance_service.get_repository_by_name(
+            repository.basic.name
+        )
+        repository_standard = (
+            get_repository_standard_from_maturity_level(compliance_report.maturity_level)
+            if compliance_report
+            else None
+        )
+
+        repository.basic.repository_standard = repository_standard
+        asset = asset_service.update_asset_by_name(
+            repository.basic.name, repository.to_dict()
+        )
+
+        if not compliance_report:
+            custom_property_update_counters["skipped_updates"] += 1
+            logger.warning(
+                "Skipping repository-standard update: no compliance report for repository [ %s ]",
+                repository.basic.name,
             )
+        elif not repository_standard:
+            custom_property_update_counters["skipped_updates"] += 1
+            logger.info(
+                "Skipping repository-standard update: maturity level does not map to a custom property value for repository [ %s ]",
+                repository.basic.name,
+            )
+        else:
+            custom_property_update_counters["attempted_updates"] += 1
+            try:
+                github_service.set_repository_standard_custom_property(
+                    repository.basic.name,
+                    repository_standard,
+                )
+                custom_property_update_counters["successful_updates"] += 1
+            except Exception as error:
+                custom_property_update_counters["failed_updates"] += 1
+                logger.error(
+                    "Failed to update repository-standard custom property for repository [ %s ]: %s",
+                    repository.basic.name,
+                    error,
+                )
+
+        for owner_config in owners_config:
+            owner = owner_by_config_name.get(owner_config.name)
+            if not owner:
+                continue
 
             repository_name_starts_with_prefix = (
                 repository.basic.name.startswith(owner_config.config.prefix)
@@ -93,6 +166,14 @@ def main():
                 or repository_name_starts_with_prefix
             ):
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")
+
+    logger.info(
+        "Repository custom property update summary: attempted=%d successful=%d failed=%d skipped=%d",
+        custom_property_update_counters["attempted_updates"],
+        custom_property_update_counters["successful_updates"],
+        custom_property_update_counters["failed_updates"],
+        custom_property_update_counters["skipped_updates"],
+    )
 
     asset_service.remove_stale_assets()
     asset_service.remove_stale_relationships()

@@ -171,6 +171,7 @@ class BasicRepositoryInfo:
     default_branch_name: str
     description: Optional[str] = None
     license: Optional[str] = None
+    repository_standard: Optional[str] = None
 
 
 @dataclass

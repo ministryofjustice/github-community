@@ -13,6 +13,19 @@ BASELINE = 1
 STANDARD = 2
 EXEMPLAR = 3
 
+REPOSITORY_STANDARD_BASELINE = "baseline"
+REPOSITORY_STANDARD_STANDARD = "standard"
+REPOSITORY_STANDARD_EXEMPLAR = "exemplar"
+
+
+def get_repository_standard_from_maturity_level(maturity_level: int) -> Optional[str]:
+    maturity_to_standard = {
+        BASELINE: REPOSITORY_STANDARD_BASELINE,
+        STANDARD: REPOSITORY_STANDARD_STANDARD,
+        EXEMPLAR: REPOSITORY_STANDARD_EXEMPLAR,
+    }
+    return maturity_to_standard.get(maturity_level)
+
 
 def get_secret_scanning_enabled_check(
     repository: RepositoryView, required: bool = True

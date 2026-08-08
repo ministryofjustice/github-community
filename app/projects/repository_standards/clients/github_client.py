@@ -136,7 +136,13 @@ class GitHubClient:
                 f"Error calling URL: [{url}], Status Code: [{response.status_code}], Response: {response.text}"
             )
 
-        return response.json()
+        if not response.content:
+            return {}
+
+        try:
+            return response.json()
+        except ValueError:
+            return {}
 
     def get_branch_rulesets(self, repo: str, branch: str) -> List[Dict[str, Any]]:
         """
@@ -151,3 +157,16 @@ class GitHubClient:
         Docs: https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#get-a-repository-ruleset
         """
         return self.__call("GET", f"/repos/{self.org}/{repo}/rulesets/{ruleset_id}")
+
+    def update_repository_custom_properties(
+        self, repo: str, properties: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Create or update custom property values for a repository.
+        Docs: https://docs.github.com/en/rest/repos/custom-properties?apiVersion=2022-11-28#create-or-update-custom-property-values-for-a-repository
+        """
+        return self.__call(
+            "PATCH",
+            f"/repos/{self.org}/{repo}/properties/values",
+            json={"properties": properties},
+        )
