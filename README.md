@@ -126,7 +126,7 @@ $ kubectl -n github-community-dev logs github-community-56b5c64d49-9x2rj
 2026-08-14T13:36:31 |     INFO | error_handler.py:14 | A request was made to a page that doesn't exist 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
 ```
 
-Get CronJobs, useful for seeing what the exists and double checking the name for other commands:
+Get CronJobs, useful for seeing what exists and double checking the name for other commands:
 
 ```bash
 $ kubectl -n github-community-dev get cronjobs
