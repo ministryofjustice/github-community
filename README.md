@@ -107,8 +107,8 @@ make app-start
 
 ## 🚀 Managing Deployments and CronJobs
 
-Occasionally , you may need to debug a failed deployment or failing cronjob in Cloud Platforms Kubernetes. Below are some commands to help you debug issues.
-Before trying these commands make sure to follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) Guide.
+Occasionally, you may need to debug a failed deployment or failing CronJob in the Cloud Platform Kubernetes cluster. Replace `github-community-dev` with the namespace you’re working in. Below are some commands to help you debug issues.
+Before trying these commands, follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) guide.
 
 Get pods in the namespace, useful for seeing if pods are healthy and getting the id of a failing pod:
 
