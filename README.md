@@ -105,6 +105,53 @@ make uv-activate
 make app-start
 ```
 
+## 🚀 Managing Deployments and CronJobs
+
+Occasionally , you may need to debug a failed deployment or failing cronjob in Cloud Platforms Kubernetes. Below are some commands to help you debug issues.
+Before trying these commands make sure to follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) Guide.
+
+Get pods in the namespace, useful for seeing if pods are healthy and getting the id of a failing pod:
+
+```bash
+$ kubectl -n github-community-dev get pods
+NAME                                                   READY   STATUS      RESTARTS   AGE
+github-community-56b5c64d49-9x2rj                      1/1     Running     0          27h
+map-github-repositories-to-owners-job-29778480-mvzc4   0/1     Completed   0          104m
+```
+
+Get the logs of a specific pod, useful for seeing why a pod may be failing to start:
+
+```bash
+$ kubectl -n github-community-dev logs github-community-56b5c64d49-9x2rj
+2026-08-14T13:36:31 |     INFO | error_handler.py:14 | A request was made to a page that doesn't exist 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+```
+
+Get CronJobs, useful for seeing what the exists and double checking the name for other commands:
+
+```bash
+$ kubectl -n github-community-dev get cronjobs
+NAME                                    SCHEDULE    TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+map-github-repositories-to-owners-job   0 3 * * *   <none>     False     0        10h             508d
+```
+
+Create Jobs, useful for manually triggering the mapper job to debug fixes:
+
+```bash
+$ kubectl -n github-community-dev create job manual-mapper-job --from cronjob/map-github-repositories-to-owners-job
+job.batch/manual-mapper-job created
+```
+
+Get Jobs, useful for seeing running and previous jobs:
+
+```bash
+$ kubectl -n github-community-dev get jobs
+NAME                                             STATUS     COMPLETIONS   DURATION   AGE
+manual-mapper-job                                Running    0/1                      25s
+map-github-repositories-to-owners-job-29602260   Failed     0/1           122d       122d
+map-github-repositories-to-owners-job-29603700   Failed     0/1           121d       121d
+map-github-repositories-to-owners-job-29777940   Complete   1/1           52m        10h
+```
+
 ---
 
 ## 📄 License
