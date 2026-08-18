@@ -17,6 +17,14 @@ Welcome to the **GitHub Community**! This repository serves as a central hub for
   - [✅ Benefits](#-benefits)
   - [❌ Challenges](#-challenges)
   - [🛠️ Development Setup](#-development-setup)
+  - [🧭 Repository Standards onboarding](#-repository-standards-onboarding)
+    - [Services the application provides](#services-the-application-provides)
+    - [Application architecture](#application-architecture)
+    - [Code architecture](#code-architecture)
+    - [Underlying data model](#underlying-data-model)
+    - [CI/CD processes](#cicd-processes)
+    - [Deployment process](#deployment-process)
+    - [How to debug common issues](#how-to-debug-common-issues)
 - [📄 License](#-license)
 
 ## 📣 About GitHub Community
@@ -105,55 +113,160 @@ make uv-activate
 make app-start
 ```
 
-## 🚀 Managing Deployments and CronJobs
+### 🧭 Repository Standards onboarding
 
-Occasionally, you may need to debug a failed deployment or failing CronJob in the Cloud Platform Kubernetes cluster. Replace `github-community-dev` with the namespace you’re working in. Below are some commands to help you debug issues.
-Before trying these commands, follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) guide.
+Repository Standards helps teams track repository health across licensing,
+security, and governance checks. This section is designed for fast onboarding.
 
-Get pods in the namespace, useful for seeing if pods are healthy and getting the name of a failing pod:
+#### Services the application provides
+
+Repository Standards provides:
+
+- report views for all repositories, teams, business units, and unowned repos
+- repository-level compliance reports with maturity levels and checks
+- badge API endpoints under `/repository-standards/api/<repository>/badge`
+- backwards-compatible legacy endpoints under deprecated routes
+
+#### Application architecture
+
+![Application Architecture](./docs/github-community-app-hld.png)
+
+The app is a modular monolith built with Flask. Repository Standards is mounted
+as blueprints in `app/shared/config/routes_config.py`, alongside other project
+modules. Runtime deployment uses a single app container, plus a scheduled job
+for repository-to-owner mapping.
+
+The app integrates with GitHub using a GitHub App and provides SSO Auth via Auth0 and EntraID.
+
+#### Code architecture
+
+![Code Architecture](./docs/github-community-app-code.png)
+
+`app/projects/repository_standards/` follows a layered pattern:
+
+- **routes/** exposes UI pages, APIs, and deprecated compatibility routes
+- **services/** contains compliance, GitHub, and relationship business logic
+- **repositories/** handles persistence access for assets and owners
+- **models/** defines compliance and repository view models
+- **jobs/** contains scheduled worker entrypoints
+- **clients/** contains low level integration details for external services
+
+#### Underlying data model
+
+![Data Model](./docs/github-community-app-data-model.png)
+
+Repository Standards stores repository snapshots and ownership mappings in four
+main tables:
+
+- **assets**: one row per repository (`type=REPOSITORY`) plus JSON repository
+  metadata in `data`
+- **owners**: owner entities (for example business units and teams), with
+  owner-specific config in JSON
+- **owner_types**: lookup table for owner categories (for example `TEAM`,
+  `BUSINESS_UNIT`)
+- **relationships**: many-to-many links between `assets` and `owners`, with a
+  relationship type such as `ADMIN_ACCESS` or `OTHER`
+
+The mapper job refreshes repository and relationship data, and stale records
+are removed during cleanup.
+
+#### CI/CD processes
+
+![CI/CD](./docs/github-community-app-cicd.png)
+
+PR commits trigger automated checks and a development deployment. Checks
+include linting, tests, security scanning, and image/container checks via the
+workflows in `.github/workflows/`.
+
+PRs must be reviewed before merge to `main` under branch protection rules.
+
+When code is merged to `main`, push-triggered workflows run and deployment
+pipelines start, including production deployment. Production is gated by manual
+approval through GitHub Environment protection rules.
+
+#### Deployment process
+
+![Deployment Process](./docs/github-community-app-deployment.png)
+
+Deployments are Helm-driven using `helm/github-community/`, with separate
+`values-dev.yaml` and `values-prod.yaml` configuration.
+
+Images are built in GitHub Actions and pushed to AWS ECR. The workflows
+authenticate to AWS using `aws-actions/configure-aws-credentials`, then log in
+to ECR before build/push.
+
+Deployment to Cloud Platform authenticates using Kubernetes cert/token secrets
+in GitHub Actions, then applies Helm upgrades.
+
+Key Kubernetes resources deployed by the chart:
+
+- **Deployment** (`templates/deployment.yaml`) for the Flask app pods
+- **CronJob**
+  (`templates/map-github-repositories-to-owners-job.yaml`) for repository-owner
+  mapping
+- **Ingress** (`templates/ingress.yaml`) for external routing and host mapping
+
+The mapper schedule differs by environment: daily in dev and multiple runs per
+day in prod.
+
+### 🚀 Managing Deployments and CronJobs
+
+Occasionally, you may need to debug a failed deployment or failing CronJob in
+the Cloud Platform Kubernetes cluster. Replace `github-community-dev` with the
+namespace you are working in.
+
+Before trying these commands, follow the
+[Cloud Platform cluster connection guide][cluster-guide].
+
+Get pods in the namespace. This helps you check pod health and identify failing
+pods:
 
 ```bash
 $ kubectl -n github-community-dev get pods
-NAME                                                   READY   STATUS      RESTARTS   AGE
-github-community-56b5c64d49-9x2rj                      1/1     Running     0          27h
-map-github-repositories-to-owners-job-29778480-mvzc4   0/1     Completed   0          104m
+NAME                       READY   STATUS      AGE
+github-community-abc123    1/1     Running     27h
+mapper-job-123             0/1     Completed   104m
 ```
 
-Get the logs of a specific pod, useful for seeing why a pod may be failing to start:
+Get logs from a specific pod. This helps explain why a pod may fail to start:
 
 ```bash
 $ kubectl -n github-community-dev logs github-community-56b5c64d49-9x2rj
-2026-08-14T13:36:31 |     INFO | error_handler.py:14 | A request was made to a page that doesn't exist 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+2026-08-14T13:36:31 | INFO | error_handler.py:14 | 404 Not Found request
 ```
 
-Get CronJobs, useful for seeing what exists and double checking the name for other commands:
+Get CronJobs to see what exists and confirm names for other commands:
 
 ```bash
 $ kubectl -n github-community-dev get cronjobs
-NAME                                    SCHEDULE    TIMEZONE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
-map-github-repositories-to-owners-job   0 3 * * *   <none>     False     0        10h             508d
+NAME         SCHEDULE   SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+mapper-job   0 3 * * *  False     0        10h             508d
 ```
 
-Create Jobs, useful for manually triggering the mapper job to debug fixes:
+Create Jobs to manually trigger the mapper job while debugging fixes:
 
 ```bash
-$ kubectl -n github-community-dev create job manual-mapper-job --from cronjob/map-github-repositories-to-owners-job
+$ kubectl -n github-community-dev create job manual-mapper-job \
+    --from cronjob/map-github-repositories-to-owners-job
 job.batch/manual-mapper-job created
 ```
 
-Get Jobs, useful for seeing running and previous jobs:
+Get Jobs to inspect running and previous executions:
 
 ```bash
 $ kubectl -n github-community-dev get jobs
-NAME                                             STATUS     COMPLETIONS   DURATION   AGE
-manual-mapper-job                                Running    0/1                      25s
-map-github-repositories-to-owners-job-29602260   Failed     0/1           122d       122d
-map-github-repositories-to-owners-job-29603700   Failed     0/1           121d       121d
-map-github-repositories-to-owners-job-29777940   Complete   1/1           52m        10h
+NAME             STATUS      COMPLETIONS   DURATION   AGE
+manual-mapper    Running     0/1                      25s
+mapper-job-a     Failed      0/1           122d       122d
+mapper-job-b     Failed      0/1           121d       121d
+mapper-job-c     Complete    1/1           52m        10h
 ```
+
+[cluster-guide]: https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html
 
 ---
 
 ## 📄 License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**.
+See the [LICENSE](LICENSE) file for details.
