@@ -131,12 +131,13 @@ Repository Standards provides:
 
 ![Application Architecture](./docs/github-community-app-hld.png)
 
-The app is a modular monolith built with Flask. Repository Standards is mounted
-as blueprints in `app/shared/config/routes_config.py`, alongside other project
-modules. Runtime deployment uses a single app container, plus a scheduled job
-for repository-to-owner mapping.
+At a high level:
 
-The app integrates with GitHub using a GitHub App and provides SSO Auth via Auth0 and EntraID.
+- Repository Standards is part of the Flask modular monolith application.
+- The app is deployed into the Cloud Platform Kubernetes cluster.
+- The app integrates with AWS RDS hosted via Cloud Platform for persistence.
+- A scheduled CronJob queries GitHub for repository data and stores it in RDS.
+- The app integrates with Auth0 and Entra ID for SSO authentication.
 
 #### Code architecture
 
