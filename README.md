@@ -232,7 +232,7 @@ mapper-job-123             0/1     Completed   104m
 Get logs from a specific pod. This helps explain why a pod may fail to start:
 
 ```bash
-$ kubectl -n github-community-dev logs github-community-56b5c64d49-9x2rj
+$ kubectl -n github-community-dev logs github-community-abc123
 2026-08-14T13:36:31 | INFO | error_handler.py:14 | 404 Not Found request
 ```
 
