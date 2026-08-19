@@ -24,7 +24,7 @@ Welcome to the **GitHub Community**! This repository serves as a central hub for
     - [Underlying data model](#underlying-data-model)
     - [CI/CD processes](#cicd-processes)
     - [Deployment process](#deployment-process)
-    - [How to debug common issues](#how-to-debug-common-issues)
+  - [🚀 Managing Deployments and CronJobs](#-managing-deployments-and-cronjobs)
 - [📄 License](#-license)
 
 ## 📣 About GitHub Community
