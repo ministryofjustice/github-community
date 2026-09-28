@@ -1,0 +1,42 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}Technical Standard – Repositories{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": "Technical Standard", "href": "/repository-standards/technical-standard" },
+      { "text": "Repositories" }
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl">Repositories</h1>
+  <p class="govuk-body">{{ compliant_repositories | length }} of {{ repositories | length }} repositories meet the standard.</p>
+
+  <table class="govuk-table" data-module="moj-sortable-table">
+    <thead class="govuk-table__head">
+      <tr class="govuk-table__row">
+        <th scope="col" class="govuk-table__header" aria-sort="ascending">Repository</th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">Compliance</th>
+      </tr>
+    </thead>
+    <tbody class="govuk-table__body">
+      {% for repo in repositories %}
+      <tr class="govuk-table__row">
+        <td class="govuk-table__cell">
+          <a class="govuk-link" href="/repository-standards/technical-standard/repositories/{{ repo.name }}">{{ repo.name }}</a>
+        </td>
+        <td class="govuk-table__cell">
+          {% if repo.compliant %}
+            <strong class="govuk-tag govuk-tag--green">Compliance met</strong>
+          {% else %}
+            <strong class="govuk-tag govuk-tag--red">Compliance not met</strong>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -9,7 +9,9 @@ from app.projects.acronyms.routes.main import acronyms_main
 from app.shared.routes.auth import auth_route
 from app.shared.routes.main import main
 from app.shared.routes.robots import robot_route
-
+from app.projects.repository_standards.routes.technical_standard import (
+    technical_standard,
+)
 
 def configure_routes(app: Flask) -> None:
     app.register_blueprint(auth_route, url_prefix="/auth")
@@ -26,4 +28,7 @@ def configure_routes(app: Flask) -> None:
 
     app.register_blueprint(
         acronyms_main, url_prefix="/acronyms/"
+    )
+    app.register_blueprint(
+        technical_standard, url_prefix="/repository-standards/technical-standard"
     )
