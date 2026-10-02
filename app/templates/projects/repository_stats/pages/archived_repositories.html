@@ -1,0 +1,182 @@
+{% extends "shared/components/base.html" %}
+{% from "govuk_frontend_jinja/components/tag/macro.html" import govukTag %}
+{% from "govuk_frontend_jinja/components/select/macro.html" import govukSelect %}
+{% from "govuk_frontend_jinja/components/inset-text/macro.html" import govukInsetText %}
+
+{% set archived_url = url_for("repository_stats_main.archived_repositories") %}
+{% set archived = page.archived %}
+{% set tag_classes = {
+  "public": "govuk-tag--red",
+  "internal": "govuk-tag--green",
+  "private": "govuk-tag--grey"
+} %}
+
+{% macro fmt(value) -%}
+  {%- if value %}{{ value.day }} {{ value.strftime("%B %Y") }}{% endif -%}
+{%- endmacro %}
+
+{% macro visibility_tag(visibility) -%}
+  {{- govukTag({
+    "text": visibility | capitalize,
+    "classes": tag_classes.get(visibility, "govuk-tag--grey")
+  }) | trim -}}
+{%- endmacro %}
+
+{% macro repository_link(repository) -%}
+  <a class="govuk-link" href="{{ repository.github_url }}" target="_blank" rel="noopener noreferrer">{{ repository.name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+{%- endmacro %}
+
+{% macro hidden_inputs(exclude) %}
+  {% for name, value in query.to_params().items() if name not in exclude %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}
+{% endmacro %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
+{% endblock %}
+
+{% block pageTitle %}
+  Archived public repositories - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats", "href": url_for("repository_stats_main.index")},
+      {"text": "Archived repositories"}
+    ]
+  }) }}
+
+  <div class="govuk-!-margin-bottom-6">
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Archived public repositories</h1>
+    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+  </div>
+
+  {% set banner_html %}
+    <p class="govuk-notification-banner__heading">Archived repositories must be changed from public to internal on or before {{ archived.deadline }}.</p>
+    <p class="govuk-body">If your team owns a repository on this list, change its visibility yourself. After the deadline, the Developer Experience team will change any remaining repositories to internal.</p>
+    <p class="govuk-body">If a repository needs to stay public, ask in the <a class="govuk-notification-banner__link" href="{{ slack_channel_url }}" target="_blank" rel="noopener noreferrer">{{ slack_channel_name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a> before the deadline.</p>
+  {% endset %}
+  {{ govukNotificationBanner({"titleText": "Important", "html": banner_html, "classes": "app-visibility-banner--full-width"}) }}
+
+  <div class="govuk-!-margin-bottom-4" id="archived-progress">
+    <h2 class="govuk-heading-m">Progress</h2>
+    {% if archived.progress.total %}
+      <div class="app-visibility-progress-summary">
+        <p class="govuk-body govuk-!-margin-bottom-1">{{ archived.progress.made_internal }} of {{ archived.progress.total }} archived public repositories have been made internal</p>
+        <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text">{{ archived.progress.percent }}% complete</p>
+      </div>
+      <div class="app-visibility-progress govuk-!-margin-bottom-2" aria-hidden="true"><div class="app-visibility-progress__bar" style="width: {{ archived.progress.percent }}%"></div></div>
+    {% else %}
+      <p class="govuk-body">There are no archived public repositories.</p>
+    {% endif %}
+    <p class="govuk-body-s app-visibility-secondary-text govuk-!-margin-bottom-0">Progress is for all organisations and is not affected by filters</p>
+  </div>
+
+  {# Filters: dates never apply to archived repositories, so there are no date fields. #}
+  <form method="get" action="{{ archived_url }}#visibility-filters" class="app-visibility-filters app-visibility-filters--compact" id="visibility-filters" novalidate>
+    <h2 class="govuk-heading-m">Find repositories</h2>
+    {{ hidden_inputs(["org", "business_unit", "q", "only_public"]) }}
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        {% set org_items = [{"value": "", "text": "All organisations", "selected": not query.filters.org}] %}
+        {% for org in page.organisations %}
+          {% set _ = org_items.append({"value": org, "text": page.organisation_name(org), "selected": org == query.filters.org}) %}
+        {% endfor %}
+        {{ govukSelect({"id": "org", "name": "org", "label": {"text": "Organisation"}, "items": org_items}) }}
+      </div>
+      <div class="govuk-grid-column-one-third">
+        {% set bu_items = [{"value": "", "text": "All business units", "selected": not query.filters.business_unit}] %}
+        {% for business_unit in page.business_units %}
+          {% set _ = bu_items.append({"value": business_unit, "text": business_unit, "selected": business_unit == query.filters.business_unit}) %}
+        {% endfor %}
+        {{ govukSelect({"id": "business_unit", "name": "business_unit", "label": {"text": "Business unit"}, "items": bu_items}) }}
+      </div>
+      <div class="govuk-grid-column-one-third">
+        {{ govukInput({
+          "id": "q",
+          "name": "q",
+          "label": {"text": "Repository name"},
+          "value": query.filters.q,
+          "spellcheck": false,
+          "autocomplete": "off"
+        }) }}
+      </div>
+    </div>
+    {# Unchecked boxes aren't submitted, so the hidden "0" records an unticked box. #}
+    <input type="hidden" name="only_public" value="0">
+    {{ govukCheckboxes({
+      "idPrefix": "only_public",
+      "formGroup": {"classes": "govuk-!-margin-bottom-4"},
+      "name": "only_public",
+      "classes": "govuk-checkboxes--small",
+      "items": [{"value": "1", "text": "Only show repositories that are still public", "checked": query.only_public}]
+    }) }}
+    <div class="app-visibility-filter-row">
+      <div class="app-visibility-filter-actions">
+        {{ govukButton({"text": "Apply filters"}) }}
+        <a class="govuk-link" id="clear-filters" href="{{ archived_url }}#visibility-filters">Clear filters</a>
+      </div>
+    </div>
+  </form>
+
+  {% set how_to_html %}
+    <ol class="govuk-list govuk-list--number">
+      <li>Go to the repository and select <strong>Settings</strong>.</li>
+      <li>In the Danger Zone section, select <strong>Unarchive this repository</strong>.</li>
+      <li>Select <strong>Change visibility</strong>, then choose <strong>Internal</strong>.</li>
+      <li>Select <strong>Archive this repository</strong>.</li>
+    </ol>
+  {% endset %}
+  {{ govukDetails({"summaryText": "How to change a repository's visibility", "html": how_to_html}) }}
+
+  {# Every tracked archived repository is rendered; rows that don't match the filters are
+     hidden here so the page works without JavaScript. archived-filters.js then filters the
+     same rows in the browser. #}
+  <div id="archived-results">
+    <div id="archived-no-match"{% if archived.matching %} hidden{% endif %}>
+      {{ govukInsetText({"text": "No archived public repositories match your filters. Try clearing your filters."}) }}
+    </div>
+    <div id="archived-all-internal"{% if not archived.matching or archived.repositories %} hidden{% endif %}>
+      {{ govukInsetText({"text": "All archived repositories that match your filters are now internal."}) }}
+    </div>
+    {% if archived.tracked %}
+      <div class="app-table-scroll" role="region" aria-label="Archived repositories table" tabindex="0" id="archived-table-region"{% if not archived.repositories %} hidden{% endif %}>
+        <table class="govuk-table app-visibility-archived-table" id="archived-table"{% if not archived.repositories %} hidden{% endif %}>
+          <caption class="govuk-table__caption govuk-table__caption--m">Repositories (<span id="archived-count">{{ archived.repositories | length }}</span>)</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              <th scope="col" class="govuk-table__header">Repository</th>
+              <th scope="col" class="govuk-table__header">Organisation</th>
+              <th scope="col" class="govuk-table__header">Business unit</th>
+              <th scope="col" class="govuk-table__header">Archived <span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">first seen archived</span></th>
+              <th scope="col" class="govuk-table__header">Last pushed</th>
+              <th scope="col" class="govuk-table__header">Visibility</th>
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for repository in archived.tracked %}
+              <tr class="govuk-table__row" data-org="{{ repository.org }}" data-business-units='{{ repository.business_units | list | tojson }}' data-name="{{ repository.name | lower }}" data-visibility="{{ repository.visibility }}"{% if repository.github_id not in archived.shown_ids %} hidden{% endif %}>
+                <td class="govuk-table__cell">
+                  {{ repository_link(repository) }}
+                  {% if repository.fork %}<span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">Fork</span>{% endif %}
+                </td>
+                <td class="govuk-table__cell app-visibility-org-cell">{{ page.organisation_name(repository.org) }}</td>
+                <td class="govuk-table__cell">{{ repository.business_unit_text }}</td>
+                <td class="govuk-table__cell app-visibility-nowrap">{{ fmt(repository.first_archived_on) or "Not known" }}</td>
+                <td class="govuk-table__cell app-visibility-nowrap">{{ fmt(repository.pushed_at) or "Not known" }}</td>
+                <td class="govuk-table__cell">{{ visibility_tag(repository.visibility) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+    <p class="govuk-visually-hidden" id="archived-filter-status" role="status" aria-live="polite"></p>
+  </div>
+
+  <script src="{{ url_for('static', filename='projects/repository_stats/javascript/archived-filters.js') }}"></script>
+{% endblock %}
