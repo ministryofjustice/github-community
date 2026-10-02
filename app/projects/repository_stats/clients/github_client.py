@@ -54,6 +54,18 @@ class GitHubAppClient:
             self.__token_expires_at = now + timedelta(minutes=55)
         return self.__token
 
+    def graphql(self, query: str, variables: dict | None = None) -> requests.Response:
+        """POST a GraphQL query. Returns the response whatever its status."""
+        return requests.post(
+            f"{GITHUB_API_URL}/graphql",
+            json={"query": query, "variables": variables or {}},
+            headers={
+                "Authorization": f"Bearer {self.__get_token()}",
+                "Accept": "application/vnd.github+json",
+            },
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+
     def get(self, path: str) -> requests.Response:
         """GET a REST API path, or a full api.github.com URL such as a pagination "next" link.
 
