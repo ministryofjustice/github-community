@@ -14,7 +14,12 @@ app:
       FLASK_DEBUG: true
       PHASE_BANNER_TEXT: "ALPHA"
       AUTH_ENABLED: false
+      # Note: AUTH_ENABLED above is not passed to the pod by templates/deployment.yaml, so the app's default (auth on) applies and this lock is active in dev too.
+      GITHUB_STATS_ACCESS_TEAM: "ministryofjustice/repository-stats-viewers"
 
   jobs:
     map_github_repositories_to_owners:
       schedule: "0 3 * * *"
+    # Repository Stats visibility snapshot (UTC)
+    record_repository_visibility:
+      schedule: "0 4 * * *"

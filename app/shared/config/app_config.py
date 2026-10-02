@@ -62,6 +62,9 @@ app_config = SimpleNamespace(
             private_key=__get_env_var("GITHUB_APP_PRIVATE_KEY"),
         ),
         token=__get_env_var("ADMIN_GITHUB_TOKEN"),
+        # "org/team-slug", or just "team-slug" for the ministryofjustice organisation.
+        # Unset means Repository Stats is open to everyone who can sign in.
+        stats_access_team=__get_env_var("GITHUB_STATS_ACCESS_TEAM") or None,
     ),
     sentry=SimpleNamespace(
         dsn_key=__get_env_var("SENTRY_DSN_KEY"), environment=__get_env_var("SENTRY_ENV")

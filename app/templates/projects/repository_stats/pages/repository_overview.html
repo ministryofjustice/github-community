@@ -1,0 +1,97 @@
+{% extends "shared/components/base.html" %}
+
+{% set overview = page.overview %}
+
+{% macro numeric_cells(totals, bold=false, total_bold=true) -%}
+  {%- for value in (totals.total, totals.public, totals.internal, totals.private) %}
+    <td class="govuk-table__cell govuk-table__cell--numeric{% if bold or (total_bold and loop.first) %} app-overview-strong{% endif %}">{{ "{:,}".format(value) }}</td>
+  {%- endfor %}
+{%- endmacro %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
+{% endblock %}
+
+{% block pageTitle %}
+  Repository overview - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats", "href": url_for("repository_stats_main.index")},
+      {"text": "Repository overview"}
+    ]
+  }) }}
+
+  <div class="govuk-!-margin-bottom-6">
+    <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Repository overview</h1>
+    <p class="govuk-body">View repository totals by organisation, business unit and team.</p>
+    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+  </div>
+
+  {% if not overview.organisations %}
+    <p class="govuk-body">There is no repository data yet.</p>
+  {% else %}
+    <p class="govuk-body-s">Select an organisation to see its business units, then select a business unit to see its teams.</p>
+    <div class="app-table-scroll" role="region" aria-label="Repository overview table" tabindex="0">
+      <table class="govuk-table app-overview-table" id="repository-overview">
+        <caption class="govuk-table__caption govuk-visually-hidden">Repository totals by organisation, business unit and team</caption>
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header">Organisation / business unit / team</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Total</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Public</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Internal</th>
+            <th scope="col" class="govuk-table__header govuk-table__header--numeric">Private</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          <tr class="govuk-table__row app-overview-row--all">
+            <th scope="row" class="govuk-table__header">{{ overview.all_organisations.name }}</th>
+            {{ numeric_cells(overview.all_organisations.totals, bold=true) }}
+          </tr>
+          {% for org in overview.organisations %}
+            {% set org_open = org.key in open_keys %}
+            <tr class="govuk-table__row app-overview-row--org" id="{{ anchors[org.key] }}">
+              <th scope="row" class="govuk-table__header">
+                <a class="govuk-link app-overview-toggle{% if org_open %} app-overview-toggle--open{% endif %}" href="{{ toggle_hrefs[org.key] }}">{{ org.name }}<span class="govuk-visually-hidden"> ({{ "hide" if org_open else "show" }} business units)</span></a>
+              </th>
+              {{ numeric_cells(org.totals) }}
+            </tr>
+            {% if org_open %}
+              {% for business_unit in org.children %}
+                {% set unit_open = business_unit.key in open_keys %}
+                <tr class="govuk-table__row app-overview-row--business-unit{% if unit_open %} app-overview-row--expanded{% endif %}" id="{{ anchors[business_unit.key] }}">
+                  <th scope="row" class="govuk-table__header app-overview-name--business-unit">
+                    <a class="govuk-link app-overview-toggle{% if unit_open %} app-overview-toggle--open{% endif %}" href="{{ toggle_hrefs[business_unit.key] }}">{{ business_unit.name }}<span class="govuk-visually-hidden"> ({{ "hide" if unit_open else "show" }} teams)</span></a>
+                    <span class="app-overview-caption">Business unit</span>
+                  </th>
+                  {{ numeric_cells(business_unit.totals) }}
+                </tr>
+                {% if unit_open %}
+                  {% for team in business_unit.children %}
+                    <tr class="govuk-table__row app-overview-row--team">
+                      <th scope="row" class="govuk-table__header app-overview-name--team">
+                        <span class="app-overview-team-name">
+                          {%- if team.url -%}
+                            <a class="govuk-link" href="{{ team.url }}" target="_blank" rel="noopener noreferrer">{{ team.name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+                          {%- else -%}
+                            {{ team.name }}
+                          {%- endif -%}
+                        </span>
+                      </th>
+                      {{ numeric_cells(team.totals, total_bold=false) }}
+                    </tr>
+                  {% endfor %}
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}
