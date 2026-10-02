@@ -45,6 +45,8 @@ def diff_scan(
         old = before.get(github_id)
         if old is None:
             events.append(event(record, "created", to_visibility=record.visibility))
+            if record.archived:
+                events.append(event(record, "archived"))
             continue
         if old.visibility != record.visibility:
             events.append(event(record, "changed", old.visibility, record.visibility))

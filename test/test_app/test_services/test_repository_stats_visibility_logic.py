@@ -510,6 +510,28 @@ class TestArchived(unittest.TestCase):
         self.assertEqual(by_name["old-public"].business_unit_text, "HMPPS")
         self.assertTrue(by_name["old-moved"].fork)
 
+    def test_archived_while_private_then_made_public_is_in_scope(self):
+        """A repo archived while private/internal, then later made public, must still
+        show up: scope can't only be decided on the "archived" event using stale state."""
+        aug = [snapshot(8, "private-then-public", "private", AUG_1, archived=False)]
+        sep = [snapshot(8, "private-then-public", "public", archived=True)]
+        events = [
+            event(8, "private-then-public", "archived", occurred_on=date(2026, 9, 1)),
+            event(
+                8,
+                "private-then-public",
+                "changed",
+                "private",
+                "public",
+                date(2026, 9, 10),
+            ),
+        ]
+        repositories = archived_public_repositories(aug, AUG_1, events, sep, {}, {})
+        self.assertEqual({r.name for r in repositories}, {"private-then-public"})
+        # archived_on is only recorded from an "archived" event, not a later "changed"
+        # one, so without an explicit first_archived_on it stays unknown.
+        self.assertIsNone(repositories[0].first_archived_on)
+
     def test_progress_percent(self):
         def repo(visibility):
             return ArchivedRepository(1, "r", ORG, (), visibility, AUG_1, None)

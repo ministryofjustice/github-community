@@ -58,7 +58,9 @@ def is_team_member(
     )
     if response.status_code == 200:
         # Pending invitations also return 200; only an active membership counts.
-        return response.json().get("state", "active") == "active"
+        # Fail closed: a non-dict body or a missing "state" must not grant access.
+        body = response.json()
+        return isinstance(body, dict) and body.get("state") == "active"
     if response.status_code == 404:
         return False
     raise GitHubAccessCheckError(

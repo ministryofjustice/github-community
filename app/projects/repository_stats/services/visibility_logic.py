@@ -715,15 +715,12 @@ def archived_public_repositories(
     for event in sorted(events, key=lambda e: e.occurred_on):
         if event.occurred_on <= earliest_date:
             continue
-        current = states.get(event.github_id)
-        if (
-            event.event_type == "archived"
-            and current
-            and current.visibility == "public"
-        ):
-            in_scope.add(event.github_id)
-            archived_on.setdefault(event.github_id, event.occurred_on)
         apply_event(states, event)
+        current = states.get(event.github_id)
+        if current and current.archived and current.visibility == "public":
+            in_scope.add(event.github_id)
+            if event.event_type == "archived":
+                archived_on.setdefault(event.github_id, event.occurred_on)
 
     return [
         ArchivedRepository(

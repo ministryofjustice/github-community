@@ -81,6 +81,24 @@ class TestIsTeamMember(unittest.TestCase):
             )
         )
 
+    def test_missing_state_fails_closed(self):
+        github = FakeGitHub({MEMBERSHIP_PATH: response(200, {"role": "member"})})
+        self.assertFalse(
+            is_team_member(
+                "octocat", "ministryofjustice", "repository-stats-viewers", github
+            )
+        )
+
+    def test_non_dict_body_fails_closed(self):
+        github = FakeGitHub(
+            {MEMBERSHIP_PATH: SimpleNamespace(status_code=200, json=lambda: None)}
+        )
+        self.assertFalse(
+            is_team_member(
+                "octocat", "ministryofjustice", "repository-stats-viewers", github
+            )
+        )
+
     def test_non_member(self):
         github = FakeGitHub({MEMBERSHIP_PATH: response(404)})
         self.assertFalse(

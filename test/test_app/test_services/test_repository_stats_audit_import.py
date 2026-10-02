@@ -351,6 +351,66 @@ class TestBuildPlan(TempDirTestCase):
             [(n, t) for n, t, *_ in self.events(self.plan())], [("alpha", "archived")]
         )
 
+    def test_newly_created_and_already_archived_both_get_events(self):
+        write_baseline(self.dir, [("alpha", "public")])
+        write_daily(
+            self.dir,
+            date(2026, 9, 18),
+            [("alpha", "public"), ("fresh", "public", True)],
+            True,
+        )
+        fresh_events = [
+            (t, on)
+            for n, t, *_rest, on, _src in self.events(self.plan())
+            if n == "fresh"
+        ]
+        self.assertEqual(
+            fresh_events,
+            [("created", date(2026, 9, 18)), ("archived", date(2026, 9, 18))],
+        )
+
+    def test_pushed_at_old_none_falls_through_to_known_not_masked_forever(self):
+        """A snapshot can legitimately carry pushed_at=None (GitHub's real value was later
+        than that snapshot, see _not_after). A later file must still be able to pick up
+        the real value from the inventory instead of being stuck with that old None."""
+        write_workbook(
+            self.dir / "list_repos_17aug2026.xlsx",
+            {
+                "Repos": [
+                    BASELINE_HEADERS,
+                    [
+                        ORG,
+                        "alpha",
+                        f"{ORG}/alpha",
+                        "public",
+                        False,
+                        False,
+                        "2020-01-02T03:04:05Z",
+                        "",
+                        "x",
+                    ],
+                ],
+                "Summary": [["total"], [1]],
+            },
+        )
+        write_daily(self.dir, date(2026, 9, 27), [("alpha", "public")])
+        known = RepositoryRecord(
+            github_id=1,
+            org=ORG,
+            name="alpha",
+            visibility="public",
+            archived=False,
+            fork=False,
+            created_at=datetime(2020, 1, 2, 3, 4, 5),
+            pushed_at=datetime(2026, 9, 25, 10, 0, 0),
+        )
+        plan = self.plan([known])
+        baseline_alpha = plan.snapshots[date(2026, 8, 17)][0]
+        self.assertIsNone(baseline_alpha.pushed_at)  # too recent for that snapshot
+
+        daily_alpha = plan.snapshots[date(2026, 9, 27)][0]
+        self.assertEqual(daily_alpha.pushed_at, datetime(2026, 9, 25, 10, 0, 0))
+
     def test_new_repositorys_later_push_is_not_put_on_an_older_snapshot(self):
         write_baseline(self.dir, [("alpha", "public")])
         write_daily(

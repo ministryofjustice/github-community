@@ -337,6 +337,8 @@ def diff_records(
         if old is None:
             on = _created_on(record.created_at, previous_on, occurred_on)
             events.append(event(record, "created", on, to_vis=record.visibility))
+            if record.archived:
+                events.append(event(record, "archived", on))
             continue
         if old.visibility != record.visibility:
             events.append(
@@ -392,7 +394,9 @@ def build_plan(
                 if value is not None:
                     return value
                 if old is not None:
-                    return getattr(old, field)
+                    old_value = getattr(old, field)
+                    if old_value is not None:
+                        return old_value
                 if known is not None and field != "archived":
                     return getattr(known, field)
                 return default
