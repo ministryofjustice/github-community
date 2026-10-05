@@ -2,7 +2,15 @@ import logging
 import re
 from urllib.parse import urlencode
 
-from flask import Blueprint, Response, render_template, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 
 from app.projects.repository_stats.config.visibility_config import (
     IMPORT_APPROXIMATE_FROM,
@@ -13,6 +21,13 @@ from app.projects.repository_stats.config.visibility_config import (
 )
 from app.projects.repository_stats.repositories.visibility_repository import (
     VisibilityRepository,
+)
+from app.projects.repository_stats.services import github_sign_in as github
+from app.projects.repository_stats.services.visibility_access import (
+    check_stats_access,
+    clear_github_sign_in,
+    get_github_login,
+    remember_github_login,
 )
 from app.projects.repository_stats.services.visibility_logic import (
     parse_archived_query,
@@ -157,3 +172,105 @@ def archived_repositories():
         slack_channel_name=VISIBILITY_SLACK_CHANNEL_NAME,
         slack_channel_url=VISIBILITY_SLACK_CHANNEL_URL,
     )
+
+
+# "Continue with GitHub": confirms which GitHub account the signed-in user has, so their
+# membership of the access team can be checked. See services/github_sign_in.py.
+
+PROBLEM_TEMPLATE = "projects/repository_stats/pages/github_problem.html"
+
+
+def render_no_access():
+    return (
+        render_template(
+            "projects/repository_stats/pages/no_access.html",
+            github_login=get_github_login(session.get("user")),
+            slack_channel_name=VISIBILITY_SLACK_CHANNEL_NAME,
+            slack_channel_url=VISIBILITY_SLACK_CHANNEL_URL,
+        ),
+        403,
+    )
+
+
+def render_github_problem(problem: str, status: int, retry_href: str | None = None):
+    """problem: "cancelled", "state", "failed", "unavailable" or "not_configured".
+
+    retry_href defaults to starting the GitHub sign-in again.
+    """
+    return (
+        render_template(
+            PROBLEM_TEMPLATE,
+            problem=problem,
+            retry_href=retry_href or url_for("repository_stats_main.github_login"),
+            slack_channel_name=VISIBILITY_SLACK_CHANNEL_NAME,
+            slack_channel_url=VISIBILITY_SLACK_CHANNEL_URL,
+        ),
+        status,
+    )
+
+
+def github_callback_url() -> str:
+    # Built from the request host so dev and both production hostnames work. Always
+    # https, like the Auth0 callback: TLS ends at the ingress in front of the app.
+    return url_for(
+        "repository_stats_main.github_callback", _external=True, _scheme="https"
+    )
+
+
+@repository_stats_main.route("/github", methods=["GET"])
+@requires_auth
+def github_sign_in():
+    return render_template(
+        "projects/repository_stats/pages/github_sign_in.html",
+        switched=request.args.get("switched") == "1",
+    )
+
+
+@repository_stats_main.route("/github/login", methods=["GET"])
+@requires_auth
+def github_login():
+    if not github.is_configured():
+        logger.warning("Repository Stats GitHub sign-in is not configured")
+        return render_github_problem("not_configured", 503)
+    return redirect(github.authorize_url(github_callback_url(), session))
+
+
+@repository_stats_main.route("/github/callback", methods=["GET"])
+@requires_auth
+def github_callback():
+    state_matches = github.take_state_matches(request.args.get("state"), session)
+    error = request.args.get("error")
+    if error == "access_denied":
+        return render_github_problem("cancelled", 200)
+    if not state_matches:
+        logger.warning("Repository Stats GitHub sign-in state was missing or wrong")
+        return render_github_problem("state", 400)
+    code = request.args.get("code")
+    if error or not code:
+        logger.warning("Repository Stats GitHub sign-in returned no code")
+        return render_github_problem("failed", 400)
+    if not github.is_configured():
+        logger.warning("Repository Stats GitHub sign-in is not configured")
+        return render_github_problem("not_configured", 503)
+
+    try:
+        login = github.fetch_github_login(code, github_callback_url())
+    except github.GitHubUnavailableError as error:
+        logger.warning("Repository Stats GitHub sign-in failed: %s", error)
+        return render_github_problem("unavailable", 503)
+    except github.GitHubSignInError as error:
+        logger.warning("Repository Stats GitHub sign-in failed: %s", error)
+        return render_github_problem("failed", 502)
+
+    remember_github_login(session.get("user"), login)
+    # Check the team now so the result is ready for the page we send them back to.
+    check_stats_access(session.get("user"))
+    next_path = github.safe_next_path(session.pop(github.NEXT_SESSION_KEY, None))
+    return redirect(next_path or url_for("repository_stats_main.index"))
+
+
+@repository_stats_main.route("/github/switch", methods=["POST"])
+@requires_auth
+def github_switch_account():
+    clear_github_sign_in(session)
+    return redirect(url_for("repository_stats_main.github_sign_in", switched="1"))

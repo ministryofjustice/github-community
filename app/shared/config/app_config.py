@@ -65,6 +65,11 @@ app_config = SimpleNamespace(
         # "org/team-slug", or just "team-slug" for the ministryofjustice organisation.
         # Unset means Repository Stats is open to everyone who can sign in.
         stats_access_team=__get_env_var("GITHUB_STATS_ACCESS_TEAM") or None,
+        # GitHub OAuth App for the Repository Stats "Continue with GitHub" step.
+        stats_oauth=SimpleNamespace(
+            client_id=__get_env_var("GITHUB_STATS_OAUTH_CLIENT_ID"),
+            client_secret=__get_env_var("GITHUB_STATS_OAUTH_CLIENT_SECRET"),
+        ),
     ),
     sentry=SimpleNamespace(
         dsn_key=__get_env_var("SENTRY_DSN_KEY"), environment=__get_env_var("SENTRY_ENV")

@@ -1,14 +1,17 @@
 import csv
 import io
+import json
 import os
 import re
 import time
 import unittest
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlencode, urlsplit
 
+import requests
 from flask import Flask
 
 from app.projects.repository_stats.config.visibility_config import (
@@ -20,6 +23,11 @@ from app.projects.repository_stats.services.business_units import (
     RepositoryBusinessUnits,
 )
 from app.projects.repository_stats.services.overview_logic import RepositoryTeams, Team
+from app.projects.repository_stats.services.visibility_access import (
+    GITHUB_SESSION_KEY,
+    SESSION_KEY,
+    GitHubAccessCheckError,
+)
 from app.projects.repository_stats.services.visibility_logic import (
     VisibilityEvent,
     VisibilitySnapshot,
@@ -272,69 +280,298 @@ ROUTES = (
     "/repository-stats/visibility/changes.csv",
     "/repository-stats/archived",
 )
+GITHUB_ROUTES = (
+    "/repository-stats/github",
+    "/repository-stats/github/login",
+    "/repository-stats/github/callback",
+    "/repository-stats/github/switch",
+)
 ACCESS_TEAM = "ministryofjustice/repository-stats-viewers"
-MEMBERSHIP = "app.projects.repository_stats.services.visibility_access.is_team_member"
+ACCESS = "app.projects.repository_stats.services.visibility_access"
+MEMBERSHIP = f"{ACCESS}.is_team_member"
+SIGN_IN = "app.projects.repository_stats.services.github_sign_in"
+SIGN_IN_URL = "/repository-stats/github"
+GITHUB_LOGIN_URL = "/repository-stats/github/login"
+CALLBACK_URL = "/repository-stats/github/callback"
+SWITCH_URL = "/repository-stats/github/switch"
+NO_ACCESS_HEADING = (
+    '<h1 class="govuk-heading-l">You don\'t have access to Repository Stats yet</h1>'
+)
+UNAVAILABLE_HEADING = "Sorry, we can&#39;t check your access right now"
+MICROSOFT_SUB = "waad|pairwise-id"
 
 
-class TestStatsAccess(RepositoryStatsTestCase):
+def microsoft_user(sub=MICROSOFT_SUB):
+    return {
+        "expires_at": time.time() + 3600,
+        "userinfo": {"sub": sub, "nickname": "octo.cat"},
+    }
+
+
+class StatsAccessTestCase(RepositoryStatsTestCase):
+    """Auth on, the access team set, signed in with Microsoft but not yet GitHub."""
+
     def setUp(self):
         super().setUp()
         for target, value in (
             ("app.shared.middleware.auth.app_config.auth_enabled", True),
+            (f"{ACCESS}.app_config.github.stats_access_team", ACCESS_TEAM),
+            (f"{ACCESS}.get_github_client", lambda: object()),
             (
-                "app.projects.repository_stats.services.visibility_access.app_config.github.stats_access_team",
-                ACCESS_TEAM,
-            ),
-            (
-                "app.projects.repository_stats.services.visibility_access.get_github_client",
-                lambda: object(),
+                f"{SIGN_IN}.app_config.github.stats_oauth",
+                SimpleNamespace(client_id="client-id", client_secret="client-secret"),
             ),
         ):
             patcher = patch(target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
         with self.client.session_transaction() as flask_session:
-            flask_session["user"] = {
-                "expires_at": time.time() + 3600,
-                "userinfo": {"sub": "github|583231", "nickname": "octocat"},
-            }
+            flask_session["user"] = microsoft_user()
 
-    def test_team_member_can_see_every_route(self):
-        with patch(MEMBERSHIP, return_value=True) as membership:
-            for url in ROUTES:
-                with self.subTest(url=url):
-                    response = self.client.get(url)
-                    self.assertEqual(response.status_code, 200)
-                    self.assertNotIn(
-                        b"have access to Repository Stats yet", response.data
-                    )
-        membership.assert_called_once()
-        self.assertEqual(
-            membership.call_args.args[:3],
-            ("octocat", "ministryofjustice", "repository-stats-viewers"),
+    def sign_in_to_github(self, login="octocat", checked_at=None, has_access=True):
+        with self.client.session_transaction() as flask_session:
+            flask_session[GITHUB_SESSION_KEY] = {
+                "login": login,
+                "auth_sub": MICROSOFT_SUB,
+                "signed_in_at": time.time(),
+            }
+            if checked_at is not None:
+                flask_session[SESSION_KEY] = {
+                    ACCESS_TEAM: {
+                        "login": login,
+                        "has_access": has_access,
+                        "checked_at": checked_at,
+                    }
+                }
+
+    def session(self):
+        with self.client.session_transaction() as flask_session:
+            return dict(flask_session)
+
+    def start_github_sign_in(self):
+        """Go to GitHub; returns the state GitHub would send back."""
+        response = self.client.get(GITHUB_LOGIN_URL)
+        self.assertEqual(response.status_code, 302)
+        return parse_qs(urlsplit(response.location).query)["state"][0]
+
+    def callback(self, query, login="octocat", token=None, user=None):
+        token = token or SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"access_token": "gho_x"}
+        )
+        user = user or SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"login": login}
         )
 
+        def result(value):
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        with (
+            patch(
+                f"{SIGN_IN}.requests.post", side_effect=lambda *a, **k: result(token)
+            ),
+            patch(f"{SIGN_IN}.requests.get", side_effect=lambda *a, **k: result(user)),
+        ):
+            return self.client.get(f"{CALLBACK_URL}?{urlencode(query)}")
+
+
+class TestStatsAccess(StatsAccessTestCase):
     def test_every_stats_route_is_access_tested(self):
         rules = {
             rule.rule
             for rule in self.client.application.url_map.iter_rules()
             if rule.endpoint.startswith("repository_stats_main.")
         }
-        self.assertEqual(rules, set(ROUTES))
+        self.assertEqual(rules, set(ROUTES) | set(GITHUB_ROUTES))
 
-    def test_non_member_sees_no_access_page_on_every_route(self):
+    def test_no_github_sign_in_goes_to_confirm_page_and_remembers_the_page(self):
+        with patch(MEMBERSHIP) as membership:
+            for url in ROUTES:
+                with self.subTest(url=url):
+                    response = self.client.get(f"{url}?a=1")
+                    self.assertEqual(response.status_code, 302)
+                    self.assertEqual(response.location, SIGN_IN_URL)
+                    self.assertEqual(self.session()["stats_github_next"], f"{url}?a=1")
+        membership.assert_not_called()
+
+    def test_confirm_page(self):
+        response = self.client.get(SIGN_IN_URL)
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        main_html = body.split("<main", 1)[1].split("</main>", 1)[0]
+        self.assertIn(
+            '<h1 class="govuk-heading-l">Confirm your GitHub account</h1>', main_html
+        )
+        self.assertIn("members of a specific GitHub team", main_html)
+        self.assertIn("We don't ask for any permissions", main_html)
+        start_button = re.search(r"<a [^>]*govuk-button--start[^>]*>", main_html)
+        self.assertIsNotNone(start_button)
+        self.assertIn(f'href="{GITHUB_LOGIN_URL}"', start_button.group(0))
+        self.assertIn("Continue with GitHub", main_html)
+        self.assertNotIn("sign out of github.com", main_html)
+
+    def test_confirm_page_needs_microsoft_sign_in(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
+        for url in (SIGN_IN_URL, GITHUB_LOGIN_URL, f"{CALLBACK_URL}?code=x&state=y"):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response.location, "/auth/login")
+        response = self.client.post(SWITCH_URL)
+        self.assertEqual(response.location, "/auth/login")
+
+    def sign_in_on_host(self, base_url):
+        with self.client.session_transaction(base_url=base_url) as flask_session:
+            flask_session["user"] = microsoft_user()
+
+    def test_github_login_redirects_to_github_without_scopes(self):
+        self.sign_in_on_host("http://github-community.service.justice.gov.uk")
+        response = self.client.get(
+            GITHUB_LOGIN_URL, base_url="http://github-community.service.justice.gov.uk"
+        )
+        self.assertEqual(response.status_code, 302)
+        url = urlsplit(response.location)
+        self.assertEqual(url.netloc, "github.com")
+        self.assertEqual(url.path, "/login/oauth/authorize")
+        query = parse_qs(url.query)
+        self.assertEqual(query["client_id"], ["client-id"])
+        # https even when the request reached the app over http behind the proxy.
+        self.assertEqual(
+            query["redirect_uri"],
+            [
+                "https://github-community.service.justice.gov.uk/repository-stats/github/callback"
+            ],
+        )
+        self.assertNotIn("scope", query)
+        with self.client.session_transaction(
+            base_url="http://github-community.service.justice.gov.uk"
+        ) as flask_session:
+            self.assertEqual(
+                query["state"], [flask_session["stats_github_oauth_state"]]
+            )
+
+    def test_redirect_uri_follows_the_request_host(self):
+        for host in (
+            "github-community-dev.cloud-platform.service.justice.gov.uk",
+            "github-community.cloud-platform.service.justice.gov.uk",
+        ):
+            with self.subTest(host=host):
+                self.sign_in_on_host(f"https://{host}")
+                response = self.client.get(GITHUB_LOGIN_URL, base_url=f"https://{host}")
+                query = parse_qs(urlsplit(response.location).query)
+                self.assertEqual(
+                    query["redirect_uri"],
+                    [f"https://{host}/repository-stats/github/callback"],
+                )
+
+    def test_github_login_not_configured(self):
+        with patch(
+            f"{SIGN_IN}.app_config.github.stats_oauth",
+            SimpleNamespace(client_id=None, client_secret=None),
+        ):
+            response = self.client.get(GITHUB_LOGIN_URL)
+        self.assertEqual(response.status_code, 503)
+        self.assertIn(
+            "GitHub sign-in isn&#39;t available", response.get_data(as_text=True)
+        )
+
+    def test_happy_path_member(self):
+        self.client.get("/repository-stats/overview?open=ministryofjustice")
+        state = self.start_github_sign_in()
+        with patch(MEMBERSHIP, return_value=True) as membership:
+            response = self.callback({"code": "abc", "state": state})
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(
+                response.location, "/repository-stats/overview?open=ministryofjustice"
+            )
+            # The team was checked in the callback; the page uses that result.
+            membership.assert_called_once()
+            self.assertEqual(
+                membership.call_args.args[:3],
+                ("octocat", "ministryofjustice", "repository-stats-viewers"),
+            )
+            page = self.client.get(response.location)
+            self.assertEqual(page.status_code, 200)
+            membership.assert_called_once()
+        saved = self.session()
+        self.assertEqual(saved[GITHUB_SESSION_KEY]["login"], "octocat")
+        self.assertEqual(saved[GITHUB_SESSION_KEY]["auth_sub"], MICROSOFT_SUB)
+        self.assertIn("signed_in_at", saved[GITHUB_SESSION_KEY])
+        self.assertTrue(saved[SESSION_KEY][ACCESS_TEAM]["has_access"])
+        self.assertNotIn("stats_github_oauth_state", saved)
+        self.assertNotIn("stats_github_next", saved)
+        # The GitHub token is never kept.
+        self.assertNotIn("gho_x", json.dumps(saved))
+
+    def test_token_exchange_sends_the_code_and_callback_url(self):
+        state = self.start_github_sign_in()
+        token = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"access_token": "gho_x"}
+        )
+        user = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"login": "octocat"}
+        )
+        with (
+            patch(f"{SIGN_IN}.requests.post", return_value=token) as post,
+            patch(f"{SIGN_IN}.requests.get", return_value=user),
+            patch(MEMBERSHIP, return_value=True),
+        ):
+            self.client.get(f"{CALLBACK_URL}?code=abc&state={state}")
+        self.assertEqual(post.call_args.kwargs["data"]["code"], "abc")
+        self.assertEqual(
+            post.call_args.kwargs["data"]["redirect_uri"],
+            "https://localhost/repository-stats/github/callback",
+        )
+
+    def test_happy_path_without_a_remembered_page_goes_to_stats_home(self):
+        state = self.start_github_sign_in()
+        with patch(MEMBERSHIP, return_value=True):
+            response = self.callback({"code": "abc", "state": state})
+        self.assertEqual(response.location, "/repository-stats/")
+
+    def test_unsafe_next_url_is_rejected(self):
+        for next_path in (
+            "https://evil.example/",
+            "//evil.example/repository-stats/",
+            "/repository-standards/",
+        ):
+            with self.subTest(next_path=next_path):
+                state = self.start_github_sign_in()
+                with self.client.session_transaction() as flask_session:
+                    flask_session["stats_github_next"] = next_path
+                with patch(MEMBERSHIP, return_value=True):
+                    response = self.callback({"code": "abc", "state": state})
+                self.assertEqual(response.location, "/repository-stats/")
+
+    def test_not_in_team(self):
+        state = self.start_github_sign_in()
         with patch(MEMBERSHIP, return_value=False) as membership:
+            self.callback({"code": "abc", "state": state})
             for url in ROUTES:
                 with self.subTest(url=url):
                     response = self.client.get(url)
                     self.assertEqual(response.status_code, 403)
                     self.assertIsNone(response.location)
-                    self.assertEqual(response.request.path, url)
                     self.assertEqual(response.mimetype, "text/html")
                     body = response.get_data(as_text=True)
                     main_html = body.split("<main", 1)[1].split("</main>", 1)[0]
+                    self.assertIn(NO_ACCESS_HEADING, main_html)
                     self.assertIn(
-                        '<h1 class="govuk-heading-l">You don\'t have access to Repository Stats yet</h1>',
+                        "You confirmed your GitHub account as <strong>octocat</strong>.",
+                        main_html,
+                    )
+                    # Slack is the only way to ask; the homepage link comes last.
+                    self.assertEqual(
+                        re.findall(
+                            r'<a [^>]*href="([^"]+)"', main_html.split("</nav>", 1)[1]
+                        ),
+                        [VISIBILITY_SLACK_CHANNEL_URL, "/"],
+                    )
+                    self.assertIn(
+                        '<p class="govuk-body"><a class="govuk-link" href="/">'
+                        "Go to the GitHub Community homepage</a></p>",
                         main_html,
                     )
                     self.assertIn(
@@ -342,15 +579,212 @@ class TestStatsAccess(RepositoryStatsTestCase):
                         f'rel="noopener noreferrer">{VISIBILITY_SLACK_CHANNEL_NAME}',
                         main_html,
                     )
+                    self.assertIn(f'action="{SWITCH_URL}"', main_html)
+                    self.assertIn("Use a different GitHub account", main_html)
+                    self.assertIn("sign out of github.com first", main_html)
                     self.assertNotIn("Repository visibility changes", main_html)
-                    self.assertNotIn("Archived public repositories", main_html)
         membership.assert_called_once()
 
-    def test_github_error_denies_access(self):
+    def test_cancel_on_github(self):
+        state = self.start_github_sign_in()
+        with patch(MEMBERSHIP) as membership:
+            response = self.callback(
+                {
+                    "error": "access_denied",
+                    "error_description": "The user has denied your application access.",
+                    "state": state,
+                }
+            )
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("You didn&#39;t confirm your GitHub account", body)
+        self.assertIn(f'href="{GITHUB_LOGIN_URL}"', body)
+        self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+        membership.assert_not_called()
+
+    def test_bad_missing_or_reused_state(self):
+        for name, make_query in (
+            ("wrong", lambda state: {"code": "abc", "state": state + "x"}),
+            ("missing", lambda state: {"code": "abc"}),
+            ("empty", lambda state: {"code": "abc", "state": ""}),
+        ):
+            with self.subTest(name=name):
+                state = self.start_github_sign_in()
+                with patch(MEMBERSHIP) as membership:
+                    response = self.callback(make_query(state))
+                self.assert_state_problem(response)
+                membership.assert_not_called()
+                # The saved state is used up even when it didn't match.
+                self.assertNotIn("stats_github_oauth_state", self.session())
+
+        with self.subTest(name="reused"):
+            state = self.start_github_sign_in()
+            with patch(MEMBERSHIP, return_value=True):
+                self.assertEqual(
+                    self.callback({"code": "abc", "state": state}).status_code, 302
+                )
+            with self.client.session_transaction() as flask_session:
+                flask_session.pop(GITHUB_SESSION_KEY)
+            self.assert_state_problem(self.callback({"code": "abc", "state": state}))
+            self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+        with self.subTest(name="never started"):
+            with self.client.session_transaction() as flask_session:
+                flask_session.pop("stats_github_oauth_state", None)
+            self.assert_state_problem(self.callback({"code": "abc", "state": "abc"}))
+
+    def assert_state_problem(self, response):
+        self.assertEqual(response.status_code, 400)
+        body = response.get_data(as_text=True)
+        self.assertIn("Your GitHub sign-in has expired", body)
+        self.assertIn(f'href="{GITHUB_LOGIN_URL}"', body)
+        self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+    def test_other_github_error_or_missing_code(self):
+        for query in ({"error": "redirect_uri_mismatch"}, {}):
+            with self.subTest(query=query):
+                state = self.start_github_sign_in()
+                response = self.callback({**query, "state": state})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(
+                    "We couldn&#39;t confirm your GitHub account",
+                    response.get_data(as_text=True),
+                )
+                self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+    def test_token_exchange_failure(self):
+        state = self.start_github_sign_in()
+        response = self.callback(
+            {"code": "abc", "state": state},
+            token=SimpleNamespace(
+                status_code=200,
+                ok=True,
+                json=lambda: {"error": "bad_verification_code"},
+            ),
+        )
+        self.assertEqual(response.status_code, 502)
+        body = response.get_data(as_text=True)
+        self.assertIn("We couldn&#39;t confirm your GitHub account", body)
+        self.assertIn(f'href="{GITHUB_LOGIN_URL}"', body)
+        self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+    def test_user_lookup_failure(self):
+        state = self.start_github_sign_in()
+        response = self.callback(
+            {"code": "abc", "state": state},
+            user=SimpleNamespace(status_code=401, ok=False, json=dict),
+        )
+        self.assertEqual(response.status_code, 502)
+        self.assertIn(
+            "We couldn&#39;t confirm your GitHub account",
+            response.get_data(as_text=True),
+        )
+        self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+    def test_github_down_during_sign_in(self):
+        for token, user in (
+            (requests.ReadTimeout("slow"), None),
+            (SimpleNamespace(status_code=502, ok=False, json=dict), None),
+            (None, requests.ConnectionError("down")),
+        ):
+            with self.subTest(token=token, user=user):
+                state = self.start_github_sign_in()
+                response = self.callback(
+                    {"code": "abc", "state": state}, token=token, user=user
+                )
+                self.assertEqual(response.status_code, 503)
+                body = response.get_data(as_text=True)
+                self.assertIn(UNAVAILABLE_HEADING, body)
+                self.assertIn("Try again later", body)
+                self.assertIn(f'href="{GITHUB_LOGIN_URL}"', body)
+                self.assertNotIn(GITHUB_SESSION_KEY, self.session())
+
+    def test_team_check_error_fails_closed(self):
+        self.sign_in_to_github()
+        for error in (ConnectionError("down"), GitHubAccessCheckError("status 500")):
+            with patch(MEMBERSHIP, side_effect=error):
+                for url in ROUTES:
+                    with self.subTest(error=error, url=url):
+                        response = self.client.get(url)
+                        self.assertEqual(response.status_code, 503)
+                        body = response.get_data(as_text=True)
+                        self.assertIn(UNAVAILABLE_HEADING, body)
+                        self.assertIn(f'href="{url}"', body)
+                        self.assertNotIn("Repository visibility changes", body)
+        self.assertNotIn(SESSION_KEY, self.session())
+
+    def test_team_check_error_in_callback_fails_closed(self):
+        state = self.start_github_sign_in()
         with patch(MEMBERSHIP, side_effect=ConnectionError("down")):
+            response = self.callback({"code": "abc", "state": state})
+            self.assertEqual(response.status_code, 302)
+            page = self.client.get(response.location)
+        self.assertEqual(page.status_code, 503)
+        self.assertIn(UNAVAILABLE_HEADING, page.get_data(as_text=True))
+
+    def test_member_with_fresh_cache_is_not_rechecked(self):
+        self.sign_in_to_github(checked_at=time.time() - 60)
+        with patch(MEMBERSHIP) as membership:
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 403)
+                    self.assertEqual(self.client.get(url).status_code, 200)
+        membership.assert_not_called()
+
+    def test_hourly_recheck_keeps_a_member_in(self):
+        self.sign_in_to_github(checked_at=time.time() - 3601)
+        with patch(MEMBERSHIP, return_value=True) as membership:
+            self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+            self.assertEqual(self.client.get(ROUTES[1]).status_code, 200)
+        membership.assert_called_once()
+        self.assertGreater(
+            self.session()[SESSION_KEY][ACCESS_TEAM]["checked_at"], time.time() - 60
+        )
+
+    def test_hourly_recheck_denies_someone_removed_from_the_team(self):
+        self.sign_in_to_github(checked_at=time.time() - 3601)
+        with patch(MEMBERSHIP, return_value=False) as membership:
+            response = self.client.get(ROUTES[1])
+        self.assertEqual(response.status_code, 403)
+        self.assertIn(NO_ACCESS_HEADING, response.get_data(as_text=True))
+        # Checked silently with the stored login; no new GitHub sign-in.
+        self.assertEqual(membership.call_args.args[0], "octocat")
+        self.assertEqual(self.session()[GITHUB_SESSION_KEY]["login"], "octocat")
+
+    def test_new_session_triggers_a_check(self):
+        with patch(MEMBERSHIP, return_value=True) as membership:
+            for _ in range(2):
+                self.client = create_test_app().test_client()
+                with self.client.session_transaction() as flask_session:
+                    flask_session["user"] = microsoft_user()
+                self.sign_in_to_github()
+                self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+        self.assertEqual(membership.call_count, 2)
+
+    def test_github_login_for_another_microsoft_user_is_not_used(self):
+        self.sign_in_to_github(checked_at=time.time())
+        with self.client.session_transaction() as flask_session:
+            flask_session["user"] = microsoft_user("waad|someone-else")
+        with patch(MEMBERSHIP) as membership:
+            response = self.client.get(ROUTES[0])
+        self.assertEqual(response.location, SIGN_IN_URL)
+        membership.assert_not_called()
+
+    def test_use_a_different_github_account(self):
+        self.sign_in_to_github(checked_at=time.time(), has_access=False)
+        response = self.client.post(SWITCH_URL)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, f"{SIGN_IN_URL}?switched=1")
+        saved = self.session()
+        self.assertNotIn(GITHUB_SESSION_KEY, saved)
+        self.assertNotIn(SESSION_KEY, saved)
+        self.assertIn("user", saved)
+        body = self.client.get(response.location).get_data(as_text=True)
+        self.assertIn(
+            '<a class="govuk-link" href="https://github.com/logout">sign out of github.com</a>',
+            body,
+        )
+        self.assertIn("Continue with GitHub", body)
+        self.assertEqual(self.client.get(SWITCH_URL).status_code, 405)
 
     def test_signed_out_user_still_goes_to_login_first(self):
         with self.client.session_transaction() as flask_session:
@@ -363,12 +797,9 @@ class TestStatsAccess(RepositoryStatsTestCase):
                     self.assertEqual(response.location, "/auth/login")
         membership.assert_not_called()
 
-    def test_team_unset_allows_everyone_without_calling_github(self):
+    def test_team_unset_allows_everyone_without_github_sign_in(self):
         with (
-            patch(
-                "app.projects.repository_stats.services.visibility_access.app_config.github.stats_access_team",
-                None,
-            ),
+            patch(f"{ACCESS}.app_config.github.stats_access_team", None),
             patch(MEMBERSHIP) as membership,
         ):
             for url in ROUTES:
@@ -377,6 +808,8 @@ class TestStatsAccess(RepositoryStatsTestCase):
         membership.assert_not_called()
 
     def test_auth_disabled_allows_everyone_without_calling_github(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
         with (
             patch("app.shared.middleware.auth.app_config.auth_enabled", False),
             patch(MEMBERSHIP) as membership,
@@ -391,6 +824,46 @@ class TestStatsAccess(RepositoryStatsTestCase):
             response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         self.assertIn('href="/repository-stats/"', response.get_data(as_text=True))
+
+
+class TestSharedAuthRoutes(unittest.TestCase):
+    """/auth/logout and /auth/callback (Microsoft sign-in through Auth0)."""
+
+    def setUp(self):
+        app = create_test_app()
+        with app.app_context():
+            from app.shared.routes import auth
+
+        self.auth = auth
+        app.register_blueprint(auth.auth_route, url_prefix="/auth")
+        self.client = app.test_client()
+        with self.client.session_transaction() as flask_session:
+            flask_session["user"] = microsoft_user()
+            flask_session[GITHUB_SESSION_KEY] = {
+                "login": "octocat",
+                "auth_sub": MICROSOFT_SUB,
+            }
+            flask_session[SESSION_KEY] = {ACCESS_TEAM: {"has_access": True}}
+            flask_session["stats_github_oauth_state"] = "abc"
+
+    def test_logout_clears_microsoft_and_github_sign_in(self):
+        with patch.object(self.auth.auth0_service, "domain", "example.auth0.test"):
+            response = self.client.get("/auth/logout")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            response.location.startswith("https://example.auth0.test/v2/logout")
+        )
+        with self.client.session_transaction() as flask_session:
+            self.assertEqual(dict(flask_session), {})
+
+    def test_new_microsoft_sign_in_gets_a_fresh_team_check(self):
+        with patch.object(
+            self.auth.auth0_service, "get_access_token", return_value=microsoft_user()
+        ):
+            self.client.get("/auth/callback")
+        with self.client.session_transaction() as flask_session:
+            self.assertNotIn(SESSION_KEY, flask_session)
+            self.assertEqual(flask_session[GITHUB_SESSION_KEY]["login"], "octocat")
 
 
 class TestLandingPages(RepositoryStatsTestCase):
@@ -1361,7 +1834,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             re.DOTALL,
         ):
             name = re.sub(
-                r'<span class="(?:govuk-visually-hidden|app-overview-caption)">.*?</span>'
+                r'<span class="govuk-visually-hidden">.*?</span>'
                 r"|<[^>]+>",
                 "",
                 row.split("</th>", 1)[0],
@@ -1437,6 +1910,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             [
                 ("all", "All organisations", ["34", "3", "31", "0"]),
                 ("org", ORG, ["33", "2", "31", "0"]),
+                ("group-label", "Business unit", []),
                 ("business-unit", "HMPPS", ["1", "0", "1", "0"]),
                 ("business-unit", "Office of the CTO", ["1", "1", "0", "0"]),
                 ("business-unit", "Unknown", ["31", "1", "30", "0"]),
@@ -1478,7 +1952,16 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             body,
         )
         self.assertIn(f'id="overview-{ORG}-office-of-the-cto"', body)
-        self.assertIn('<span class="app-overview-caption">Business unit</span>', body)
+        # "Business unit" once, above the group, not under every business unit.
+        self.assertEqual(body.count(">Business unit</td>"), 1)
+        self.assertIn(
+            '<tr class="govuk-table__row app-overview-row--group-label">\n'
+            '                  <td class="govuk-table__cell app-overview-group-label '
+            'app-overview-group-label--business-unit" colspan="5">Business unit</td>',
+            body,
+        )
+        self.assertNotIn("app-overview-caption", body)
+        self.assertNotIn(">Team</td>", body)
         self.assertNotIn("app-overview-row--team", body)
         # Totals are bold on organisation and business unit rows.
         bu_row = body.split(f'id="overview-{ORG}-hmpps"', 1)[1].split("</tr>", 1)[0]
@@ -1494,11 +1977,14 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             [
                 ("all", "All organisations", ["34", "3", "31", "0"]),
                 ("org", ORG, ["33", "2", "31", "0"]),
+                ("group-label", "Business unit", []),
                 ("business-unit", "HMPPS", ["1", "0", "1", "0"]),
                 ("business-unit", "Office of the CTO", ["1", "1", "0", "0"]),
+                ("group-label", "Team", []),
                 ("team", "platform-team", ["1", "1", "0", "0"]),
                 ("team", "service-team", ["1", "1", "0", "0"]),
                 ("business-unit", "Unknown", ["31", "1", "30", "0"]),
+                ("group-label", "Team", []),
                 ("team", "No team", ["31", "1", "30", "0"]),
                 ("org", OTHER_ORG, ["1", "1", "0", "0"]),
             ],
@@ -1632,6 +2118,58 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             self.rows(body)[0],
             ("all", "All organisations", ["1,234", "0", "1,234", "0"]),
         )
+
+    def test_group_captions_once_per_group(self):
+        _, body = self.get(OVERVIEW_URL)
+        self.assertNotIn("app-overview-row--group-label", body)
+
+        _, body = self.get(
+            f"{OVERVIEW_URL}?open={ORG}&open={OTHER_ORG}&open={ORG}/Office of the CTO"
+            f"&open={ORG}/Unknown"
+        )
+        kinds = [(kind, name) for kind, name, _ in self.rows(body)]
+        labels = [
+            (index, name)
+            for index, (kind, name) in enumerate(kinds)
+            if kind == "group-label"
+        ]
+        # One "Business unit" line directly above each open organisation's business
+        # units, and one "Team" line directly above each open business unit's teams.
+        self.assertEqual(
+            [name for _, name in labels],
+            ["Business unit", "Team", "Team", "Business unit"],
+        )
+        for index, name in labels:
+            expected = "business-unit" if name == "Business unit" else "team"
+            self.assertEqual(kinds[index + 1][0], expected)
+            self.assertIn(kinds[index - 1][0], ("org", "business-unit"))
+        for kind, name in kinds:
+            if kind != "group-label":
+                self.assertNotIn(name, ("Business unit", "Team"))
+        # A plain line spanning the table: no header cell, no bold, no toggle.
+        for row in re.findall(
+            r'<tr class="govuk-table__row app-overview-row--group-label">(.*?)</tr>',
+            body,
+            re.DOTALL,
+        ):
+            self.assertNotIn("<th", row)
+            self.assertNotIn("<a", row)
+            self.assertNotIn("app-overview-strong", row)
+            self.assertIn('colspan="5"', row)
+
+    def test_group_caption_style(self):
+        with open(
+            os.path.join(
+                APP_DIR,
+                "static/projects/repository_stats/stylesheets/visibility.css",
+            )
+        ) as stylesheet:
+            css = stylesheet.read()
+        rule = css.split(".app-overview-group-label {", 1)[1].split("}", 1)[0]
+        self.assertIn("font-weight: 400;", rule)
+        self.assertNotIn("background", rule)
+        self.assertNotIn("text-transform", rule)
+        self.assertNotIn(".app-overview-row--group-label", css)
 
 
 class TestRepositoryOverviewNoData(RepositoryStatsTestCase):

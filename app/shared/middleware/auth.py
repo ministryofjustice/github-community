@@ -6,6 +6,7 @@ from flask import (
     redirect,
     request,
     session,
+    url_for,
 )
 
 from app.shared.config.app_config import app_config
@@ -28,21 +29,15 @@ def requires_auth(function_f):
 
 
 def _render_stats_no_access():
-    from flask import render_template
+    from app.projects.repository_stats.routes.main import render_no_access
 
-    from app.projects.repository_stats.config.visibility_config import (
-        VISIBILITY_SLACK_CHANNEL_NAME,
-        VISIBILITY_SLACK_CHANNEL_URL,
-    )
+    return render_no_access()
 
-    return (
-        render_template(
-            "projects/repository_stats/pages/no_access.html",
-            slack_channel_name=VISIBILITY_SLACK_CHANNEL_NAME,
-            slack_channel_url=VISIBILITY_SLACK_CHANNEL_URL,
-        ),
-        403,
-    )
+
+def _render_stats_unavailable(retry_href):
+    from app.projects.repository_stats.routes.main import render_github_problem
+
+    return render_github_problem("unavailable", 503, retry_href=retry_href)
 
 
 def requires_stats_access(function_f=None, *, team=None, render_no_access=None):
@@ -50,21 +45,37 @@ def requires_stats_access(function_f=None, *, team=None, render_no_access=None):
 
     Use under @requires_auth, either bare (@requires_stats_access) to check the team in
     GITHUB_STATS_ACCESS_TEAM, or with team="org/team-slug" so a report can use its own
-    team. With no team configured, or AUTH_ENABLED=false, everyone has access. The no-access
-    page is rendered in place (not a redirect), so the URL stays the page requested.
+    team. With no team configured, or AUTH_ENABLED=false, everyone has access.
+
+    Someone who hasn't confirmed their GitHub account yet is sent to the "Continue with
+    GitHub" page and brought back here afterwards. The no-access and "try again later"
+    pages are rendered in place (not a redirect), so the URL stays the page requested.
     """
+    from app.projects.repository_stats.services.github_sign_in import (
+        NEXT_SESSION_KEY,
+        safe_next_path,
+    )
     from app.projects.repository_stats.services.visibility_access import (
-        user_has_stats_access,
+        StatsAccess,
+        check_stats_access,
     )
 
     def decorator(view):
         @wraps(view)
         def decorated(*args, **kwargs):
-            if app_config.auth_enabled and not user_has_stats_access(
-                session.get("user"), team=team
-            ):
-                return (render_no_access or _render_stats_no_access)()
-            return view(*args, **kwargs)
+            if not app_config.auth_enabled:
+                return view(*args, **kwargs)
+            access = check_stats_access(session.get("user"), team=team)
+            if access is StatsAccess.ALLOWED:
+                return view(*args, **kwargs)
+            next_path = safe_next_path(request.full_path)
+            if access is StatsAccess.NEEDS_GITHUB:
+                if next_path:
+                    session[NEXT_SESSION_KEY] = next_path
+                return redirect(url_for("repository_stats_main.github_sign_in"))
+            if access is StatsAccess.UNAVAILABLE:
+                return _render_stats_unavailable(next_path or request.path)
+            return (render_no_access or _render_stats_no_access)()
 
         return decorated
 

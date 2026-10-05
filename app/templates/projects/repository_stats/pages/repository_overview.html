@@ -62,16 +62,25 @@
               {{ numeric_cells(org.totals) }}
             </tr>
             {% if org_open %}
+              {% if org.children %}
+                <tr class="govuk-table__row app-overview-row--group-label">
+                  <td class="govuk-table__cell app-overview-group-label app-overview-group-label--business-unit" colspan="5">Business unit</td>
+                </tr>
+              {% endif %}
               {% for business_unit in org.children %}
                 {% set unit_open = business_unit.key in open_keys %}
                 <tr class="govuk-table__row app-overview-row--business-unit{% if unit_open %} app-overview-row--expanded{% endif %}" id="{{ anchors[business_unit.key] }}">
                   <th scope="row" class="govuk-table__header app-overview-name--business-unit">
                     <a class="govuk-link app-overview-toggle{% if unit_open %} app-overview-toggle--open{% endif %}" href="{{ toggle_hrefs[business_unit.key] }}">{{ business_unit.name }}<span class="govuk-visually-hidden"> ({{ "hide" if unit_open else "show" }} teams)</span></a>
-                    <span class="app-overview-caption">Business unit</span>
                   </th>
                   {{ numeric_cells(business_unit.totals) }}
                 </tr>
                 {% if unit_open %}
+                  {% if business_unit.children %}
+                    <tr class="govuk-table__row app-overview-row--group-label">
+                      <td class="govuk-table__cell app-overview-group-label app-overview-group-label--team" colspan="5">Team</td>
+                    </tr>
+                  {% endif %}
                   {% for team in business_unit.children %}
                     <tr class="govuk-table__row app-overview-row--team">
                       <th scope="row" class="govuk-table__header app-overview-name--team">

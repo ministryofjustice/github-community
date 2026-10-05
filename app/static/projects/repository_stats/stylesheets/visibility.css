@@ -248,13 +248,25 @@
   padding-left: 30px;
 }
 
-.app-overview-caption {
-  display: block;
-  padding-left: 25px;
+/* "Business unit" or "Team", once above each group of rows. A plain line: regular
+   weight, not shaded, and no rule between it and the first row of its group. */
+.app-overview-group-label {
+  padding-bottom: 0;
+  border-bottom: 0;
   color: #505a5f;
   font-size: 1rem;
   font-weight: 400;
   line-height: 1.25;
+}
+
+/* Lined up with the business unit names (cell indent plus toggle triangle). */
+.app-overview-group-label--business-unit {
+  padding-left: 55px;
+}
+
+/* Lined up with the team names (cell indent plus the rule beside them). */
+.app-overview-group-label--team {
+  padding-left: 67px;
 }
 
 /* An expanded business unit and its teams share a light grey background. */

@@ -2,28 +2,21 @@
 
 Access is granted to members of one GitHub team, set with GITHUB_STATS_ACCESS_TEAM as
 "org/team-slug" (or just "team-slug" for the ministryofjustice organisation). When it is
-unset, everyone who can sign in has access.
+unset, everyone who can sign in has access and no GitHub sign-in is needed.
 
-Working out the signed-in user's GitHub login:
-- People sign in to this app with Microsoft (Entra ID) through Auth0, so the ID token
-  has no GitHub identity. The team's organisation enforces SAML single sign-on, and
-  GitHub records each member's SAML identity (their Entra email and UPN) against their
-  GitHub login. We match the ID token's verified work email to those SAML identities,
-  read through the GitHub App with GraphQL (organization.samlIdentityProvider
-  .externalIdentities). The SAML NameID can't be used: it comes from a different Auth0
-  tenant and is a pairwise id, so it never equals this app's "sub".
-- An Auth0 GitHub social login ("sub" is "github|<id>") is still supported.
-- A free-text nickname is never trusted on its own.
+People sign in to this app with Microsoft (Entra ID) through Auth0, which gives us no
+GitHub identity. Repository Stats adds a second step: "Continue with GitHub" (a GitHub
+OAuth App, see github_sign_in.py) tells us the user's GitHub login. Team membership is
+then checked with the Community GitHub App and cached in the session for
+ACCESS_RECHECK_SECONDS, after which it is checked again silently with the stored login.
 
 Never log usernames, emails, team names or membership results from this module.
 """
 
 import logging
-import re
-import threading
 from collections.abc import Callable, MutableMapping
-from datetime import UTC, datetime
-from time import monotonic
+from enum import Enum
+from time import time
 
 from flask import session
 
@@ -33,41 +26,25 @@ from app.shared.config.app_config import app_config
 logger = logging.getLogger(__name__)
 
 DEFAULT_ORG = "ministryofjustice"
+# Cached team check results: {"org/team-slug": {"login", "has_access", "checked_at"}}.
 SESSION_KEY = "stats_access"
-GITHUB_SUB_PATTERN = re.compile(r"^github\|(\d+)$")
-# Work email domains seen in the ministryofjustice SAML identities. Only emails on these
-# domains are matched to a GitHub login.
-ALLOWED_EMAIL_DOMAINS = frozenset(
-    {
-        "justice.gov.uk",
-        "digital.justice.gov.uk",
-        "publicguardian.gov.uk",
-        "cica.gov.uk",
-    }
-)
-UPN_ATTRIBUTE = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/upn"
-# The email -> login map for an organisation is shared by everyone signing in, so the
-# whole organisation is paged through at most once per this many seconds per process.
-SAML_EMAIL_MAP_TTL_SECONDS = 15 * 60
-SAML_IDENTITIES_QUERY = """
-query($org: String!, $cursor: String) {
-  organization(login: $org) {
-    samlIdentityProvider {
-      externalIdentities(first: 100, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes {
-          samlIdentity { nameId username emails { value } attributes { name value } }
-          user { login }
-        }
-      }
-    }
-  }
-}
-"""
+# The GitHub account confirmed with "Continue with GitHub":
+# {"login", "auth_sub" (the Auth0 user it was confirmed for), "signed_in_at"}.
+GITHUB_SESSION_KEY = "stats_github"
+ACCESS_RECHECK_SECONDS = 60 * 60
 
 
 class GitHubAccessCheckError(Exception):
     """GitHub answered with something other than member (200) or not a member (404)."""
+
+
+class StatsAccess(Enum):
+    ALLOWED = "allowed"
+    # Signed in with Microsoft but no GitHub account confirmed yet.
+    NEEDS_GITHUB = "needs_github"
+    DENIED = "denied"
+    # GitHub couldn't be asked; access is denied for now (fail closed).
+    UNAVAILABLE = "unavailable"
 
 
 def parse_team(value: str | None) -> tuple[str, str] | None:
@@ -110,226 +87,104 @@ def is_team_member(
     )
 
 
-def get_username_by_id(
-    github_id: str, client: GitHubAppClient | None = None
+def _auth_subject(session_user: dict | None) -> str | None:
+    return ((session_user or {}).get("userinfo") or {}).get("sub") or None
+
+
+def get_github_login(
+    session_user: dict | None, cache: MutableMapping | None = None
 ) -> str | None:
-    """Docs: https://docs.github.com/en/rest/users/users#get-a-user-using-their-id"""
-    client = client or get_github_client()
-    response = client.get(f"/user/{github_id}")
-    if response.status_code == 200:
-        return response.json().get("login") or None
-    if response.status_code == 404:
-        return None
-    raise GitHubAccessCheckError(
-        f"GitHub user lookup failed with status {response.status_code}"
-    )
+    """The GitHub login confirmed in this session for the signed-in user, or None.
 
-
-def _normalise_email(value) -> str | None:
-    if not isinstance(value, str):
-        return None
-    value = value.strip().lower()
-    local, at, domain = value.rpartition("@")
-    if not at or not local or not domain:
-        return None
-    return value
-
-
-def fetch_saml_email_map(org: str, client: GitHubAppClient | None = None) -> dict:
-    """Every SAML identity email (and UPN) in the organisation -> GitHub login.
-
-    An email linked to more than one GitHub login maps to None, so it never grants
-    access. Docs: https://docs.github.com/en/graphql/reference/objects#externalidentity
+    A GitHub account confirmed for a different Microsoft user is ignored and removed.
     """
-    client = client or get_github_client()
-    logins_by_email: dict[str, set[str]] = {}
-    cursor = None
-    while True:
-        response = client.graphql(SAML_IDENTITIES_QUERY, {"org": org, "cursor": cursor})
-        if response.status_code != 200:
-            raise GitHubAccessCheckError(
-                f"GitHub SAML identity lookup failed with status {response.status_code}"
-            )
-        body = response.json()
-        if not isinstance(body, dict) or body.get("errors"):
-            error_types = sorted(
-                {
-                    str(error.get("type") or "unknown")
-                    for error in (body or {}).get("errors") or []
-                    if isinstance(error, dict)
-                }
-            )
-            raise GitHubAccessCheckError(
-                f"GitHub SAML identity lookup returned errors: {error_types}"
-            )
-        provider = ((body.get("data") or {}).get("organization") or {}).get(
-            "samlIdentityProvider"
-        )
-        if not provider:
-            raise GitHubAccessCheckError(
-                "GitHub SAML identity provider is not visible to the GitHub App"
-            )
-        identities = provider.get("externalIdentities") or {}
-        for node in identities.get("nodes") or []:
-            login = ((node or {}).get("user") or {}).get("login")
-            if not login:
-                continue
-            saml = node.get("samlIdentity") or {}
-            candidates = [email.get("value") for email in saml.get("emails") or []]
-            candidates += [saml.get("username"), saml.get("nameId")]
-            candidates += [
-                attribute.get("value")
-                for attribute in saml.get("attributes") or []
-                if attribute.get("name") == UPN_ATTRIBUTE
-            ]
-            for candidate in candidates:
-                email = _normalise_email(candidate)
-                if email:
-                    logins_by_email.setdefault(email, set()).add(login.lower())
-        page_info = identities.get("pageInfo") or {}
-        if not page_info.get("hasNextPage"):
-            break
-        cursor = page_info.get("endCursor")
-        if not cursor:
-            raise GitHubAccessCheckError("GitHub SAML identity paging stopped early")
-    return {
-        email: next(iter(logins)) if len(logins) == 1 else None
-        for email, logins in logins_by_email.items()
-    }
-
-
-_saml_email_maps: dict[str, tuple[float, dict]] = {}
-_saml_email_maps_lock = threading.Lock()
-
-
-def clear_saml_email_map_cache() -> None:
-    with _saml_email_maps_lock:
-        _saml_email_maps.clear()
-
-
-def get_username_by_email(
-    email: str, org: str, client: GitHubAppClient | None = None
-) -> str | None:
-    """The GitHub login whose SAML identity in org has this email, or None.
-
-    The org-wide map is cached in this process for SAML_EMAIL_MAP_TTL_SECONDS. A failed
-    fetch raises and caches nothing.
-    """
-    org_key = org.lower()
-    with _saml_email_maps_lock:
-        cached = _saml_email_maps.get(org_key)
-        if cached is None or monotonic() - cached[0] >= SAML_EMAIL_MAP_TTL_SECONDS:
-            cached = (monotonic(), fetch_saml_email_map(org, client))
-            _saml_email_maps[org_key] = cached
-    return cached[1].get(email.lower())
-
-
-def verified_work_email(userinfo: dict) -> str | None:
-    """The ID token's email, only if Auth0 says it is verified and it's an MoJ domain."""
-    verified = userinfo.get("email_verified")
-    if not (verified is True or (isinstance(verified, str) and verified == "true")):
+    cache = session if cache is None else cache
+    github = cache.get(GITHUB_SESSION_KEY)
+    if not isinstance(github, dict) or not github.get("login"):
         return None
-    email = _normalise_email(userinfo.get("email"))
-    if not email or email.rpartition("@")[2] not in ALLOWED_EMAIL_DOMAINS:
+    if github.get("auth_sub") != _auth_subject(session_user):
+        clear_github_sign_in(cache)
         return None
-    return email
+    return github["login"]
 
 
-def resolve_github_username(
+def remember_github_login(
     session_user: dict | None,
-    lookup_by_id: Callable[[str], str | None] = get_username_by_id,
-    lookup_by_email: Callable[[str], str | None] | None = None,
-) -> str | None:
-    """The GitHub username of the signed-in user, or None if it can't be worked out.
-
-    session["user"] is the Auth0 token response; "userinfo" holds the ID token claims.
-
-    GitHub social connection: "sub" is "github|<numeric GitHub user id>" and "nickname"
-    is normally the GitHub login. If "nickname" is missing we look the login up from the
-    numeric id.
-
-    Any other connection (Microsoft / Entra ID in practice): the verified MoJ work email
-    is looked up with lookup_by_email (the organisation's SAML identities). "nickname" is
-    ignored here: it is the email local part for Microsoft and user-chosen for some other
-    connections, so it could match someone else's GitHub login.
-    """
-    userinfo = (session_user or {}).get("userinfo") or {}
-    match = GITHUB_SUB_PATTERN.match(userinfo.get("sub") or "")
-    if match:
-        nickname = (userinfo.get("nickname") or "").strip()
-        if nickname:
-            return nickname
-        return lookup_by_id(match.group(1))
-    if lookup_by_email is None:
-        return None
-    email = verified_work_email(userinfo)
-    if not email:
-        return None
-    return lookup_by_email(email)
+    login: str,
+    cache: MutableMapping | None = None,
+    now: Callable[[], float] = time,
+) -> None:
+    cache = session if cache is None else cache
+    cache[GITHUB_SESSION_KEY] = {
+        "login": login,
+        "auth_sub": _auth_subject(session_user),
+        "signed_in_at": now(),
+    }
+    # A new GitHub account always gets a fresh team check.
+    cache.pop(SESSION_KEY, None)
 
 
-def user_has_stats_access(
+def clear_github_sign_in(cache: MutableMapping | None = None) -> None:
+    """Forget the GitHub part of the session (the Microsoft sign-in is kept)."""
+    cache = session if cache is None else cache
+    cache.pop(GITHUB_SESSION_KEY, None)
+    cache.pop(SESSION_KEY, None)
+
+
+def check_stats_access(
     session_user: dict | None,
     team: str | None = None,
     cache: MutableMapping | None = None,
     client: GitHubAppClient | None = None,
-) -> bool:
+    now: Callable[[], float] = time,
+) -> StatsAccess:
     """team: 'org/team-slug' to check; defaults to GITHUB_STATS_ACCESS_TEAM.
 
-    The result is cached in the login session, so GitHub is only asked once per login.
-    Errors from GitHub deny access and are not cached, so the next request tries again.
-    A user whose GitHub login can't be worked out is denied and not cached either, so
-    someone who links their account later doesn't have to sign out and in again.
+    The team check result is cached in the session and checked again with GitHub once it
+    is ACCESS_RECHECK_SECONDS old, so someone removed from the team loses access within
+    the hour. A new session has no cached result, so it is always checked. Errors from
+    GitHub deny access and are not cached, so the next request tries again.
     """
     required = parse_team(
         team if team is not None else app_config.github.stats_access_team
     )
     if required is None:
-        return True
+        return StatsAccess.ALLOWED
 
     cache = session if cache is None else cache
+    login = get_github_login(session_user, cache)
+    if not login:
+        return StatsAccess.NEEDS_GITHUB
+
     team_key = "/".join(required)
-    subject = ((session_user or {}).get("userinfo") or {}).get("sub")
-    cached = cache.get(SESSION_KEY)
+    results = cache.get(SESSION_KEY)
+    results = dict(results) if isinstance(results, dict) else {}
+    cached = results.get(team_key)
     if (
-        cached
-        and subject
-        and cached.get("sub") == subject
-        and cached.get("team") == team_key
+        isinstance(cached, dict)
+        and cached.get("login") == login
+        and isinstance(cached.get("checked_at"), int | float)
+        and 0 <= now() - cached["checked_at"] < ACCESS_RECHECK_SECONDS
     ):
-        return bool(cached.get("has_access"))
+        return StatsAccess.ALLOWED if cached.get("has_access") else StatsAccess.DENIED
 
     try:
-        username = resolve_github_username(
-            session_user,
-            lambda github_id: get_username_by_id(github_id, client),
-            lambda email: get_username_by_email(email, required[0], client),
-        )
-        has_access = bool(username) and is_team_member(
-            username, *required, client=client
-        )
+        has_access = is_team_member(login, *required, client=client)
     except GitHubAccessCheckError as error:
-        # These messages are ours and only hold status codes or GraphQL error types, so
-        # they are safe to log and show a missing GitHub App permission.
+        # These messages are ours and only hold status codes, so they are safe to log.
         logger.warning(
             "Repository Stats access check failed; access denied for this request: %s",
             error,
         )
-        return False
+        return StatsAccess.UNAVAILABLE
     except Exception:  # noqa: BLE001 - any failure must deny access, never allow it
         # Includes network errors and a missing or invalid GitHub App key.
         # Deliberately generic: exception text can include request URLs with usernames.
-        logger.debug(
+        logger.warning(
             "Repository Stats access check failed; access denied for this request"
         )
-        return False
+        return StatsAccess.UNAVAILABLE
 
-    if username:
-        cache[SESSION_KEY] = {
-            "sub": subject,
-            "username": username,
-            "team": team_key,
-            "has_access": has_access,
-            "checked_at": datetime.now(UTC).isoformat(),
-        }
-    return has_access
+    results[team_key] = {"login": login, "has_access": has_access, "checked_at": now()}
+    cache[SESSION_KEY] = results
+    return StatsAccess.ALLOWED if has_access else StatsAccess.DENIED

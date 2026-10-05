@@ -74,6 +74,14 @@ spec:
             - name: GITHUB_STATS_ACCESS_TEAM
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_ID }}
+            - name: GITHUB_STATS_OAUTH_CLIENT_ID
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_SECRET }}
+            - name: GITHUB_STATS_OAUTH_CLIENT_SECRET
+              value: {{ . | quote }}
+            {{- end }}
 
           ports:
             - name: http

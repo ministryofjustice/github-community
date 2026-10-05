@@ -44,6 +44,10 @@ services:
 
       # Repository Stats access: "org/team-slug". Leave unset for open access.
       - GITHUB_STATS_ACCESS_TEAM=ministryofjustice/repository-stats-viewers
+      # GitHub OAuth App for the "Continue with GitHub" step. Only used when
+      # AUTH_ENABLED is true. Callback: <host>/repository-stats/github/callback
+      # - GITHUB_STATS_OAUTH_CLIENT_ID=
+      # - GITHUB_STATS_OAUTH_CLIENT_SECRET=
 
       # Local
       - LOGGING_LEVEL=DEBUG

@@ -1,7 +1,9 @@
 # ruff: noqa: DTZ001 - naive datetimes here are UTC, as stored by the database
 import unittest
 from datetime import UTC, date, datetime, timedelta
+from unittest.mock import patch
 
+import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
@@ -76,6 +78,8 @@ class FakeGitHub:
         self.failing_team_orgs = set(failing_team_orgs)
         self.display_names = display_names or {}
         self.failing_profile_orgs = set(failing_profile_orgs)
+        # {path: how many times it times out before answering}
+        self.slow_paths = {}
         self.calls = []
 
     def client_for(self, installation_id):
@@ -85,6 +89,9 @@ class FakeGitHub:
         class Client:
             def get(self, path):
                 github.calls.append(path)
+                if github.slow_paths.get(path):
+                    github.slow_paths[path] -= 1
+                    raise requests.ReadTimeout("Read timed out. (read timeout=10)")
                 teams = github.teams_by_org.get(org, [])
                 if path == f"/orgs/{org}":
                     if org in github.failing_profile_orgs:
@@ -151,6 +158,7 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
         failing_team_orgs=(),
         display_names=None,
         failing_profile_orgs=(),
+        slow_paths=None,
     ):
         github = FakeGitHub(
             repositories if isinstance(repositories, dict) else {MOJ: repositories},
@@ -160,6 +168,7 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
             display_names,
             failing_profile_orgs,
         )
+        github.slow_paths.update(slow_paths or {})
         self.github = github
         times = iter([at, at + timedelta(minutes=4)])
         return record_repository_visibility(
@@ -503,6 +512,38 @@ class TestRecordTeamAccess(RecordRepositoryVisibilityTestCase):
         self.assertEqual([e[2] for e in self.events()], ["changed"])
         self.assertEqual([r[0] for r in self.runs()], ["success", "success"])
         self.assertIsNone(results[0].team_access)
+
+    @patch("app.projects.repository_stats.services.github_teams.time.sleep")
+    def test_one_slow_team_call_is_retried_and_keeps_all_team_data(self, sleep):
+        with self.assertLogs(
+            "app.projects.repository_stats.services.github_teams", "WARNING"
+        ) as logs:
+            results = self.run_job(
+                [repo(1, "one"), repo(2, "two")],
+                DAY_1,
+                teams=self.TEAMS,
+                slow_paths={f"/orgs/{MOJ}/teams/service-team/repos?per_page=100": 1},
+            )
+        self.assertEqual(results[0].team_access, 3)
+        self.assertEqual(len(self.team_access()), 3)
+        self.assertIn("ReadTimeout", logs.output[0])
+        sleep.assert_called_once_with(2)
+        self.assertEqual(results[0].api_calls, 6)
+
+    @patch("app.projects.repository_stats.services.github_teams.time.sleep")
+    def test_team_call_that_keeps_timing_out_keeps_old_data(self, sleep):
+        self.run_job([repo(1, "one")], DAY_1, teams=self.TEAMS)
+        before = self.team_access()
+        path = f"/orgs/{MOJ}/teams/service-team/repos?per_page=100"
+        with self.assertLogs(
+            "app.projects.repository_stats.jobs.record_repository_visibility", "ERROR"
+        ):
+            results = self.run_job(
+                [repo(1, "one")], DAY_2, teams=self.TEAMS, slow_paths={path: 3}
+            )
+        self.assertIsNone(results[0].team_access)
+        self.assertEqual(self.team_access(), before)
+        self.assertEqual([call.args for call in sleep.call_args_list], [(2,), (5,)])
 
     def test_team_failure_in_one_org_keeps_other_orgs_teams(self):
         orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]

@@ -1,11 +1,14 @@
 import unittest
 from types import SimpleNamespace
 
+import requests
+
 from app.projects.repository_stats.services.github_inventory import (
     CountingGetter,
     GitHubInventoryError,
 )
 from app.projects.repository_stats.services.github_teams import (
+    RetryingGetter,
     TeamAccessRecord,
     fetch_org_team_access,
     team_permission,
@@ -104,8 +107,16 @@ class TestFetchOrgTeamAccess(unittest.TestCase):
                 ),
             }
         )
-        with self.assertRaisesRegex(GitHubInventoryError, "500"):
-            fetch_org_team_access(github, ORG)
+        sleeps = []
+        with (
+            self.assertLogs(
+                "app.projects.repository_stats.services.github_teams", "WARNING"
+            ),
+            self.assertRaisesRegex(GitHubInventoryError, "500"),
+        ):
+            fetch_org_team_access(github, ORG, sleep=sleeps.append)
+        self.assertEqual(github.calls.count(team_repos("b-team")), 3)
+        self.assertEqual(sleeps, [2, 5])
 
     def test_unexpected_body_and_missing_slug(self):
         with self.assertRaisesRegex(GitHubInventoryError, "unexpected team list"):
@@ -126,6 +137,117 @@ class TestFetchOrgTeamAccess(unittest.TestCase):
             }
         )
         self.assertEqual(fetch_org_team_access(github, ORG), [])
+
+
+class Flaky:
+    """Returns (or raises) each outcome in turn, one per call."""
+
+    def __init__(self, *outcomes):
+        self.outcomes = list(outcomes)
+        self.calls = 0
+
+    def get(self, path):
+        self.calls += 1
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+class TestRetryingGetter(unittest.TestCase):
+    def setUp(self):
+        self.sleeps = []
+
+    def getter(self, *outcomes):
+        self.flaky = Flaky(*outcomes)
+        return RetryingGetter(self.flaky, sleep=self.sleeps.append)
+
+    def test_success_first_time_does_not_retry(self):
+        ok = page([])
+        self.assertIs(self.getter(ok).get("/x"), ok)
+        self.assertEqual((self.flaky.calls, self.sleeps), (1, []))
+
+    def test_read_timeout_then_success(self):
+        ok = page([])
+        with self.assertLogs(
+            "app.projects.repository_stats.services.github_teams", "WARNING"
+        ) as logs:
+            response = self.getter(requests.ReadTimeout("slow"), ok).get("/x")
+        self.assertIs(response, ok)
+        self.assertEqual((self.flaky.calls, self.sleeps), (2, [2]))
+        self.assertIn("ReadTimeout", logs.output[0])
+        self.assertIn("attempt 2 of 3", logs.output[0])
+
+    def test_connection_error_and_5xx_are_retried(self):
+        ok = page([])
+        with self.assertLogs("app.projects.repository_stats.services.github_teams"):
+            response = self.getter(
+                requests.ConnectionError("reset"), page({}, status_code=502), ok
+            ).get("/x")
+        self.assertIs(response, ok)
+        self.assertEqual((self.flaky.calls, self.sleeps), (3, [2, 5]))
+
+    def test_gives_up_after_three_timeouts(self):
+        with (
+            self.assertLogs("app.projects.repository_stats.services.github_teams"),
+            self.assertRaises(requests.ReadTimeout),
+        ):
+            self.getter(*[requests.ReadTimeout("slow")] * 3).get("/x")
+        self.assertEqual((self.flaky.calls, self.sleeps), (3, [2, 5]))
+
+    def test_returns_last_5xx_after_three_attempts(self):
+        last = page({}, status_code=503)
+        with self.assertLogs("app.projects.repository_stats.services.github_teams"):
+            response = self.getter(
+                page({}, status_code=500), page({}, status_code=500), last
+            ).get("/x")
+        self.assertIs(response, last)
+        self.assertEqual(self.flaky.calls, 3)
+
+    def test_4xx_is_not_retried(self):
+        forbidden = page({}, status_code=403)
+        self.assertIs(self.getter(forbidden).get("/x"), forbidden)
+        self.assertEqual((self.flaky.calls, self.sleeps), (1, []))
+
+    def test_other_errors_are_not_retried(self):
+        with self.assertRaises(ValueError):
+            self.getter(ValueError("bug")).get("/x")
+        self.assertEqual(self.flaky.calls, 1)
+
+    def test_log_does_not_include_the_path(self):
+        with self.assertLogs(
+            "app.projects.repository_stats.services.github_teams"
+        ) as logs:
+            self.getter(requests.ReadTimeout("slow"), page([])).get(
+                "/orgs/o/teams/secret-team/repos"
+            )
+        self.assertNotIn("secret-team", "\n".join(logs.output))
+
+    def test_one_timeout_on_a_team_call_keeps_the_team_data(self):
+        github = FakeGitHub(
+            {
+                TEAMS: page([{"slug": "a-team"}, {"slug": "b-team"}]),
+                team_repos("a-team"): page([{"id": 1, "role_name": "read"}]),
+                team_repos("b-team"): page([{"id": 2, "role_name": "admin"}]),
+            }
+        )
+        original = github.get
+        timed_out = []
+
+        def get(path):
+            if path == team_repos("b-team") and not timed_out:
+                timed_out.append(path)
+                raise requests.ReadTimeout("Read timed out. (read timeout=10)")
+            return original(path)
+
+        github.get = get
+        with self.assertLogs("app.projects.repository_stats.services.github_teams"):
+            records = fetch_org_team_access(github, ORG, sleep=self.sleeps.append)
+        self.assertEqual(
+            sorted((r.github_id, r.team_slug) for r in records),
+            [(1, "a-team"), (2, "b-team")],
+        )
+        self.assertEqual(self.sleeps, [2])
 
 
 class TestTeamPermission(unittest.TestCase):

@@ -1,70 +1,37 @@
+import logging
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
 
 from app.projects.repository_stats.services.visibility_access import (
+    ACCESS_RECHECK_SECONDS,
+    GITHUB_SESSION_KEY,
     SESSION_KEY,
-    UPN_ATTRIBUTE,
     GitHubAccessCheckError,
-    clear_saml_email_map_cache,
-    fetch_saml_email_map,
-    get_username_by_email,
+    StatsAccess,
+    check_stats_access,
+    clear_github_sign_in,
+    get_github_login,
     is_team_member,
     parse_team,
-    resolve_github_username,
-    user_has_stats_access,
-    verified_work_email,
+    remember_github_login,
 )
 
 TEAM = "ministryofjustice/repository-stats-viewers"
 MEMBERSHIP_PATH = (
     "/orgs/ministryofjustice/teams/repository-stats-viewers/memberships/octocat"
 )
+NOW = 1_800_000_000.0
 
 
 def response(status_code, body=None):
     return SimpleNamespace(status_code=status_code, json=lambda: body or {})
 
 
-def saml_node(login, email=None, upn=None, username=None, name_id="waad|abc"):
-    return {
-        "samlIdentity": {
-            "nameId": name_id,
-            "username": username or name_id,
-            "emails": [{"value": email}] if email else [],
-            "attributes": [{"name": UPN_ATTRIBUTE, "value": upn}] if upn else [],
-        },
-        "user": {"login": login} if login else None,
-    }
-
-
-def saml_page(nodes, next_cursor=None):
-    return response(
-        200,
-        {
-            "data": {
-                "organization": {
-                    "samlIdentityProvider": {
-                        "externalIdentities": {
-                            "pageInfo": {
-                                "hasNextPage": next_cursor is not None,
-                                "endCursor": next_cursor,
-                            },
-                            "nodes": nodes,
-                        }
-                    }
-                }
-            }
-        },
-    )
-
-
 class FakeGitHub:
-    """Answers GET paths from a dict, GraphQL from a list of pages; records every call."""
+    """Answers GET paths from a dict; records every call."""
 
-    def __init__(self, responses, graphql_pages=None):
+    def __init__(self, responses):
         self.responses = responses
-        self.graphql_pages = list(graphql_pages or [])
         self.calls = []
 
     def get(self, path):
@@ -74,36 +41,19 @@ class FakeGitHub:
             raise result
         return result
 
-    def graphql(self, query, variables=None):
-        self.calls.append(("graphql", (variables or {}).get("cursor")))
-        if not self.graphql_pages:
-            raise AssertionError("unexpected GraphQL call")
-        result = self.graphql_pages.pop(0)
-        if isinstance(result, Exception):
-            raise result
-        return result
 
-
-def user(nickname="octocat", sub="github|583231"):
-    userinfo = {
-        "sub": sub,
-        "name": "The Octocat",
-        "picture": "https://example.test/a.png",
+def microsoft_user(sub="waad|pairwise-id"):
+    return {
+        "access_token": "x",
+        "expires_at": 9999999999,
+        "userinfo": {"sub": sub, "nickname": "octo.cat", "name": "Octo Cat"},
     }
-    if nickname is not None:
-        userinfo["nickname"] = nickname
-    return {"access_token": "x", "expires_at": 9999999999, "userinfo": userinfo}
 
 
-def microsoft_user(
-    email="Octo.Cat@justice.gov.uk", email_verified=True, nickname="octo.cat"
-):
-    userinfo = {"sub": "waad|pairwise-id", "nickname": nickname, "name": "Octo Cat"}
-    if email is not None:
-        userinfo["email"] = email
-    if email_verified is not None:
-        userinfo["email_verified"] = email_verified
-    return {"access_token": "x", "expires_at": 9999999999, "userinfo": userinfo}
+def signed_in_cache(login="octocat", user=None):
+    cache = {}
+    remember_github_login(user or microsoft_user(), login, cache, now=lambda: NOW)
+    return cache
 
 
 class TestParseTeam(unittest.TestCase):
@@ -176,480 +126,175 @@ class TestIsTeamMember(unittest.TestCase):
         self.assertNotIn("repository-stats-viewers", str(raised.exception))
 
 
-class TestResolveGitHubUsername(unittest.TestCase):
-    def test_nickname_first(self):
-        lookups = []
-        self.assertEqual(resolve_github_username(user(), lookups.append), "octocat")
-        self.assertEqual(lookups, [])
-
-    def test_falls_back_to_github_id_in_sub(self):
+class TestGitHubLoginInSession(unittest.TestCase):
+    def test_remember_and_read(self):
+        cache = signed_in_cache()
         self.assertEqual(
-            resolve_github_username(
-                user(nickname=None), lambda github_id: f"login-for-{github_id}"
-            ),
-            "login-for-583231",
+            cache[GITHUB_SESSION_KEY],
+            {"login": "octocat", "auth_sub": "waad|pairwise-id", "signed_in_at": NOW},
         )
-        self.assertEqual(
-            resolve_github_username(user(nickname=" "), lambda github_id: "from-id"),
-            "from-id",
-        )
+        self.assertEqual(get_github_login(microsoft_user(), cache), "octocat")
 
-    def test_unknown_identity(self):
-        lookup = lambda github_id: self.fail("should not look up")
-        self.assertIsNone(
-            resolve_github_username(user(nickname=None, sub="auth0|abc"), lookup)
-        )
-        self.assertIsNone(
-            resolve_github_username(user(nickname=None, sub=None), lookup)
-        )
-        self.assertIsNone(resolve_github_username({}, lookup))
-        self.assertIsNone(resolve_github_username(None, lookup))
+    def test_no_github_sign_in(self):
+        self.assertIsNone(get_github_login(microsoft_user(), {}))
 
-    def test_nickname_is_ignored_without_a_github_sub(self):
-        lookup = lambda github_id: self.fail("should not look up")
-        for sub in ("auth0|abc", "google-oauth2|123", "github|not-a-number", None):
-            with self.subTest(sub=sub):
-                self.assertIsNone(
-                    resolve_github_username(user(nickname="octocat", sub=sub), lookup)
-                )
+    def test_github_login_for_another_microsoft_user_is_ignored_and_cleared(self):
+        cache = signed_in_cache()
+        cache[SESSION_KEY] = {TEAM: {"login": "octocat", "has_access": True}}
+        self.assertIsNone(get_github_login(microsoft_user("waad|someone-else"), cache))
+        self.assertNotIn(GITHUB_SESSION_KEY, cache)
+        self.assertNotIn(SESSION_KEY, cache)
+
+    def test_remembering_a_new_login_drops_old_team_results(self):
+        cache = signed_in_cache()
+        cache[SESSION_KEY] = {TEAM: {"login": "octocat", "has_access": True}}
+        remember_github_login(microsoft_user(), "hubot", cache)
+        self.assertNotIn(SESSION_KEY, cache)
+        self.assertEqual(get_github_login(microsoft_user(), cache), "hubot")
+
+    def test_clear_keeps_the_microsoft_sign_in(self):
+        cache = signed_in_cache()
+        cache["user"] = microsoft_user()
+        cache[SESSION_KEY] = {}
+        clear_github_sign_in(cache)
+        self.assertEqual(list(cache), ["user"])
 
 
-class TestVerifiedWorkEmail(unittest.TestCase):
-    def test_verified_moj_email(self):
-        for domain in ("justice.gov.uk", "digital.justice.gov.uk"):
-            with self.subTest(domain=domain):
-                self.assertEqual(
-                    verified_work_email(
-                        {"email": f" A.B@{domain.upper()} ", "email_verified": True}
-                    ),
-                    f"a.b@{domain}",
-                )
-        self.assertEqual(
-            verified_work_email(
-                {"email": "a@justice.gov.uk", "email_verified": "true"}
-            ),
-            "a@justice.gov.uk",
+class TestCheckStatsAccess(unittest.TestCase):
+    def check(self, cache, github=None, now=NOW, team=TEAM, user=None):
+        return check_stats_access(
+            user or microsoft_user(),
+            team=team,
+            cache=cache,
+            client=github or FakeGitHub({}),
+            now=lambda: now,
         )
 
-    def test_unverified_or_other_domain_is_rejected(self):
-        for userinfo in (
-            {"email": "a@justice.gov.uk"},
-            {"email": "a@justice.gov.uk", "email_verified": False},
-            {"email": "a@justice.gov.uk", "email_verified": "false"},
-            {"email": "a@justice.gov.uk", "email_verified": 1},
-            {"email": "a@example.com", "email_verified": True},
-            {"email": "a@evil-justice.gov.uk", "email_verified": True},
-            {"email": "a@justice.gov.uk.evil.com", "email_verified": True},
-            {"email": "justice.gov.uk", "email_verified": True},
-            {"email": "@justice.gov.uk", "email_verified": True},
-            {"email": None, "email_verified": True},
-            {"email_verified": True},
+    def test_team_unset_always_allows_without_github_sign_in(self):
+        github = FakeGitHub({})
+        for team in ("", "  "):
+            with self.subTest(team=team):
+                self.assertIs(self.check({}, github, team=team), StatsAccess.ALLOWED)
+        self.assertEqual(github.calls, [])
+
+    def test_team_unset_in_config_allows(self):
+        from unittest.mock import patch
+
+        with patch(
+            "app.projects.repository_stats.services.visibility_access.app_config.github.stats_access_team",
+            None,
         ):
-            with self.subTest(userinfo=userinfo):
-                self.assertIsNone(verified_work_email(userinfo))
-
-
-class TestFetchSamlEmailMap(unittest.TestCase):
-    def test_maps_emails_and_upns_across_pages(self):
-        github = FakeGitHub(
-            {},
-            [
-                saml_page(
-                    [
-                        saml_node("OctoCat", "Octo.Cat@justice.gov.uk"),
-                        saml_node(None, "nobody@justice.gov.uk"),
-                    ],
-                    next_cursor="c1",
-                ),
-                saml_page(
-                    [
-                        saml_node("hubot", upn="hubot@digital.justice.gov.uk"),
-                        saml_node(
-                            "legacy",
-                            name_id="legacy.user",
-                            username="legacy.user@justice.gov.uk",
-                        ),
-                    ]
-                ),
-            ],
-        )
-        self.assertEqual(
-            fetch_saml_email_map("ministryofjustice", github),
-            {
-                "octo.cat@justice.gov.uk": "octocat",
-                "hubot@digital.justice.gov.uk": "hubot",
-                "legacy.user@justice.gov.uk": "legacy",
-            },
-        )
-        self.assertEqual(github.calls, [("graphql", None), ("graphql", "c1")])
-
-    def test_email_on_two_logins_maps_to_none(self):
-        github = FakeGitHub(
-            {},
-            [
-                saml_page(
-                    [
-                        saml_node("one", "shared@justice.gov.uk"),
-                        saml_node("two", "shared@justice.gov.uk"),
-                    ]
-                )
-            ],
-        )
-        self.assertEqual(
-            fetch_saml_email_map("ministryofjustice", github),
-            {"shared@justice.gov.uk": None},
-        )
-
-    def test_failures_raise_without_personal_data(self):
-        for failure in (
-            response(403),
-            response(502),
-            response(200, {"errors": [{"type": "FORBIDDEN", "message": "x"}]}),
-            response(200, {"data": {"organization": {"samlIdentityProvider": None}}}),
-            response(200, {"data": {"organization": None}}),
-            saml_page([saml_node("octocat", "a@justice.gov.uk")], next_cursor=""),
-        ):
-            with self.subTest(failure=failure):
-                github = FakeGitHub({}, [failure])
-                with self.assertRaises(GitHubAccessCheckError) as raised:
-                    fetch_saml_email_map("ministryofjustice", github)
-                self.assertNotIn("octocat", str(raised.exception))
-                self.assertNotIn("justice.gov.uk", str(raised.exception))
-
-
-class TestGetUsernameByEmail(unittest.TestCase):
-    def setUp(self):
-        clear_saml_email_map_cache()
-        self.addCleanup(clear_saml_email_map_cache)
-
-    def test_org_map_is_cached_until_ttl(self):
-        github = FakeGitHub(
-            {},
-            [
-                saml_page([saml_node("octocat", "octo.cat@justice.gov.uk")]),
-                saml_page([saml_node("octocat2", "octo.cat@justice.gov.uk")]),
-            ],
-        )
-        module = "app.projects.repository_stats.services.visibility_access"
-        with patch(f"{module}.monotonic", return_value=1000.0):
-            self.assertEqual(
-                get_username_by_email(
-                    "Octo.Cat@justice.gov.uk", "ministryofjustice", github
-                ),
-                "octocat",
+            self.assertIs(
+                check_stats_access(microsoft_user(), cache={}), StatsAccess.ALLOWED
             )
-            self.assertIsNone(
-                get_username_by_email(
-                    "other@justice.gov.uk", "MinistryOfJustice", github
-                )
-            )
-        self.assertEqual(len(github.calls), 1)
-        with patch(f"{module}.monotonic", return_value=1000.0 + 15 * 60):
-            self.assertEqual(
-                get_username_by_email(
-                    "octo.cat@justice.gov.uk", "ministryofjustice", github
-                ),
-                "octocat2",
-            )
-        self.assertEqual(len(github.calls), 2)
 
-    def test_failure_is_not_cached(self):
-        github = FakeGitHub(
-            {},
-            [
-                response(500),
-                saml_page([saml_node("octocat", "octo.cat@justice.gov.uk")]),
-            ],
-        )
-        with self.assertRaises(GitHubAccessCheckError):
-            get_username_by_email(
-                "octo.cat@justice.gov.uk", "ministryofjustice", github
-            )
-        self.assertEqual(
-            get_username_by_email(
-                "octo.cat@justice.gov.uk", "ministryofjustice", github
-            ),
-            "octocat",
-        )
-
-
-class TestResolveGitHubUsernameByEmail(unittest.TestCase):
-    def test_verified_email_is_looked_up(self):
-        lookups = []
-
-        def lookup(email):
-            lookups.append(email)
-            return "octocat"
-
-        self.assertEqual(
-            resolve_github_username(
-                microsoft_user(), lambda _: self.fail("no id lookup"), lookup
-            ),
-            "octocat",
-        )
-        self.assertEqual(lookups, ["octo.cat@justice.gov.uk"])
-
-    def test_nickname_never_used_for_microsoft_users(self):
-        for session_user in (
-            microsoft_user(email_verified=False),
-            microsoft_user(email_verified=None),
-            microsoft_user(email="octocat@example.com"),
-            microsoft_user(email=None),
-        ):
-            with self.subTest(session_user=session_user):
-                self.assertIsNone(
-                    resolve_github_username(
-                        session_user,
-                        lambda _: self.fail("no id lookup"),
-                        lambda _: self.fail("no email lookup"),
-                    )
-                )
-        self.assertIsNone(
-            resolve_github_username(
-                microsoft_user(), lambda _: self.fail("no id lookup")
-            )
-        )
-
-    def test_github_sub_ignores_email(self):
-        session_user = user()
-        session_user["userinfo"].update(
-            email="someone.else@justice.gov.uk", email_verified=True
-        )
-        self.assertEqual(
-            resolve_github_username(
-                session_user,
-                lambda _: self.fail("no id lookup"),
-                lambda _: self.fail("no email lookup"),
-            ),
-            "octocat",
-        )
-
-
-class TestUserHasStatsAccess(unittest.TestCase):
-    def setUp(self):
-        patcher = patch(
-            "app.projects.repository_stats.services.visibility_access.app_config"
-        )
-        self.config = patcher.start()
-        self.addCleanup(patcher.stop)
-        self.config.github.stats_access_team = TEAM
-        clear_saml_email_map_cache()
-        self.addCleanup(clear_saml_email_map_cache)
-
-    def test_team_unset_always_allows(self):
-        for value in (None, ""):
-            with self.subTest(value=value):
-                self.config.github.stats_access_team = value
-                github = FakeGitHub({})
-                cache = {}
-                self.assertTrue(user_has_stats_access(None, cache=cache, client=github))
-                self.assertTrue(
-                    user_has_stats_access(user(), cache=cache, client=github)
-                )
-                self.assertEqual(github.calls, [])
-                self.assertEqual(cache, {})
+    def test_needs_github_sign_in_first(self):
+        github = FakeGitHub({})
+        self.assertIs(self.check({}, github), StatsAccess.NEEDS_GITHUB)
+        self.assertEqual(github.calls, [])
 
     def test_member_is_allowed_and_cached(self):
+        cache = signed_in_cache()
         github = FakeGitHub({MEMBERSHIP_PATH: response(200, {"state": "active"})})
-        cache = {}
-        self.assertTrue(user_has_stats_access(user(), cache=cache, client=github))
-        self.assertTrue(user_has_stats_access(user(), cache=cache, client=github))
-        self.assertEqual(github.calls, [MEMBERSHIP_PATH])
-        entry = cache[SESSION_KEY]
+        self.assertIs(self.check(cache, github), StatsAccess.ALLOWED)
         self.assertEqual(
-            {k: entry[k] for k in ("username", "has_access", "team", "sub")},
-            {
-                "username": "octocat",
-                "has_access": True,
-                "team": TEAM,
-                "sub": "github|583231",
-            },
+            cache[SESSION_KEY],
+            {TEAM: {"login": "octocat", "has_access": True, "checked_at": NOW}},
         )
-        self.assertRegex(entry["checked_at"], r"^\d{4}-\d{2}-\d{2}T")
+        self.assertIs(self.check(cache, github, now=NOW + 60), StatsAccess.ALLOWED)
+        self.assertEqual(github.calls, [MEMBERSHIP_PATH])
 
     def test_non_member_is_denied_and_cached(self):
-        github = FakeGitHub({})
-        cache = {}
-        self.assertFalse(user_has_stats_access(user(), cache=cache, client=github))
-        self.assertFalse(user_has_stats_access(user(), cache=cache, client=github))
+        cache = signed_in_cache()
+        github = FakeGitHub({MEMBERSHIP_PATH: response(404)})
+        self.assertIs(self.check(cache, github), StatsAccess.DENIED)
+        self.assertIs(self.check(cache, github), StatsAccess.DENIED)
         self.assertEqual(github.calls, [MEMBERSHIP_PATH])
-        self.assertFalse(cache[SESSION_KEY]["has_access"])
 
-    def test_cache_ignored_for_other_user_or_team(self):
+    def test_rechecked_once_the_cache_is_an_hour_old(self):
+        cache = signed_in_cache()
         github = FakeGitHub({MEMBERSHIP_PATH: response(200, {"state": "active"})})
-        cache = {
-            SESSION_KEY: {
-                "sub": "github|1",
-                "username": "someone",
-                "team": TEAM,
-                "has_access": True,
-            }
-        }
-        self.assertTrue(user_has_stats_access(user(), cache=cache, client=github))
+        self.assertIs(self.check(cache, github), StatsAccess.ALLOWED)
+        later = NOW + ACCESS_RECHECK_SECONDS - 1
+        self.assertIs(self.check(cache, github, now=later), StatsAccess.ALLOWED)
         self.assertEqual(len(github.calls), 1)
-        self.assertFalse(
-            user_has_stats_access(
-                user(), team="ministryofjustice/other", cache=cache, client=github
-            )
-        )
+        # Removed from the team: the next hourly check denies, with no new GitHub
+        # sign-in needed.
+        github.responses[MEMBERSHIP_PATH] = response(404)
+        an_hour_later = NOW + ACCESS_RECHECK_SECONDS
+        self.assertIs(self.check(cache, github, now=an_hour_later), StatsAccess.DENIED)
+        self.assertEqual(len(github.calls), 2)
+        self.assertEqual(cache[SESSION_KEY][TEAM]["checked_at"], an_hour_later)
+
+    def test_cache_from_the_future_is_rechecked(self):
+        cache = signed_in_cache()
+        cache[SESSION_KEY] = {
+            TEAM: {"login": "octocat", "has_access": True, "checked_at": NOW + 999}
+        }
+        github = FakeGitHub({MEMBERSHIP_PATH: response(404)})
+        self.assertIs(self.check(cache, github), StatsAccess.DENIED)
+
+    def test_new_session_is_always_checked(self):
+        github = FakeGitHub({MEMBERSHIP_PATH: response(200, {"state": "active"})})
+        for _ in range(2):
+            self.assertIs(self.check(signed_in_cache(), github), StatsAccess.ALLOWED)
         self.assertEqual(len(github.calls), 2)
 
+    def test_cache_ignored_for_other_login_or_team(self):
+        cache = signed_in_cache()
+        cache[SESSION_KEY] = {
+            TEAM: {"login": "someone-else", "has_access": True, "checked_at": NOW},
+            "ministryofjustice/other": {
+                "login": "octocat",
+                "has_access": True,
+                "checked_at": NOW,
+            },
+        }
+        github = FakeGitHub({MEMBERSHIP_PATH: response(404)})
+        self.assertIs(self.check(cache, github), StatsAccess.DENIED)
+        self.assertEqual(github.calls, [MEMBERSHIP_PATH])
+        # Results for other teams are kept.
+        self.assertIn("ministryofjustice/other", cache[SESSION_KEY])
+
+    def test_malformed_cache_is_rechecked(self):
+        for bad in ("yes", {TEAM: "yes"}, {TEAM: {"login": "octocat"}}):
+            with self.subTest(bad=bad):
+                cache = signed_in_cache()
+                cache[SESSION_KEY] = bad
+                github = FakeGitHub({MEMBERSHIP_PATH: response(404)})
+                self.assertIs(self.check(cache, github), StatsAccess.DENIED)
+                self.assertEqual(github.calls, [MEMBERSHIP_PATH])
+
     def test_explicit_team_overrides_config(self):
-        self.config.github.stats_access_team = None
-        path = "/orgs/moj-analytical-services/teams/analysts/memberships/octocat"
+        cache = signed_in_cache()
+        path = "/orgs/other-org/teams/viewers/memberships/octocat"
         github = FakeGitHub({path: response(200, {"state": "active"})})
-        self.assertTrue(
-            user_has_stats_access(
-                user(), team="moj-analytical-services/analysts", cache={}, client=github
-            )
+        self.assertIs(
+            self.check(cache, github, team="other-org/viewers"), StatsAccess.ALLOWED
         )
         self.assertEqual(github.calls, [path])
 
-    def test_sub_fallback_looks_up_login_once(self):
-        github = FakeGitHub(
-            {
-                "/user/583231": response(200, {"login": "octocat"}),
-                MEMBERSHIP_PATH: response(200, {"state": "active"}),
-            }
-        )
-        cache = {}
-        self.assertTrue(
-            user_has_stats_access(user(nickname=None), cache=cache, client=github)
-        )
-        self.assertTrue(
-            user_has_stats_access(user(nickname=None), cache=cache, client=github)
-        )
-        self.assertEqual(github.calls, ["/user/583231", MEMBERSHIP_PATH])
-
-    def test_unresolvable_user_is_denied(self):
-        github = FakeGitHub({})
-        for session_user in (
-            None,
-            {},
-            user(nickname=None, sub="auth0|abc"),
-            user(nickname=None),
-        ):
-            with self.subTest(session_user=session_user):
-                self.assertFalse(
-                    user_has_stats_access(session_user, cache={}, client=github)
-                )
-
-    def test_errors_deny_are_not_cached_and_log_no_personal_data(self):
-        for failure in (
+    def test_errors_fail_closed_are_not_cached_and_log_no_personal_data(self):
+        for error in (
             response(500),
             response(403),
-            ConnectionError("down"),
-            ValueError("bad key"),
+            ConnectionError("https://api.github.com/.../memberships/octocat"),
         ):
-            with self.subTest(failure=failure):
-                github = FakeGitHub({MEMBERSHIP_PATH: failure})
-                cache = {}
+            with self.subTest(error=error):
+                cache = signed_in_cache()
+                github = FakeGitHub({MEMBERSHIP_PATH: error})
                 with self.assertLogs(
-                    "app.projects.repository_stats.services.visibility_access", "DEBUG"
+                    "app.projects.repository_stats.services.visibility_access",
+                    logging.WARNING,
                 ) as logs:
-                    self.assertFalse(
-                        user_has_stats_access(user(), cache=cache, client=github)
-                    )
-                self.assertEqual(cache, {})
+                    self.assertIs(self.check(cache, github), StatsAccess.UNAVAILABLE)
+                self.assertNotIn(SESSION_KEY, cache)
                 output = "\n".join(logs.output)
                 self.assertNotIn("octocat", output)
                 self.assertNotIn("repository-stats-viewers", output)
-                self.assertTrue(
-                    all(
-                        record.levelname in ("DEBUG", "WARNING")
-                        for record in logs.records
-                    )
-                )
-
-    def test_microsoft_user_in_team_is_allowed_and_cached(self):
-        github = FakeGitHub(
-            {MEMBERSHIP_PATH: response(200, {"state": "active"})},
-            [saml_page([saml_node("octocat", "octo.cat@justice.gov.uk")])],
-        )
-        cache = {}
-        self.assertTrue(
-            user_has_stats_access(microsoft_user(), cache=cache, client=github)
-        )
-        self.assertTrue(
-            user_has_stats_access(microsoft_user(), cache=cache, client=github)
-        )
-        self.assertEqual(github.calls, [("graphql", None), MEMBERSHIP_PATH])
-        self.assertEqual(cache[SESSION_KEY]["sub"], "waad|pairwise-id")
-        self.assertEqual(cache[SESSION_KEY]["username"], "octocat")
-        self.assertTrue(cache[SESSION_KEY]["has_access"])
-
-    def test_microsoft_user_not_in_team_is_denied(self):
-        github = FakeGitHub(
-            {MEMBERSHIP_PATH: response(404)},
-            [saml_page([saml_node("octocat", "octo.cat@justice.gov.uk")])],
-        )
-        cache = {}
-        self.assertFalse(
-            user_has_stats_access(microsoft_user(), cache=cache, client=github)
-        )
-        self.assertFalse(cache[SESSION_KEY]["has_access"])
-
-    def test_microsoft_user_with_untrusted_email_is_denied_without_lookups(self):
-        for session_user in (
-            microsoft_user(email_verified=False),
-            microsoft_user(email_verified=None),
-            microsoft_user(email="octocat@example.com"),
-            microsoft_user(email=None, nickname="octocat"),
-        ):
-            with self.subTest(session_user=session_user):
-                github = FakeGitHub(
-                    {MEMBERSHIP_PATH: response(200, {"state": "active"})}
-                )
-                cache = {}
-                self.assertFalse(
-                    user_has_stats_access(session_user, cache=cache, client=github)
-                )
-                self.assertEqual(github.calls, [])
-                self.assertEqual(cache, {})
-
-    def test_microsoft_user_without_github_account_is_denied(self):
-        github = FakeGitHub(
-            {MEMBERSHIP_PATH: response(200, {"state": "active"})},
-            [saml_page([saml_node("someone", "someone@justice.gov.uk")])],
-        )
-        cache = {}
-        self.assertFalse(
-            user_has_stats_access(microsoft_user(), cache=cache, client=github)
-        )
-        self.assertEqual(github.calls, [("graphql", None)])
-        self.assertEqual(cache, {})
-
-    def test_microsoft_user_github_errors_deny_and_are_not_cached(self):
-        for failure in (
-            response(403),
-            response(200, {"errors": [{"type": "FORBIDDEN"}]}),
-            ConnectionError("down"),
-        ):
-            with self.subTest(failure=failure):
-                clear_saml_email_map_cache()
-                github = FakeGitHub(
-                    {MEMBERSHIP_PATH: response(200, {"state": "active"})},
-                    [
-                        failure,
-                        saml_page([saml_node("octocat", "octo.cat@justice.gov.uk")]),
-                    ],
-                )
-                cache = {}
-                with self.assertLogs(
-                    "app.projects.repository_stats.services.visibility_access", "DEBUG"
-                ) as logs:
-                    self.assertFalse(
-                        user_has_stats_access(
-                            microsoft_user(), cache=cache, client=github
-                        )
-                    )
-                self.assertEqual(cache, {})
-                output = "\n".join(logs.output)
-                self.assertNotIn("octo", output.lower())
-                self.assertNotIn("repository-stats-viewers", output)
-                self.assertTrue(
-                    user_has_stats_access(microsoft_user(), cache=cache, client=github)
-                )
+                # The next request asks GitHub again.
+                github.responses[MEMBERSHIP_PATH] = response(200, {"state": "active"})
+                self.assertIs(self.check(cache, github), StatsAccess.ALLOWED)
 
     def test_uses_flask_session_by_default(self):
         from flask import Flask, session
@@ -658,8 +303,12 @@ class TestUserHasStatsAccess(unittest.TestCase):
         app.secret_key = "test"
         github = FakeGitHub({MEMBERSHIP_PATH: response(200, {"state": "active"})})
         with app.test_request_context():
-            self.assertTrue(user_has_stats_access(user(), client=github))
-            self.assertTrue(session[SESSION_KEY]["has_access"])
+            remember_github_login(microsoft_user(), "octocat")
+            self.assertIs(
+                check_stats_access(microsoft_user(), team=TEAM, client=github),
+                StatsAccess.ALLOWED,
+            )
+            self.assertTrue(session[SESSION_KEY][TEAM]["has_access"])
 
 
 if __name__ == "__main__":

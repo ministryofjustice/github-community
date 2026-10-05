@@ -1,0 +1,32 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  Confirm your GitHub account - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats"}
+    ]
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-l">Confirm your GitHub account</h1>
+      {% if switched %}
+        <div class="govuk-inset-text">
+          You've been signed out of your GitHub account for Repository Stats. If GitHub signs you straight back in to the same account, <a class="govuk-link" href="https://github.com/logout">sign out of github.com</a> first, then continue.
+        </div>
+      {% endif %}
+      <p class="govuk-body">Repository Stats is only available to members of a specific GitHub team. To check if you're a member, we need to know which GitHub account is yours.</p>
+      <p class="govuk-body">We only read your GitHub username. We don't ask for any permissions and can't change anything on GitHub.</p>
+      {{ govukButton({
+        "text": "Continue with GitHub",
+        "href": url_for("repository_stats_main.github_login"),
+        "isStartButton": true
+      }) }}
+    </div>
+  </div>
+{% endblock %}
