@@ -89,7 +89,6 @@
   <div class="govuk-!-margin-bottom-6">
     <p class="govuk-body-l govuk-!-margin-bottom-4">Track repository visibility changes, new repositories and deleted repositories.</p>
     {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
-    {% if page.has_imported_events %}<p class="govuk-body-s" id="imported-dates-note">Dates between {{ import_approximate_from }} and {{ import_approximate_to }} are approximate.</p>{% endif %}
   </div>
 
   {# Filters #}

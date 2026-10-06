@@ -13,8 +13,6 @@ from flask import (
 )
 
 from app.projects.repository_stats.config.visibility_config import (
-    IMPORT_APPROXIMATE_FROM,
-    IMPORT_APPROXIMATE_TO,
     VISIBILITY_ARCHIVED_DEADLINE,
     VISIBILITY_SLACK_CHANNEL_NAME,
     VISIBILITY_SLACK_CHANNEL_URL,
@@ -133,8 +131,6 @@ def visibility_changes():
         "projects/repository_stats/pages/visibility_changes.html",
         page=page,
         query=page.query,
-        import_approximate_from=IMPORT_APPROXIMATE_FROM,
-        import_approximate_to=IMPORT_APPROXIMATE_TO,
     )
 
 

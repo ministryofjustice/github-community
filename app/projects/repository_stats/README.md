@@ -10,8 +10,7 @@ visibility audit spreadsheets into the Repository Stats tables:
   each become a snapshot for their date.
 - Differences between consecutive files become events (visibility changed, new
   repository, deleted repository) with source `import`. An event is dated to the first
-  file that shows it, so dates between 24 August and 18 September 2026 are approximate
-  (the Visibility changes page says so).
+  file that shows it.
 
 Any other file in the directory is ignored. Repositories are matched by full name, so a
 rename shows as a delete and a create, and a change that was reversed between two files

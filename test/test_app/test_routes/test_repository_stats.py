@@ -1446,28 +1446,14 @@ class TestLastUpdatedLine(RepositoryStatsTestCase):
                 self.assertNotIn('<p class="govuk-body-s">Last updated', body)
 
 
-IMPORTED_DATES_NOTE = (
-    '<p class="govuk-body-s" id="imported-dates-note">Dates between 24 August and '
-    "18 September 2026 are approximate.</p>"
-)
-
-
-class TestImportedDatesNote(RepositoryStatsTestCase):
-    def test_shown_below_last_updated_when_imported_data_exists(self):
+class TestNoImportedDatesNote(RepositoryStatsTestCase):
+    def test_not_shown_even_with_imported_data(self):
         self.repository.imported_events = True
-        _, body = self.get(CHANGES_URL)
-        self.assertEqual(body.count(IMPORTED_DATES_NOTE), 1)
-        self.assertLess(body.index(LAST_UPDATED_LINE), body.index(IMPORTED_DATES_NOTE))
-        self.assertLess(body.index(IMPORTED_DATES_NOTE), body.index("<form"))
-
-    def test_not_shown_without_imported_data(self):
-        _, body = self.get(CHANGES_URL)
-        self.assertNotIn("imported-dates-note", body)
-
-    def test_not_on_the_archived_page(self):
-        self.repository.imported_events = True
-        _, body = self.get(ARCHIVED_URL)
-        self.assertNotIn("imported-dates-note", body)
+        for url in (CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(url=url):
+                _, body = self.get(url)
+                self.assertNotIn("imported-dates-note", body)
+                self.assertNotIn("Dates between", body)
 
 
 class TestNoSnapshots(RepositoryStatsTestCase):

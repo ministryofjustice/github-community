@@ -130,8 +130,6 @@ class VisibilityPage:
     last_updated: tuple[str, str] | None = None
     today: date | None = None
     earliest_captured_on: date | None = None
-    # True when the data includes events from the one-off audit report import.
-    has_imported_events: bool = False
     # Organisation display names by login, where GitHub has one.
     organisation_names: Mapping[str, str] = field(default_factory=dict)
 
@@ -320,7 +318,6 @@ class VisibilityService:
             last_updated=self._last_updated(),
             today=self.today,
             earliest_captured_on=dates[0] if dates else None,
-            has_imported_events=self.repository.has_events_from_source("import"),
             organisation_names=context.organisation_names,
         )
 
