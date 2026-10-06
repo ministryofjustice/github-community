@@ -174,8 +174,10 @@ def archived_repositories():
     )
 
 
-# "Continue with GitHub": confirms which GitHub account the signed-in user has, so their
+# GitHub sign-in: confirms which GitHub account the signed-in user has, so their
 # membership of the access team can be checked. See services/github_sign_in.py.
+# Stats pages redirect straight to /github/login. Failures always show a problem page
+# with a "Try again" button rather than redirecting to GitHub again, so there's no loop.
 
 PROBLEM_TEMPLATE = "projects/repository_stats/pages/github_problem.html"
 
@@ -217,18 +219,13 @@ def github_callback_url() -> str:
     )
 
 
-@repository_stats_main.route("/github", methods=["GET"])
-@requires_auth
-def github_sign_in():
-    return render_template(
-        "projects/repository_stats/pages/github_sign_in.html",
-        switched=request.args.get("switched") == "1",
-    )
-
-
 @repository_stats_main.route("/github/login", methods=["GET"])
 @requires_auth
 def github_login():
+    # Stats pages send people here with the page to return to. Without a "next" (e.g.
+    # "Try again") keep any page already remembered.
+    if next_path := github.safe_next_path(request.args.get("next")):
+        session[github.NEXT_SESSION_KEY] = next_path
     if not github.is_configured():
         logger.warning("Repository Stats GitHub sign-in is not configured")
         return render_github_problem("not_configured", 503)
@@ -273,4 +270,4 @@ def github_callback():
 @requires_auth
 def github_switch_account():
     clear_github_sign_in(session)
-    return redirect(url_for("repository_stats_main.github_sign_in", switched="1"))
+    return redirect(url_for("repository_stats_main.github_login"))

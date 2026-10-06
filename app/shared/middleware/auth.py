@@ -47,14 +47,11 @@ def requires_stats_access(function_f=None, *, team=None, render_no_access=None):
     GITHUB_STATS_ACCESS_TEAM, or with team="org/team-slug" so a report can use its own
     team. With no team configured, or AUTH_ENABLED=false, everyone has access.
 
-    Someone who hasn't confirmed their GitHub account yet is sent to the "Continue with
-    GitHub" page and brought back here afterwards. The no-access and "try again later"
+    Someone who hasn't confirmed their GitHub account yet is sent straight to GitHub to
+    sign in and brought back here afterwards. The no-access and "try again later"
     pages are rendered in place (not a redirect), so the URL stays the page requested.
     """
-    from app.projects.repository_stats.services.github_sign_in import (
-        NEXT_SESSION_KEY,
-        safe_next_path,
-    )
+    from app.projects.repository_stats.services.github_sign_in import safe_next_path
     from app.projects.repository_stats.services.visibility_access import (
         StatsAccess,
         check_stats_access,
@@ -70,9 +67,9 @@ def requires_stats_access(function_f=None, *, team=None, render_no_access=None):
                 return view(*args, **kwargs)
             next_path = safe_next_path(request.full_path)
             if access is StatsAccess.NEEDS_GITHUB:
-                if next_path:
-                    session[NEXT_SESSION_KEY] = next_path
-                return redirect(url_for("repository_stats_main.github_sign_in"))
+                return redirect(
+                    url_for("repository_stats_main.github_login", next=next_path)
+                )
             if access is StatsAccess.UNAVAILABLE:
                 return _render_stats_unavailable(next_path or request.path)
             return (render_no_access or _render_stats_no_access)()

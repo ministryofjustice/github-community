@@ -281,7 +281,6 @@ ROUTES = (
     "/repository-stats/archived",
 )
 GITHUB_ROUTES = (
-    "/repository-stats/github",
     "/repository-stats/github/login",
     "/repository-stats/github/callback",
     "/repository-stats/github/switch",
@@ -290,7 +289,6 @@ ACCESS_TEAM = "ministryofjustice/repository-stats-viewers"
 ACCESS = "app.projects.repository_stats.services.visibility_access"
 MEMBERSHIP = f"{ACCESS}.is_team_member"
 SIGN_IN = "app.projects.repository_stats.services.github_sign_in"
-SIGN_IN_URL = "/repository-stats/github"
 GITHUB_LOGIN_URL = "/repository-stats/github/login"
 CALLBACK_URL = "/repository-stats/github/callback"
 SWITCH_URL = "/repository-stats/github/switch"
@@ -299,6 +297,12 @@ NO_ACCESS_HEADING = (
 )
 UNAVAILABLE_HEADING = "Sorry, we can&#39;t check your access right now"
 MICROSOFT_SUB = "waad|pairwise-id"
+
+
+def login_redirect(location):
+    """(path, next) for a redirect to the GitHub login route."""
+    parts = urlsplit(location)
+    return parts.path, parse_qs(parts.query).get("next")
 
 
 def microsoft_user(sub=MICROSOFT_SUB):
@@ -385,36 +389,56 @@ class TestStatsAccess(StatsAccessTestCase):
         }
         self.assertEqual(rules, set(ROUTES) | set(GITHUB_ROUTES))
 
-    def test_no_github_sign_in_goes_to_confirm_page_and_remembers_the_page(self):
+    def test_no_github_sign_in_goes_straight_to_github_and_remembers_the_page(self):
         with patch(MEMBERSHIP) as membership:
             for url in ROUTES:
                 with self.subTest(url=url):
                     response = self.client.get(f"{url}?a=1")
                     self.assertEqual(response.status_code, 302)
-                    self.assertEqual(response.location, SIGN_IN_URL)
+                    self.assertEqual(
+                        login_redirect(response.location),
+                        (GITHUB_LOGIN_URL, [f"{url}?a=1"]),
+                    )
+                    response = self.client.get(response.location)
+                    self.assertEqual(response.status_code, 302)
+                    self.assertTrue(
+                        response.location.startswith(
+                            "https://github.com/login/oauth/authorize?"
+                        )
+                    )
                     self.assertEqual(self.session()["stats_github_next"], f"{url}?a=1")
         membership.assert_not_called()
 
-    def test_confirm_page(self):
-        response = self.client.get(SIGN_IN_URL)
-        self.assertEqual(response.status_code, 200)
-        body = response.get_data(as_text=True)
-        main_html = body.split("<main", 1)[1].split("</main>", 1)[0]
-        self.assertIn(
-            '<h1 class="govuk-heading-l">Confirm your GitHub account</h1>', main_html
-        )
-        self.assertIn("members of a specific GitHub team", main_html)
-        self.assertIn("We don't ask for any permissions", main_html)
-        start_button = re.search(r"<a [^>]*govuk-button--start[^>]*>", main_html)
-        self.assertIsNotNone(start_button)
-        self.assertIn(f'href="{GITHUB_LOGIN_URL}"', start_button.group(0))
-        self.assertIn("Continue with GitHub", main_html)
-        self.assertNotIn("sign out of github.com", main_html)
+    def test_github_login_ignores_unsafe_next_and_keeps_remembered_page(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session["stats_github_next"] = "/repository-stats/archived"
+        for next_path in ("https://evil.example/", "//evil.example", "/auth/logout"):
+            with self.subTest(next_path=next_path):
+                response = self.client.get(
+                    f"{GITHUB_LOGIN_URL}?{urlencode({'next': next_path})}"
+                )
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(
+                    self.session()["stats_github_next"], "/repository-stats/archived"
+                )
+
+    def test_confirm_page_is_gone(self):
+        self.assertEqual(self.client.get("/repository-stats/github").status_code, 404)
+
+    def test_failed_callback_shows_a_page_rather_than_going_back_to_github(self):
+        self.start_github_sign_in()
+        for query in ({"error": "access_denied"}, {"state": "wrong", "code": "x"}):
+            with self.subTest(query=query):
+                response = self.client.get(f"{CALLBACK_URL}?{urlencode(query)}")
+                self.assertIn(response.status_code, (200, 400))
+                self.assertIsNone(response.location)
+                body = response.get_data(as_text=True)
+                self.assertIn(f'href="{GITHUB_LOGIN_URL}"', body)
 
     def test_confirm_page_needs_microsoft_sign_in(self):
         with self.client.session_transaction() as flask_session:
             flask_session.clear()
-        for url in (SIGN_IN_URL, GITHUB_LOGIN_URL, f"{CALLBACK_URL}?code=x&state=y"):
+        for url in (GITHUB_LOGIN_URL, f"{CALLBACK_URL}?code=x&state=y"):
             with self.subTest(url=url):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 302)
@@ -478,8 +502,9 @@ class TestStatsAccess(StatsAccessTestCase):
         )
 
     def test_happy_path_member(self):
-        self.client.get("/repository-stats/overview?open=ministryofjustice")
-        state = self.start_github_sign_in()
+        page = self.client.get("/repository-stats/overview?open=ministryofjustice")
+        to_github = self.client.get(page.location)
+        state = parse_qs(urlsplit(to_github.location).query)["state"][0]
         with patch(MEMBERSHIP, return_value=True) as membership:
             response = self.callback({"code": "abc", "state": state})
             self.assertEqual(response.status_code, 302)
@@ -766,24 +791,24 @@ class TestStatsAccess(StatsAccessTestCase):
             flask_session["user"] = microsoft_user("waad|someone-else")
         with patch(MEMBERSHIP) as membership:
             response = self.client.get(ROUTES[0])
-        self.assertEqual(response.location, SIGN_IN_URL)
+        self.assertEqual(
+            login_redirect(response.location), (GITHUB_LOGIN_URL, [ROUTES[0]])
+        )
         membership.assert_not_called()
 
     def test_use_a_different_github_account(self):
         self.sign_in_to_github(checked_at=time.time(), has_access=False)
         response = self.client.post(SWITCH_URL)
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, f"{SIGN_IN_URL}?switched=1")
+        self.assertEqual(response.location, GITHUB_LOGIN_URL)
         saved = self.session()
         self.assertNotIn(GITHUB_SESSION_KEY, saved)
         self.assertNotIn(SESSION_KEY, saved)
         self.assertIn("user", saved)
-        body = self.client.get(response.location).get_data(as_text=True)
-        self.assertIn(
-            '<a class="govuk-link" href="https://github.com/logout">sign out of github.com</a>',
-            body,
+        response = self.client.get(response.location)
+        self.assertTrue(
+            response.location.startswith("https://github.com/login/oauth/authorize?")
         )
-        self.assertIn("Continue with GitHub", body)
         self.assertEqual(self.client.get(SWITCH_URL).status_code, 405)
 
     def test_signed_out_user_still_goes_to_login_first(self):
