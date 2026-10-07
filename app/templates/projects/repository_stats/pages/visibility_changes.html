@@ -88,8 +88,8 @@
   <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Repository visibility changes</h1>
   <div class="govuk-!-margin-bottom-6">
     <p class="govuk-body-l govuk-!-margin-bottom-4">Track repository visibility changes, new repositories and deleted repositories.</p>
-    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
     <p class="govuk-body-s">Showing changes since: {{ history_start_date }}</p>
+    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
   </div>
 
   {# Filters #}
