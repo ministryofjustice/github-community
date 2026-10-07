@@ -14,6 +14,7 @@ from flask import (
 
 from app.projects.repository_stats.config.visibility_config import (
     VISIBILITY_ARCHIVED_DEADLINE,
+    VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
     VISIBILITY_SLACK_CHANNEL_URL,
 )
@@ -131,6 +132,7 @@ def visibility_changes():
         "projects/repository_stats/pages/visibility_changes.html",
         page=page,
         query=page.query,
+        history_start_date=VISIBILITY_HISTORY_START_DATE,
     )
 
 

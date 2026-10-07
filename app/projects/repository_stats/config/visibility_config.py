@@ -5,6 +5,11 @@ VISIBILITY_ARCHIVED_DEADLINE = (
     os.getenv("VISIBILITY_ARCHIVED_DEADLINE") or "23 October 2026"
 )
 
+# The date of the earliest imported visibility audit report (list_repos_17aug2026.xlsx),
+# so the earliest date the Visibility changes page has history for. Fixed, not
+# calculated from the database.
+VISIBILITY_HISTORY_START_DATE = "17 August 2026"
+
 VISIBILITY_SLACK_CHANNEL_NAME = "#ask-developer-experience"
 VISIBILITY_SLACK_CHANNEL_URL = "https://moj.enterprise.slack.com/archives/C0AJBK3P5A8"
 

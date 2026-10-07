@@ -118,6 +118,55 @@ class TestFetchOrgTeamAccess(unittest.TestCase):
         self.assertEqual(github.calls.count(team_repos("b-team")), 3)
         self.assertEqual(sleeps, [2, 5])
 
+    def test_a_404_on_one_team_skips_only_that_team(self):
+        github = FakeGitHub(
+            {
+                TEAMS: page(
+                    [
+                        {"slug": "a-team", "name": "A"},
+                        {"slug": "gone-team", "name": "Gone"},
+                        {"slug": "c-team", "name": "C"},
+                    ]
+                ),
+                team_repos("a-team"): page([{"id": 1, "role_name": "read"}]),
+                team_repos("gone-team"): page(
+                    {"message": "Not Found"}, status_code=404
+                ),
+                team_repos("c-team"): page([{"id": 3, "role_name": "admin"}]),
+            }
+        )
+        sleeps = []
+        with self.assertLogs(
+            "app.projects.repository_stats.services.github_teams", "WARNING"
+        ) as logs:
+            records = fetch_org_team_access(github, ORG, sleep=sleeps.append)
+        self.assertEqual(
+            sorted((r.github_id, r.team_slug) for r in records),
+            [(1, "a-team"), (3, "c-team")],
+        )
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("gone-team", logs.output[0])
+        self.assertIn("404", logs.output[0])
+        # 404s aren't retried.
+        self.assertEqual(github.calls.count(team_repos("gone-team")), 1)
+        self.assertEqual(sleeps, [])
+
+    def test_a_404_on_the_team_list_still_fails_the_fetch(self):
+        github = FakeGitHub({TEAMS: page({"message": "Not Found"}, status_code=404)})
+        with self.assertRaisesRegex(GitHubInventoryError, "404"):
+            fetch_org_team_access(github, ORG)
+
+    def test_other_4xx_on_a_team_still_fails_the_fetch(self):
+        github = FakeGitHub(
+            {
+                TEAMS: page([{"slug": "a-team"}, {"slug": "b-team"}]),
+                team_repos("a-team"): page({"message": "Forbidden"}, status_code=403),
+                team_repos("b-team"): page([{"id": 2, "role_name": "read"}]),
+            }
+        )
+        with self.assertRaisesRegex(GitHubInventoryError, "403"):
+            fetch_org_team_access(github, ORG)
+
     def test_unexpected_body_and_missing_slug(self):
         with self.assertRaisesRegex(GitHubInventoryError, "unexpected team list"):
             fetch_org_team_access(FakeGitHub({TEAMS: page({"oops": 1})}), ORG)

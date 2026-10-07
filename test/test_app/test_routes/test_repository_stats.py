@@ -15,6 +15,7 @@ import requests
 from flask import Flask
 
 from app.projects.repository_stats.config.visibility_config import (
+    VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
     VISIBILITY_SLACK_CHANNEL_URL,
 )
@@ -1444,6 +1445,31 @@ class TestLastUpdatedLine(RepositoryStatsTestCase):
             with self.subTest(url=url):
                 _, body = self.get(url)
                 self.assertNotIn('<p class="govuk-body-s">Last updated', body)
+
+
+HISTORY_START_LINE = '<p class="govuk-body-s">Showing changes since: 17 August 2026</p>'
+
+
+class TestHistoryStartLine(RepositoryStatsTestCase):
+    def test_shown_directly_under_last_updated_on_the_changes_page(self):
+        _, body = self.get(CHANGES_URL)
+        self.assertEqual(body.count(HISTORY_START_LINE), 1)
+        self.assertRegex(
+            body, re.escape(LAST_UPDATED_LINE) + r"\s*" + re.escape(HISTORY_START_LINE)
+        )
+        self.assertLess(body.index(HISTORY_START_LINE), body.index("<form"))
+
+    def test_uses_the_config_constant(self):
+        self.assertEqual(VISIBILITY_HISTORY_START_DATE, "17 August 2026")
+
+    def test_shown_without_a_last_updated_line(self):
+        self.repository.last_run_finished_at = None
+        _, body = self.get(CHANGES_URL)
+        self.assertIn(HISTORY_START_LINE, body)
+
+    def test_not_on_the_archived_page(self):
+        _, body = self.get(ARCHIVED_URL)
+        self.assertNotIn("Showing changes since", body)
 
 
 class TestNoImportedDatesNote(RepositoryStatsTestCase):

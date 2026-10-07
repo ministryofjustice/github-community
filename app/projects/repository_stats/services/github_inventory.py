@@ -12,6 +12,11 @@ MAX_PAGES = 1000
 class GitHubInventoryError(Exception):
     """GitHub didn't return a complete repository list, so the run must not write anything."""
 
+    def __init__(self, message: str, status_code: int | None = None):
+        super().__init__(message)
+        # The HTTP status GitHub returned, when the error came from a response.
+        self.status_code = status_code
+
 
 class GitHubGetter(Protocol):
     def get(self, path: str): ...
@@ -63,7 +68,10 @@ def _raise_for_status(response) -> None:
             headers.get("x-ratelimit-reset") or headers.get("retry-after") or "unknown"
         )
         raise GitHubInventoryError(f"GitHub API rate limit reached (reset: {reset})")
-    raise GitHubInventoryError(f"GitHub API returned status {response.status_code}")
+    raise GitHubInventoryError(
+        f"GitHub API returned status {response.status_code}",
+        status_code=response.status_code,
+    )
 
 
 def get_all_pages(client: GitHubGetter, path: str, what: str) -> list[dict]:

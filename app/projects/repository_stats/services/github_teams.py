@@ -108,9 +108,11 @@ def fetch_org_team_access(
 ) -> list[TeamAccessRecord]:
     """One record per team per repository it can access.
 
-    Each call is retried (see RetryingGetter). Raises GitHubInventoryError, or the
-    network error, if any list still can't be fetched in full, so the caller can keep
-    the previous data rather than store a partial set.
+    Each call is retried (see RetryingGetter). A team whose repository list returns 404
+    (e.g. renamed or deleted during the scan) is skipped with a warning and the other
+    teams are still returned. Any other failure raises GitHubInventoryError, or the
+    network error, so the caller can keep the previous data rather than store a partial
+    set.
     """
     client = RetryingGetter(client, sleep=sleep)
     records: dict[tuple[int, str], TeamAccessRecord] = {}
@@ -121,7 +123,19 @@ def fetch_org_team_access(
             raise GitHubInventoryError("GitHub API returned a team without a slug")
         parent = (team.get("parent") or {}).get("slug")
         path = f"/orgs/{org}/teams/{quote(slug, safe='')}/repos?per_page={PER_PAGE}"
-        for repository in get_all_pages(client, path, "team repository"):
+        try:
+            repositories = get_all_pages(client, path, "team repository")
+        except GitHubInventoryError as error:
+            if error.status_code != 404:
+                raise
+            logger.warning(
+                "Skipping team %s in %s: GitHub returned 404 for its repositories "
+                "(renamed or deleted during the scan?)",
+                slug,
+                org,
+            )
+            continue
+        for repository in repositories:
             record = TeamAccessRecord(
                 org=org,
                 github_id=int(repository["id"]),

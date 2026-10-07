@@ -118,6 +118,9 @@ class FakeGitHub:
                     )
                 for t in teams:
                     if path == f"/orgs/{org}/teams/{t['slug']}/repos?per_page=100":
+                        if t["repos"] is None:
+                            # Renamed or deleted since the team list was fetched.
+                            return Response({"message": "Not Found"}, 404)
                         return Response(
                             [
                                 {"id": github_id, "role_name": role}
@@ -544,6 +547,32 @@ class TestRecordTeamAccess(RecordRepositoryVisibilityTestCase):
         self.assertIsNone(results[0].team_access)
         self.assertEqual(self.team_access(), before)
         self.assertEqual([call.args for call in sleep.call_args_list], [(2,), (5,)])
+
+    def test_a_404_on_one_team_still_stores_the_other_teams(self):
+        self.run_job([repo(1, "one")], DAY_1, teams=[team("old-team", {1: "read"})])
+        with self.assertLogs(
+            "app.projects.repository_stats.services.github_teams", "WARNING"
+        ) as logs:
+            results = self.run_job(
+                [repo(1, "one"), repo(2, "two")],
+                DAY_2,
+                teams=[
+                    team("platform-team", {1: "admin", 2: "write"}),
+                    team("deleted-team", None),
+                    team("service-team", {1: "read"}),
+                ],
+            )
+        self.assertEqual(
+            self.team_access(),
+            [
+                (MOJ, 1, "platform-team", "platform-team", None, "admin"),
+                (MOJ, 1, "service-team", "service-team", None, "read"),
+                (MOJ, 2, "platform-team", "platform-team", None, "write"),
+            ],
+        )
+        self.assertEqual(results[0].team_access, 3)
+        self.assertIn("deleted-team", "\n".join(logs.output))
+        self.assertEqual([r[0] for r in self.runs()], ["success", "success"])
 
     def test_team_failure_in_one_org_keeps_other_orgs_teams(self):
         orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
