@@ -32,6 +32,30 @@
     {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
   </div>
 
+  {% if overview.organisations %}
+    <form method="get" action="{{ url_for('repository_stats_main.repository_overview') }}" class="app-overview-search" novalidate>
+      <div class="govuk-form-group">
+        {{ govukInput({
+          "id": "q",
+          "name": "q",
+          "label": {"text": "Search for a team"},
+          "hint": {"text": "Enter a team name to expand and highlight it below."},
+          "value": search_query,
+          "spellcheck": false,
+          "autocomplete": "off"
+        }) }}
+      </div>
+      {{ govukButton({"text": "Search"}) }}
+    </form>
+    {% if search_match_count is not none %}
+      {% if search_match_count %}
+        <p class="govuk-body" id="overview-search-result">{{ search_match_count }} team{{ "" if search_match_count == 1 else "s" }} found matching &ldquo;{{ search_query }}&rdquo;.</p>
+      {% else %}
+        <div class="govuk-inset-text" id="overview-search-result">No teams found matching &ldquo;{{ search_query }}&rdquo;.</div>
+      {% endif %}
+    {% endif %}
+  {% endif %}
+
   {% if not overview.organisations %}
     <p class="govuk-body">There is no repository data yet.</p>
   {% else %}
@@ -86,9 +110,9 @@
                       <th scope="row" class="govuk-table__header app-overview-name--team">
                         <span class="app-overview-team-name">
                           {%- if team.url -%}
-                            <a class="govuk-link" href="{{ team.url }}" target="_blank" rel="noopener noreferrer">{{ team.name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+                            <a class="govuk-link" href="{{ team.url }}" target="_blank" rel="noopener noreferrer">{{ team.name | highlight_match(search_query) }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
                           {%- else -%}
-                            {{ team.name }}
+                            {{ team.name | highlight_match(search_query) }}
                           {%- endif -%}
                         </span>
                       </th>

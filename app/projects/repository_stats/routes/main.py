@@ -22,6 +22,7 @@ from app.projects.repository_stats.repositories.visibility_repository import (
     VisibilityRepository,
 )
 from app.projects.repository_stats.services import github_sign_in as github
+from app.projects.repository_stats.services.overview_logic import find_matching_teams
 from app.projects.repository_stats.services.visibility_access import (
     check_stats_access,
     clear_github_sign_in,
@@ -102,14 +103,45 @@ def repository_overview():
         for row in (org, *org.children)
         if row.key
     ]
-    open_keys = [
-        key for key in dict.fromkeys(request.args.getlist("open")) if key in keys
-    ]
-    # A business unit only shows when its organisation is open too.
-    open_keys = [
-        key for key in open_keys if "/" not in key or key.split("/", 1)[0] in open_keys
-    ]
     anchors = overview_anchors(keys)
+
+    search_query = request.args.get("q", "").strip()
+    search_match_count = None
+    if search_query:
+        matches = find_matching_teams(page.overview, search_query)
+        search_match_count = len(matches)
+        needed_keys = []
+        for match in matches:
+            for key in (match.organisation_key, match.business_unit_key):
+                if key not in needed_keys:
+                    needed_keys.append(key)
+        current_keys = list(dict.fromkeys(request.args.getlist("open")))
+        if current_keys != needed_keys:
+            # Search fully decides what's expanded, so any existing ?open= is
+            # dropped, and we redirect to the canonical URL rather than render it
+            # directly. That keeps the address bar (and a page refresh) showing
+            # exactly what's expanded, and lets us jump straight to the first match.
+            query_pairs = [("open", key) for key in needed_keys]
+            query_pairs.append(("q", search_query))
+            target = (
+                f"{url_for('repository_stats_main.repository_overview')}"
+                f"?{urlencode(query_pairs)}"
+            )
+            if matches:
+                target += f"#{anchors[matches[0].business_unit_key]}"
+            return redirect(target)
+        open_keys = needed_keys
+    else:
+        open_keys = [
+            key for key in dict.fromkeys(request.args.getlist("open")) if key in keys
+        ]
+        # A business unit only shows when its organisation is open too.
+        open_keys = [
+            key
+            for key in open_keys
+            if "/" not in key or key.split("/", 1)[0] in open_keys
+        ]
+
     return render_template(
         "projects/repository_stats/pages/repository_overview.html",
         page=page,
@@ -118,6 +150,8 @@ def repository_overview():
             key: overview_toggle_href(open_keys, key, anchors[key]) for key in keys
         },
         anchors=anchors,
+        search_query=search_query,
+        search_match_count=search_match_count,
     )
 
 

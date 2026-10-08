@@ -5,6 +5,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from urllib.parse import quote
 
+from markupsafe import Markup, escape
+
 from app.projects.repository_stats.services.business_units import (
     BusinessUnitSource,
     business_units_for,
@@ -62,6 +64,48 @@ class RepositoryTeams:
 class Overview:
     all_organisations: OverviewRow
     organisations: list[OverviewRow]
+
+
+@dataclass(frozen=True)
+class TeamMatch:
+    organisation_key: str
+    business_unit_key: str
+    team: OverviewRow
+
+
+def find_matching_teams(overview: Overview, query: str) -> list[TeamMatch]:
+    """Every team whose name contains query (case-insensitive substring match),
+    in organisation then business unit then team order, with the organisation and
+    business unit keys that must be open to reveal it."""
+    query = query.strip().lower()
+    if not query:
+        return []
+    return [
+        TeamMatch(org.key, business_unit.key, team)
+        for org in overview.organisations
+        for business_unit in org.children
+        for team in business_unit.children
+        if query in team.name.lower()
+    ]
+
+
+def highlight_match(name: str, query: str) -> Markup:
+    """name, HTML-escaped, with the first case-insensitive occurrence of query (if
+    any) wrapped in <mark>. Used to highlight team names matched by a search."""
+    query = query.strip()
+    if not query:
+        return Markup(escape(name))
+    start = name.lower().find(query.lower())
+    if start == -1:
+        return Markup(escape(name))
+    end = start + len(query)
+    return (
+        Markup(escape(name[:start]))
+        + Markup('<mark class="app-overview-match">')
+        + Markup(escape(name[start:end]))
+        + Markup("</mark>")
+        + Markup(escape(name[end:]))
+    )
 
 
 def team_url(org: str, slug: str) -> str:

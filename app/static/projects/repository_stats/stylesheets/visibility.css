@@ -299,6 +299,18 @@
   outline-offset: 0;
 }
 
+/* Freeze the header row (like Excel's freeze panes) so column titles stay visible
+   while scrolling a long table. Used by both the Repository overview and Archived
+   repositories tables, which share the .app-table-scroll wrapper. A solid background
+   stops scrolled-past rows showing through underneath the frozen header. */
+.app-table-scroll thead.govuk-table__head th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #ffffff;
+  box-shadow: inset 0 -1px 0 #b1b4b6;
+}
+
 /* GOV.UK error red is 4.3:1 on the grey filter panel; this darker red is 5.7:1. */
 .app-visibility-filters .govuk-error-message {
   color: #b52a16;
@@ -312,4 +324,40 @@
 /* Long unbroken names wrap rather than widen the table. */
 .app-table-scroll .govuk-table__cell {
   overflow-wrap: break-word;
+}
+
+/* Repository overview: team search box, above the table. */
+.app-overview-search {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.app-overview-search .govuk-form-group {
+  margin-bottom: 0;
+  max-width: 20em;
+}
+
+.app-overview-search .govuk-input {
+  width: 100%;
+}
+
+.app-overview-search .govuk-button {
+  margin-bottom: 0;
+}
+
+@media (min-width: 641px) {
+  .app-overview-search {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+}
+
+/* Matched substring in a team name, found by the search box above the table. */
+.app-overview-match {
+  background-color: #fff7bf;
+  font-weight: 700;
+  padding: 0 1px;
 }

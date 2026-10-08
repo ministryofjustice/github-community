@@ -10,6 +10,8 @@ from app.projects.repository_stats.services.overview_logic import (
     RepositoryTeams,
     Team,
     build_overview,
+    find_matching_teams,
+    highlight_match,
     team_url,
 )
 from app.projects.repository_stats.services.visibility_logic import VisibilitySnapshot
@@ -209,6 +211,77 @@ class TestBuildOverview(unittest.TestCase):
         overview = build_overview([], {})
         self.assertEqual(totals(overview.all_organisations), (0, 0, 0, 0))
         self.assertEqual(overview.organisations, [])
+
+
+class TestFindMatchingTeams(unittest.TestCase):
+    def build(self):
+        repository_teams = RepositoryTeams(
+            by_name={
+                "repo-one": [Team("platform-team", "Platform team")],
+                "repo-two": [Team("service-team", "Service team")],
+                "repo-three": [Team("platform-team", "Platform team")],
+            }
+        )
+        return build_overview(
+            [
+                snap(1, "org-a", "repo-one", "public"),
+                snap(2, "org-a", "repo-two", "internal"),
+                snap(3, "org-b", "repo-three", "private"),
+            ],
+            {"repo-one": ["Unit A"], "repo-two": ["Unit B"], "repo-three": ["Unit A"]},
+            repository_teams=repository_teams,
+        )
+
+    def test_matches_are_case_insensitive_substrings(self):
+        overview = self.build()
+        matches = find_matching_teams(overview, "PLATFORM")
+        self.assertEqual(
+            [(m.organisation_key, m.business_unit_key, m.team.name) for m in matches],
+            [
+                ("org-a", "org-a/Unit A", "Platform team"),
+                ("org-b", "org-b/Unit A", "Platform team"),
+            ],
+        )
+
+    def test_no_matches(self):
+        overview = self.build()
+        self.assertEqual(find_matching_teams(overview, "no such team"), [])
+
+    def test_blank_query_matches_nothing(self):
+        overview = self.build()
+        self.assertEqual(find_matching_teams(overview, "   "), [])
+
+    def test_matches_in_organisation_then_business_unit_then_team_order(self):
+        overview = self.build()
+        matches = find_matching_teams(overview, "team")
+        self.assertEqual(
+            [(m.organisation_key, m.business_unit_key) for m in matches],
+            [
+                ("org-a", "org-a/Unit A"),
+                ("org-a", "org-a/Unit B"),
+                ("org-b", "org-b/Unit A"),
+            ],
+        )
+
+
+class TestHighlightMatch(unittest.TestCase):
+    def test_wraps_matching_substring_preserving_case(self):
+        self.assertEqual(
+            str(highlight_match("Platform Team", "team")),
+            'Platform <mark class="app-overview-match">Team</mark>',
+        )
+
+    def test_no_match_returns_escaped_name_unchanged(self):
+        self.assertEqual(str(highlight_match("Platform Team", "xyz")), "Platform Team")
+
+    def test_blank_query_returns_escaped_name_unchanged(self):
+        self.assertEqual(str(highlight_match("Platform Team", "")), "Platform Team")
+
+    def test_escapes_html_in_name(self):
+        self.assertEqual(
+            str(highlight_match("<script>team", "team")),
+            '&lt;script&gt;<mark class="app-overview-match">team</mark>',
+        )
 
 
 if __name__ == "__main__":

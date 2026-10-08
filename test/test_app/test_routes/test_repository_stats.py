@@ -1451,11 +1451,11 @@ HISTORY_START_LINE = '<p class="govuk-body-s">Showing changes since: 17 August 2
 
 
 class TestHistoryStartLine(RepositoryStatsTestCase):
-    def test_shown_directly_under_last_updated_on_the_changes_page(self):
+    def test_shown_directly_above_last_updated_on_the_changes_page(self):
         _, body = self.get(CHANGES_URL)
         self.assertEqual(body.count(HISTORY_START_LINE), 1)
         self.assertRegex(
-            body, re.escape(LAST_UPDATED_LINE) + r"\s*" + re.escape(HISTORY_START_LINE)
+            body, re.escape(HISTORY_START_LINE) + r"\s*" + re.escape(LAST_UPDATED_LINE)
         )
         self.assertLess(body.index(HISTORY_START_LINE), body.index("<form"))
 
@@ -2207,6 +2207,111 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
         self.assertNotIn("background", rule)
         self.assertNotIn("text-transform", rule)
         self.assertNotIn(".app-overview-row--group-label", css)
+
+
+class TestRepositoryOverviewSearch(RepositoryStatsTestCase):
+    def test_search_redirects_expanding_matching_organisations_and_business_units(self):
+        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
+        self.assertEqual(response.status_code, 302)
+        location = response.headers["Location"]
+        query = parse_qs(urlsplit(location).query)
+        self.assertEqual(
+            query["open"], [ORG, f"{ORG}/HMPPS", f"{ORG}/Office of the CTO"]
+        )
+        self.assertEqual(query["q"], ["platform-team"])
+        self.assertEqual(urlsplit(location).fragment, f"overview-{ORG.lower()}-hmpps")
+
+    def test_search_ignores_existing_open_params(self):
+        response = self.client.get(
+            f"{OVERVIEW_URL}?open=something-unrelated&q=platform-team"
+        )
+        self.assertEqual(response.status_code, 302)
+        query = parse_qs(urlsplit(response.headers["Location"]).query)
+        self.assertEqual(
+            query["open"], [ORG, f"{ORG}/HMPPS", f"{ORG}/Office of the CTO"]
+        )
+
+    def test_search_with_no_matches_redirects_fully_collapsed(self):
+        response = self.client.get(f"{OVERVIEW_URL}?open={ORG}&q=no-such-team")
+        self.assertEqual(response.status_code, 302)
+        parts = urlsplit(response.headers["Location"])
+        query = parse_qs(parts.query)
+        self.assertNotIn("open", query)
+        self.assertEqual(query["q"], ["no-such-team"])
+        self.assertEqual(parts.fragment, "")
+
+    def test_redirect_target_renders_with_highlighted_matches_and_count(self):
+        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
+        location = response.headers["Location"]
+        target = urlsplit(location)._replace(scheme="", netloc="").geturl()
+        _, body = self.get(target)
+        self.assertEqual(
+            body.count('<mark class="app-overview-match">platform-team</mark>'), 2
+        )
+        self.assertIn(
+            '<p class="govuk-body" id="overview-search-result">2 teams found'
+            " matching &ldquo;platform-team&rdquo;.</p>",
+            body,
+        )
+        self.assertIn('value="platform-team"', body)
+
+    def test_redirect_target_is_stable_no_further_redirect(self):
+        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
+        target = (
+            urlsplit(response.headers["Location"])
+            ._replace(scheme="", netloc="")
+            .geturl()
+        )
+        second, _ = self.get(target)
+        self.assertEqual(second.status_code, 200)
+
+    def test_no_matches_shows_message(self):
+        # No ?open= to disagree with, so this renders directly (no redirect needed).
+        response, body = self.get(f"{OVERVIEW_URL}?q=no-such-team")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            '<div class="govuk-inset-text" id="overview-search-result">No teams found'
+            " matching &ldquo;no-such-team&rdquo;.</div>",
+            body,
+        )
+
+    def test_blank_query_behaves_like_no_search(self):
+        response, body = self.get(f"{OVERVIEW_URL}?q=")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn('id="overview-search-result"', body)
+
+    def test_search_form_present(self):
+        _, body = self.get(OVERVIEW_URL)
+        self.assertIn('class="app-overview-search"', body)
+        self.assertIn('name="q"', body)
+
+
+class TestRepositoryOverviewStickyHeader(RepositoryStatsTestCase):
+    def test_table_header_is_sticky_within_scroll_container(self):
+        with open(
+            os.path.join(
+                APP_DIR,
+                "static/projects/repository_stats/stylesheets/visibility.css",
+            )
+        ) as stylesheet:
+            css = stylesheet.read()
+        rule = css.split(".app-table-scroll thead.govuk-table__head th {", 1)[1].split(
+            "}", 1
+        )[0]
+        self.assertIn("position: sticky;", rule)
+        self.assertIn("top: 0;", rule)
+        self.assertIn("background-color:", rule)
+
+    def test_overview_table_is_inside_scroll_container(self):
+        _, body = self.get(OVERVIEW_URL)
+        region = body.split('id="repository-overview"', 1)[0][-400:]
+        self.assertIn('class="app-table-scroll"', region)
+
+    def test_archived_table_still_uses_the_shared_scroll_container(self):
+        response, body = self.get(ARCHIVED_URL)
+        self.assertEqual(response.status_code, 200)
+        region = body.split('id="archived-table"', 1)[0][-400:]
+        self.assertIn('class="app-table-scroll"', region)
 
 
 class TestRepositoryOverviewNoData(RepositoryStatsTestCase):
