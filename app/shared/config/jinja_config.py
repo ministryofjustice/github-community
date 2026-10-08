@@ -1,7 +1,6 @@
 from flask import Flask
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 
-from app.projects.repository_stats.services.overview_logic import highlight_match
 from app.shared.config.app_config import app_config
 
 
@@ -18,4 +17,3 @@ def configure_jinja(app: Flask) -> None:
     app.jinja_env.lstrip_blocks = True
     app.jinja_env.globals["govukRebrand"] = False
     app.jinja_env.globals["phase_banner_text"] = app_config.phase_banner_text
-    app.jinja_env.filters["highlight_match"] = highlight_match

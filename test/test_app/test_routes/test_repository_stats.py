@@ -1869,7 +1869,13 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
 class TestRepositoryOverviewPage(RepositoryStatsTestCase):
     def rows(self, body):
         """(kind, name, [total, public, internal, private]) for every table body row."""
-        tbody = body.split('id="repository-overview"', 1)[1].split("</tbody>", 1)[0]
+        # Team rows for each open business unit live in their own nested table (its
+        # own scroll box), inside a <td> of the outer table, so the outer tbody's
+        # closing tag isn't the first "</tbody>" in the markup - split on its
+        # distinctive (lesser) indentation to avoid stopping at a nested table's.
+        tbody = body.split('id="repository-overview"', 1)[1].split(
+            "\n        </tbody>\n      </table>", 1
+        )[0]
         result = []
         for kind, row in re.findall(
             r'<tr class="govuk-table__row app-overview-row--([a-z-]+)[ "][^>]*>(.*?)</tr>',
@@ -2215,98 +2221,50 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
         self.assertNotIn(".app-overview-row--group-label", css)
 
 
-class TestRepositoryOverviewSearch(RepositoryStatsTestCase):
-    def test_search_redirects_expanding_matching_organisations_and_business_units(self):
-        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
-        self.assertEqual(response.status_code, 302)
-        location = response.headers["Location"]
-        query = parse_qs(urlsplit(location).query)
+class TestRepositoryOverviewTeamScrollBoxes(RepositoryStatsTestCase):
+    def test_open_business_unit_wraps_its_teams_in_their_own_scroll_box(self):
+        _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO")
+        # The team table sits inside a <td> of the outer table, in its own boxed,
+        # independently-scrolling <div>, not the whole table.
+        cell_start = body.index("app-overview-teambox-cell")
+        after = body[cell_start:]
+        div_at = after.index('<div class="app-overview-teambox">')
+        table_at = after.index('<table class="govuk-table app-overview-team-table">')
+        label_at = after.index(">Team</td>")
+        row_at = after.index("app-overview-row--team")
+        self.assertLess(div_at, table_at)
+        self.assertLess(table_at, label_at)
+        self.assertLess(label_at, row_at)
+
+    def test_two_open_business_units_each_get_their_own_box(self):
+        _, body = self.get(
+            f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO&open={ORG}/Unknown"
+        )
+        self.assertEqual(body.count('class="app-overview-teambox"'), 2)
+
+    def test_org_and_business_unit_rows_are_outside_any_scroll_box(self):
+        _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO")
+        before_box = body.split('class="app-overview-teambox"', 1)[0]
+        self.assertIn(f'id="overview-{ORG}"', before_box)
+        self.assertIn(f'id="overview-{ORG}-office-of-the-cto"', before_box)
+
+    def test_outer_and_team_tables_share_matching_column_widths(self):
+        with open(
+            os.path.join(
+                APP_DIR,
+                "static/projects/repository_stats/stylesheets/visibility.css",
+            )
+        ) as stylesheet:
+            css = stylesheet.read()
+        self.assertIn(".app-overview-table,\n.app-overview-team-table {", css)
+        rule = css.split(".app-overview-table,\n.app-overview-team-table {", 1)[
+            1
+        ].split("}", 1)[0]
+        self.assertIn("table-layout: fixed;", rule)
+        _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO")
         self.assertEqual(
-            query["open"], [ORG, f"{ORG}/HMPPS", f"{ORG}/Office of the CTO"]
-        )
-        self.assertEqual(query["q"], ["platform-team"])
-        self.assertEqual(
-            urlsplit(location).fragment, f"overview-{ORG.lower()}-hmpps-team-0"
-        )
-
-    def test_search_ignores_existing_open_params(self):
-        response = self.client.get(
-            f"{OVERVIEW_URL}?open=something-unrelated&q=platform-team"
-        )
-        self.assertEqual(response.status_code, 302)
-        query = parse_qs(urlsplit(response.headers["Location"]).query)
-        self.assertEqual(
-            query["open"], [ORG, f"{ORG}/HMPPS", f"{ORG}/Office of the CTO"]
-        )
-
-    def test_search_with_no_matches_redirects_fully_collapsed(self):
-        response = self.client.get(f"{OVERVIEW_URL}?open={ORG}&q=no-such-team")
-        self.assertEqual(response.status_code, 302)
-        parts = urlsplit(response.headers["Location"])
-        query = parse_qs(parts.query)
-        self.assertNotIn("open", query)
-        self.assertEqual(query["q"], ["no-such-team"])
-        self.assertEqual(parts.fragment, "")
-
-    def test_redirect_target_renders_with_highlighted_matches_and_count(self):
-        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
-        location = response.headers["Location"]
-        target = urlsplit(location)._replace(scheme="", netloc="").geturl()
-        _, body = self.get(target)
-        self.assertEqual(
-            body.count('<mark class="app-overview-match">platform-team</mark>'), 2
-        )
-        self.assertIn(
-            '<p class="govuk-body" id="overview-search-result">2 teams'
-            " matching &ldquo;platform-team&rdquo;.</p>",
-            body,
-        )
-        self.assertIn('value="platform-team"', body)
-
-    def test_redirect_target_is_stable_no_further_redirect(self):
-        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
-        target = (
-            urlsplit(response.headers["Location"])
-            ._replace(scheme="", netloc="")
-            .geturl()
-        )
-        second, _ = self.get(target)
-        self.assertEqual(second.status_code, 200)
-
-    def test_redirect_fragment_targets_the_matching_team_row(self):
-        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
-        location = response.headers["Location"]
-        fragment = urlsplit(location).fragment
-        target = urlsplit(location)._replace(scheme="", netloc="", fragment="").geturl()
-        _, body = self.get(target)
-        # The fragment must be an id on a team row (not its business unit), and
-        # that row must be the highlighted match, so the browser lands directly
-        # on the matching team without any further scrolling.
-        row = body.split(f'id="{fragment}"', 1)[1].split("</tr>", 1)[0]
-        self.assertIn(
-            "app-overview-row--team", body.split(f'id="{fragment}"', 1)[0][-200:]
-        )
-        self.assertIn('<mark class="app-overview-match">platform-team</mark>', row)
-
-    def test_no_matches_shows_message(self):
-        # No ?open= to disagree with, so this renders directly (no redirect needed).
-        response, body = self.get(f"{OVERVIEW_URL}?q=no-such-team")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(
-            '<p class="govuk-body" id="overview-search-result">No teams'
-            " matching &ldquo;no-such-team&rdquo;.</p>",
-            body,
-        )
-
-    def test_blank_query_behaves_like_no_search(self):
-        response, body = self.get(f"{OVERVIEW_URL}?q=")
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn('id="overview-search-result"', body)
-
-    def test_search_form_present(self):
-        _, body = self.get(OVERVIEW_URL)
-        self.assertIn('class="app-overview-search"', body)
-        self.assertIn('name="q"', body)
+            body.count('<col class="app-overview-col--name">'), 2
+        )  # one outer table, one open business unit's team table
 
 
 class TestRepositoryOverviewStickyHeader(RepositoryStatsTestCase):
@@ -2325,13 +2283,11 @@ class TestRepositoryOverviewStickyHeader(RepositoryStatsTestCase):
         self.assertIn("top: 0;", rule)
         self.assertIn("background-color:", rule)
 
-    def test_overview_scroll_box_has_bounded_height_so_sticky_has_somewhere_to_stick(
-        self,
-    ):
-        # position: sticky only works against a real scrolling ancestor. The plain
-        # .app-table-scroll wrapper only ever scrolls horizontally (it grows to fit
-        # all rows vertically), so the overview page needs its own bounded,
-        # vertically-scrolling box for the sticky thead above to actually stick.
+    def test_overview_drops_its_overflow_ancestor_at_normal_widths(self):
+        # position: sticky breaks the moment any ancestor's overflow is anything
+        # but visible, so the overview page's own scroll wrapper has to cancel the
+        # shared .app-table-scroll's overflow-x: auto at normal widths, keeping it
+        # only as a narrow-screen fallback (where five columns might not fit).
         with open(
             os.path.join(
                 APP_DIR,
@@ -2340,8 +2296,12 @@ class TestRepositoryOverviewStickyHeader(RepositoryStatsTestCase):
         ) as stylesheet:
             css = stylesheet.read()
         rule = css.split(".app-table-scroll--overview {", 1)[1].split("}", 1)[0]
-        self.assertIn("max-height:", rule)
-        self.assertIn("overflow-y: auto;", rule)
+        self.assertIn("overflow-x: visible;", rule)
+        self.assertNotIn("max-height:", rule)
+        narrow_rule = css.split("@media (max-width: 40.0625em) {", 1)[1].split("}", 1)[
+            0
+        ]
+        self.assertIn("overflow-x: auto;", narrow_rule)
 
     def test_overview_table_is_inside_scroll_container(self):
         _, body = self.get(OVERVIEW_URL)

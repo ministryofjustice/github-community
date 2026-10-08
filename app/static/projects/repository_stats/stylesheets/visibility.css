@@ -289,6 +289,42 @@
   border-left: 2px solid #b1b4b6;
 }
 
+/* Column widths shared by the outer table and every open business unit's nested
+   team table (below), so the team columns line up with the Organisation / Total /
+   Public / Internal / Private headings above them. */
+.app-overview-table,
+.app-overview-team-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.app-overview-col--name {
+  width: 52%;
+}
+
+.app-overview-col--numeric {
+  width: 12%;
+}
+
+/* An open business unit's teams live in their own small table, inside a <td> of
+   the outer table, boxed to a fixed height and scrolling independently - so the
+   organisation and business unit rows around it never move, and two or more open
+   business units each scroll on their own rather than sharing one long list. */
+.app-overview-teambox-cell {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.app-overview-teambox {
+  max-height: 430px;
+  overflow-y: auto;
+  background-color: #f8f8f8;
+}
+
+.app-overview-team-table {
+  margin-bottom: 0;
+}
+
 /* Wide tables scroll sideways inside their own focusable region on narrow screens. */
 .app-table-scroll {
   overflow-x: auto;
@@ -301,11 +337,11 @@
 
 /* Freeze the header row (like Excel's freeze panes) so column titles stay visible
    while scrolling a long table. Used by both the Repository overview and Archived
-   repositories tables, which share the .app-table-scroll wrapper. position: sticky
-   only works against a real scrolling ancestor, so this also needs
-   .app-table-scroll--overview below (see its comment) to actually stick on the
-   overview page. A solid background stops scrolled-past rows showing through
-   underneath the frozen header. */
+   repositories tables. position: sticky works against the page itself as long as
+   no ancestor sets overflow to anything but visible - see .app-table-scroll--overview
+   below, which drops the overview's own horizontal-scroll ancestor at normal widths
+   so this isn't broken there. A solid background stops scrolled-past rows showing
+   through underneath the frozen header. */
 .app-table-scroll thead.govuk-table__head th {
   position: sticky;
   top: 0;
@@ -314,24 +350,28 @@
   box-shadow: inset 0 -1px 0 #b1b4b6;
 }
 
-/* Every row a search or toggle link can jump to (organisation, business unit or
-   team) gets this, so landing on it via its #id doesn't tuck it underneath the
-   frozen header above. Approximates the header row's height. */
+/* Every row a toggle link can jump to (organisation or business unit) gets this,
+   so landing on it via its #id doesn't tuck it underneath the frozen header
+   above. Approximates the header row's height. */
 .app-overview-row--org,
-.app-overview-row--business-unit,
-.app-overview-row--team {
+.app-overview-row--business-unit {
   scroll-margin-top: 48px;
 }
 
-/* Repository overview only: bound the table's height so it scrolls vertically
-   inside its own box, not just horizontally. .app-table-scroll's overflow-x: auto
-   alone never produces a vertical scroll (the box grows to fit all rows), so the
-   sticky thead above has nothing to stick against - it just scrolls away with the
-   page. Scoped to this modifier class so the Archived page's table (plain
-   .app-table-scroll) is unaffected. */
+/* Repository overview only: no horizontal-scroll ancestor at normal widths, so the
+   frozen thead above has nothing between it and the page to stick to - position:
+   sticky stops working the moment any ancestor's overflow is anything but visible.
+   Falls back to the shared .app-table-scroll horizontal scroll (and its own focus
+   outline) only on narrow screens, where five columns plus long names might not
+   otherwise fit. */
 .app-table-scroll--overview {
-  max-height: 75vh;
-  overflow-y: auto;
+  overflow-x: visible;
+}
+
+@media (max-width: 40.0625em) {
+  .app-table-scroll--overview {
+    overflow-x: auto;
+  }
 }
 
 /* GOV.UK error red is 4.3:1 on the grey filter panel; this darker red is 5.7:1. */
@@ -347,31 +387,4 @@
 /* Long unbroken names wrap rather than widen the table. */
 .app-table-scroll .govuk-table__cell {
   overflow-wrap: break-word;
-}
-
-/* Repository overview: team search box, above the table. One line of
-   label/input/button on all but the narrowest screens; the govuk-input--width-20
-   class on the input itself already sizes it, so this just aligns the button
-   next to it and stops the form stretching full width. */
-.app-overview-search {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.app-overview-search .govuk-form-group {
-  margin-bottom: 0;
-}
-
-.app-overview-search .govuk-button {
-  margin-bottom: 0;
-}
-
-/* Matched substring in a team name, found by the search box above the table. */
-.app-overview-match {
-  background-color: #fff7bf;
-  font-weight: 700;
-  padding: 0 1px;
 }

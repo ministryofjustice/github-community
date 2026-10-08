@@ -8,6 +8,16 @@
   {%- endfor %}
 {%- endmacro %}
 
+{% macro overview_colgroup() -%}
+  <colgroup>
+    <col class="app-overview-col--name">
+    <col class="app-overview-col--numeric">
+    <col class="app-overview-col--numeric">
+    <col class="app-overview-col--numeric">
+    <col class="app-overview-col--numeric">
+  </colgroup>
+{%- endmacro %}
+
 {% block head %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
@@ -32,30 +42,6 @@
     {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
   </div>
 
-  {% if overview.organisations %}
-    <form method="get" action="{{ url_for('repository_stats_main.repository_overview') }}" class="app-overview-search" novalidate>
-      <div class="govuk-form-group">
-        {{ govukInput({
-          "id": "q",
-          "name": "q",
-          "label": {"text": "Search for a team", "classes": "govuk-visually-hidden"},
-          "classes": "govuk-input--width-20",
-          "value": search_query,
-          "spellcheck": false,
-          "autocomplete": "off"
-        }) }}
-      </div>
-      {{ govukButton({"text": "Search"}) }}
-    </form>
-    {% if search_match_count is not none %}
-      {% if search_match_count %}
-        <p class="govuk-body" id="overview-search-result">{{ search_match_count }} team{{ "" if search_match_count == 1 else "s" }} matching &ldquo;{{ search_query }}&rdquo;.</p>
-      {% else %}
-        <p class="govuk-body" id="overview-search-result">No teams matching &ldquo;{{ search_query }}&rdquo;.</p>
-      {% endif %}
-    {% endif %}
-  {% endif %}
-
   {% if not overview.organisations %}
     <p class="govuk-body">There is no repository data yet.</p>
   {% else %}
@@ -63,6 +49,7 @@
     <div class="app-table-scroll app-table-scroll--overview" role="region" aria-label="Repository overview table" tabindex="0">
       <table class="govuk-table app-overview-table" id="repository-overview">
         <caption class="govuk-table__caption govuk-visually-hidden">Repository totals by organisation, business unit and team</caption>
+        {{ overview_colgroup() }}
         <thead class="govuk-table__head">
           <tr class="govuk-table__row">
             <th scope="col" class="govuk-table__header">Organisation / business unit / team</th>
@@ -99,26 +86,35 @@
                   </th>
                   {{ numeric_cells(business_unit.totals) }}
                 </tr>
-                {% if unit_open %}
-                  {% if business_unit.children %}
-                    <tr class="govuk-table__row app-overview-row--group-label">
-                      <td class="govuk-table__cell app-overview-group-label app-overview-group-label--team" colspan="5">Team</td>
-                    </tr>
-                  {% endif %}
-                  {% for team in business_unit.children %}
-                    <tr class="govuk-table__row app-overview-row--team" id="{{ team_row_anchors[(business_unit.key, loop.index0)] }}">
-                      <th scope="row" class="govuk-table__header app-overview-name--team">
-                        <span class="app-overview-team-name">
-                          {%- if team.url -%}
-                            <a class="govuk-link" href="{{ team.url }}" target="_blank" rel="noopener noreferrer">{{ team.name | highlight_match(search_query) }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
-                          {%- else -%}
-                            {{ team.name | highlight_match(search_query) }}
-                          {%- endif -%}
-                        </span>
-                      </th>
-                      {{ numeric_cells(team.totals, total_bold=false) }}
-                    </tr>
-                  {% endfor %}
+                {% if unit_open and business_unit.children %}
+                  <tr class="govuk-table__row app-overview-teambox-row">
+                    <td class="govuk-table__cell app-overview-teambox-cell" colspan="5">
+                      <div class="app-overview-teambox">
+                        <table class="govuk-table app-overview-team-table">
+                          {{ overview_colgroup() }}
+                          <tbody class="govuk-table__body">
+                            <tr class="govuk-table__row app-overview-row--group-label">
+                              <td class="govuk-table__cell app-overview-group-label app-overview-group-label--team" colspan="5">Team</td>
+                            </tr>
+                            {% for team in business_unit.children %}
+                              <tr class="govuk-table__row app-overview-row--team">
+                                <th scope="row" class="govuk-table__header app-overview-name--team">
+                                  <span class="app-overview-team-name">
+                                    {%- if team.url -%}
+                                      <a class="govuk-link" href="{{ team.url }}" target="_blank" rel="noopener noreferrer">{{ team.name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+                                    {%- else -%}
+                                      {{ team.name }}
+                                    {%- endif -%}
+                                  </span>
+                                </th>
+                                {{ numeric_cells(team.totals, total_bold=false) }}
+                              </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
                 {% endif %}
               {% endfor %}
             {% endif %}
@@ -128,3 +124,4 @@
     </div>
   {% endif %}
 {% endblock %}
+
