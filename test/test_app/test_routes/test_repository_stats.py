@@ -1395,26 +1395,32 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
 
 class TestWideTablesScroll(RepositoryStatsTestCase):
     def test_each_table_is_in_a_focusable_scroll_region(self):
-        for url, label, table in (
+        for url, label, table, scroll_classes in (
             (
                 CHANGES_URL + "?activity=all",
                 "Visibility changes table",
                 '<table class="govuk-table">',
+                "app-table-scroll",
             ),
             (
                 OVERVIEW_URL,
                 "Repository overview table",
                 '<table class="govuk-table app-overview-table"',
+                "app-table-scroll app-table-scroll--overview",
             ),
             (
                 ARCHIVED_URL,
                 "Archived repositories table",
                 '<table class="govuk-table app-visibility-archived-table"',
+                "app-table-scroll",
             ),
         ):
             with self.subTest(url=url):
                 _, body = self.get(url)
-                region = f'<div class="app-table-scroll" role="region" aria-label="{label}" tabindex="0"'
+                region = (
+                    f'<div class="{scroll_classes}" role="region" '
+                    f'aria-label="{label}" tabindex="0"'
+                )
                 self.assertIn(region, body)
                 self.assertLess(body.index(region), body.index(table))
 
@@ -2219,7 +2225,9 @@ class TestRepositoryOverviewSearch(RepositoryStatsTestCase):
             query["open"], [ORG, f"{ORG}/HMPPS", f"{ORG}/Office of the CTO"]
         )
         self.assertEqual(query["q"], ["platform-team"])
-        self.assertEqual(urlsplit(location).fragment, f"overview-{ORG.lower()}-hmpps")
+        self.assertEqual(
+            urlsplit(location).fragment, f"overview-{ORG.lower()}-hmpps-team-0"
+        )
 
     def test_search_ignores_existing_open_params(self):
         response = self.client.get(
@@ -2249,7 +2257,7 @@ class TestRepositoryOverviewSearch(RepositoryStatsTestCase):
             body.count('<mark class="app-overview-match">platform-team</mark>'), 2
         )
         self.assertIn(
-            '<p class="govuk-body" id="overview-search-result">2 teams found'
+            '<p class="govuk-body" id="overview-search-result">2 teams'
             " matching &ldquo;platform-team&rdquo;.</p>",
             body,
         )
@@ -2265,13 +2273,28 @@ class TestRepositoryOverviewSearch(RepositoryStatsTestCase):
         second, _ = self.get(target)
         self.assertEqual(second.status_code, 200)
 
+    def test_redirect_fragment_targets_the_matching_team_row(self):
+        response = self.client.get(f"{OVERVIEW_URL}?q=platform-team")
+        location = response.headers["Location"]
+        fragment = urlsplit(location).fragment
+        target = urlsplit(location)._replace(scheme="", netloc="", fragment="").geturl()
+        _, body = self.get(target)
+        # The fragment must be an id on a team row (not its business unit), and
+        # that row must be the highlighted match, so the browser lands directly
+        # on the matching team without any further scrolling.
+        row = body.split(f'id="{fragment}"', 1)[1].split("</tr>", 1)[0]
+        self.assertIn(
+            "app-overview-row--team", body.split(f'id="{fragment}"', 1)[0][-200:]
+        )
+        self.assertIn('<mark class="app-overview-match">platform-team</mark>', row)
+
     def test_no_matches_shows_message(self):
         # No ?open= to disagree with, so this renders directly (no redirect needed).
         response, body = self.get(f"{OVERVIEW_URL}?q=no-such-team")
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            '<div class="govuk-inset-text" id="overview-search-result">No teams found'
-            " matching &ldquo;no-such-team&rdquo;.</div>",
+            '<p class="govuk-body" id="overview-search-result">No teams'
+            " matching &ldquo;no-such-team&rdquo;.</p>",
             body,
         )
 
@@ -2302,16 +2325,35 @@ class TestRepositoryOverviewStickyHeader(RepositoryStatsTestCase):
         self.assertIn("top: 0;", rule)
         self.assertIn("background-color:", rule)
 
+    def test_overview_scroll_box_has_bounded_height_so_sticky_has_somewhere_to_stick(
+        self,
+    ):
+        # position: sticky only works against a real scrolling ancestor. The plain
+        # .app-table-scroll wrapper only ever scrolls horizontally (it grows to fit
+        # all rows vertically), so the overview page needs its own bounded,
+        # vertically-scrolling box for the sticky thead above to actually stick.
+        with open(
+            os.path.join(
+                APP_DIR,
+                "static/projects/repository_stats/stylesheets/visibility.css",
+            )
+        ) as stylesheet:
+            css = stylesheet.read()
+        rule = css.split(".app-table-scroll--overview {", 1)[1].split("}", 1)[0]
+        self.assertIn("max-height:", rule)
+        self.assertIn("overflow-y: auto;", rule)
+
     def test_overview_table_is_inside_scroll_container(self):
         _, body = self.get(OVERVIEW_URL)
         region = body.split('id="repository-overview"', 1)[0][-400:]
-        self.assertIn('class="app-table-scroll"', region)
+        self.assertIn('class="app-table-scroll app-table-scroll--overview"', region)
 
-    def test_archived_table_still_uses_the_shared_scroll_container(self):
+    def test_archived_table_still_uses_the_shared_scroll_container_only(self):
         response, body = self.get(ARCHIVED_URL)
         self.assertEqual(response.status_code, 200)
         region = body.split('id="archived-table"', 1)[0][-400:]
         self.assertIn('class="app-table-scroll"', region)
+        self.assertNotIn("app-table-scroll--overview", body)
 
 
 class TestRepositoryOverviewNoData(RepositoryStatsTestCase):

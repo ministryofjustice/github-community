@@ -22,7 +22,10 @@ from app.projects.repository_stats.repositories.visibility_repository import (
     VisibilityRepository,
 )
 from app.projects.repository_stats.services import github_sign_in as github
-from app.projects.repository_stats.services.overview_logic import find_matching_teams
+from app.projects.repository_stats.services.overview_logic import (
+    find_matching_teams,
+    team_anchor_key,
+)
 from app.projects.repository_stats.services.visibility_access import (
     check_stats_access,
     clear_github_sign_in,
@@ -103,7 +106,16 @@ def repository_overview():
         for row in (org, *org.children)
         if row.key
     ]
-    anchors = overview_anchors(keys)
+    # Teams have no key of their own (see team_anchor_key), so their row ids are
+    # built from their business unit plus position, but slugged through the same
+    # pool as organisation/business unit keys so none of their ids can collide.
+    team_keys = [
+        team_anchor_key(business_unit.key, team_index)
+        for org in page.overview.organisations
+        for business_unit in org.children
+        for team_index in range(len(business_unit.children))
+    ]
+    anchors = overview_anchors([*keys, *team_keys])
 
     search_query = request.args.get("q", "").strip()
     search_match_count = None
@@ -128,7 +140,10 @@ def repository_overview():
                 f"?{urlencode(query_pairs)}"
             )
             if matches:
-                target += f"#{anchors[matches[0].business_unit_key]}"
+                first_team_key = team_anchor_key(
+                    matches[0].business_unit_key, matches[0].team_index
+                )
+                target += f"#{anchors[first_team_key]}"
             return redirect(target)
         open_keys = needed_keys
     else:
@@ -142,6 +157,15 @@ def repository_overview():
             if "/" not in key or key.split("/", 1)[0] in open_keys
         ]
 
+    team_row_anchors = {
+        (business_unit.key, team_index): anchors[
+            team_anchor_key(business_unit.key, team_index)
+        ]
+        for org in page.overview.organisations
+        for business_unit in org.children
+        for team_index in range(len(business_unit.children))
+    }
+
     return render_template(
         "projects/repository_stats/pages/repository_overview.html",
         page=page,
@@ -150,6 +174,7 @@ def repository_overview():
             key: overview_toggle_href(open_keys, key, anchors[key]) for key in keys
         },
         anchors=anchors,
+        team_row_anchors=team_row_anchors,
         search_query=search_query,
         search_match_count=search_match_count,
     )
