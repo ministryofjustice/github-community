@@ -236,12 +236,12 @@ def github_login():
 @requires_auth
 def github_callback():
     state_matches = github.take_state_matches(request.args.get("state"), session)
-    error = request.args.get("error")
-    if error == "access_denied":
-        return render_github_problem("cancelled", 200)
     if not state_matches:
         logger.warning("Repository Stats GitHub sign-in state was missing or wrong")
         return render_github_problem("state", 400)
+    error = request.args.get("error")
+    if error == "access_denied":
+        return render_github_problem("cancelled", 200)
     code = request.args.get("code")
     if error or not code:
         logger.warning("Repository Stats GitHub sign-in returned no code")
