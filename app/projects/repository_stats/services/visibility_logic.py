@@ -746,7 +746,7 @@ def archived_progress(repositories: Iterable[ArchivedRepository]) -> ArchivedPro
     return ArchivedProgress(
         total=len(repositories),
         made_internal=sum(
-            1 for repository in repositories if not repository.still_public
+            1 for repository in repositories if repository.visibility == "internal"
         ),
     )
 

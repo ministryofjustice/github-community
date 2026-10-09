@@ -1392,6 +1392,33 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
         self.assertNotIn("Example Justice Organisation", text)
         self.assertNotIn("Analytical Example", text)
 
+    def test_csv_sort_by_organisation_matches_the_table(self):
+        # "Analytical Example" sorts before "Example Justice Organisation",
+        # the reverse of the two organisations' login order.
+        self.repository.events.append(
+            VisibilityEvent(
+                300,
+                OTHER_ORG,
+                "mas-model",
+                "changed",
+                AUG_1,
+                "scan",
+                "public",
+                "internal",
+            )
+        )
+        params = "activity=all&from=2026-08-01&to=2026-09-25&sort=organisation&dir=asc"
+        _, body = self.get(f"{CHANGES_URL}?{params}")
+        table = body.split('id="activity-table"', 1)[1]
+        table_order = re.findall(r"github.com/([\w.-]+)/[\w.-]+\"", table)
+
+        response = self.client.get(f"{CHANGES_URL}/changes.csv?{params}")
+        rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))[1:]
+        csv_order = [row[1] for row in rows]
+
+        self.assertEqual(csv_order[: len(table_order)], table_order)
+        self.assertEqual(csv_order[0], OTHER_ORG)
+
 
 class TestWideTablesScroll(RepositoryStatsTestCase):
     def test_each_table_is_in_a_focusable_scroll_region(self):

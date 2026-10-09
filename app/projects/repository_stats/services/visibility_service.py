@@ -375,6 +375,7 @@ class VisibilityService:
             filter_activity(self._activity_items(context), query.activity),
             query.sort,
             query.direction,
+            context.organisation_names,
         )
         filename = activity_csv_filename(
             context.date_range.from_date, context.date_range.to_date

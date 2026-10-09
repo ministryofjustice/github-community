@@ -286,15 +286,24 @@ class VisibilityRepository:
         )
         return [_to_snapshot(row) for row in rows]
 
-    def has_events_on(self, org: str, occurred_on: date, source: str) -> bool:
-        return (
-            self.db_session.query(RepositoryStatsVisibilityEvent.id)
+    def find_event_keys_on(
+        self, org: str, occurred_on: date, source: str
+    ) -> set[tuple[int, str, str | None, str | None]]:
+        """(github_id, event_type, from_visibility, to_visibility) for an org/date/source,
+        so a bridge can tell which of its own events are already recorded and skip them."""
+        rows = (
+            self.db_session.query(
+                RepositoryStatsVisibilityEvent.github_id,
+                RepositoryStatsVisibilityEvent.event_type,
+                RepositoryStatsVisibilityEvent.from_visibility,
+                RepositoryStatsVisibilityEvent.to_visibility,
+            )
             .filter(RepositoryStatsVisibilityEvent.org == org)
             .filter(RepositoryStatsVisibilityEvent.occurred_on == occurred_on)
             .filter(RepositoryStatsVisibilityEvent.source == source)
-            .first()
-            is not None
+            .all()
         )
+        return {tuple(row) for row in rows}
 
     def delete_snapshots_for_org(self, org: str, before: date | None) -> int:
         """The org's snapshots, all of them or only those captured before a date."""

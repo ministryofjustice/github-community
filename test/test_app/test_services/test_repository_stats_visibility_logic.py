@@ -468,6 +468,7 @@ class TestArchived(unittest.TestCase):
             snapshot(5, "active", "public", AUG_1),
             snapshot(6, "old-deleted", "public", AUG_1, archived=True),
             snapshot(7, "private-archived-later", "private", AUG_1),
+            snapshot(8, "old-private", "public", AUG_1, archived=True),
         ]
         sep = [
             snapshot(1, "old-public", "public", archived=True),
@@ -476,6 +477,7 @@ class TestArchived(unittest.TestCase):
             snapshot(4, "archived-later", "public", archived=True),
             snapshot(5, "active", "public"),
             snapshot(7, "private-archived-later", "private", archived=True),
+            snapshot(8, "old-private", "private", archived=True),
         ]
         events = [
             event(2, "old-moved", "changed", "public", "internal", date(2026, 8, 20)),
@@ -495,15 +497,18 @@ class TestArchived(unittest.TestCase):
         )
         self.assertEqual(
             {r.name for r in repositories},
-            {"old-public", "old-moved", "archived-later"},
+            {"old-public", "old-moved", "archived-later", "old-private"},
         )
         progress = archived_progress(repositories)
+        # "old-private" is no longer public but isn't "internal", so it counts in
+        # total but not in made_internal.
         self.assertEqual(
-            (progress.total, progress.made_internal, progress.percent), (3, 1, 33)
+            (progress.total, progress.made_internal, progress.percent), (4, 1, 25)
         )
         ordered = sort_archived(repositories)
         self.assertEqual(
-            [r.name for r in ordered], ["old-public", "archived-later", "old-moved"]
+            [r.name for r in ordered],
+            ["old-public", "archived-later", "old-moved", "old-private"],
         )
         by_name = {r.name: r for r in repositories}
         self.assertEqual(by_name["archived-later"].first_archived_on, date(2026, 9, 3))
@@ -544,7 +549,7 @@ class TestArchived(unittest.TestCase):
             archived_progress(
                 [repo("private"), repo("internal"), repo("public")]
             ).percent,
-            67,
+            33,
         )
 
 

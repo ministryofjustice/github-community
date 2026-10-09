@@ -243,6 +243,43 @@ class TestImportAndScan(ImportTestCase):
             [e[1:3] for e in self.events() if e[7] == "scan"], [("alpha", "changed")]
         )
 
+    def test_an_unrelated_scan_event_on_the_first_scan_date_does_not_block_the_bridge(
+        self,
+    ):
+        # The real production pattern: a 04:00 baseline (first ever run, so no events)
+        # and a 13:00 run the same day. Here the 13:00 run only adds a brand new repo,
+        # "gamma" - unrelated to alpha's own change, which happened before the baseline.
+        self.scan(
+            [repo(1, "alpha"), repo(2, "beta"), self.github_repos[2]],
+            datetime(2026, 9, 21, 4, 0, tzinfo=UTC),
+        )
+        self.scan(
+            [
+                repo(1, "alpha"),
+                repo(2, "beta"),
+                self.github_repos[2],
+                repo(4, "gamma"),
+            ],
+            datetime(2026, 9, 21, 13, 0, tzinfo=UTC),
+        )
+        summary = self.run_import()
+        self.assertEqual(summary.first_scan_date, date(2026, 9, 21))
+        self.assertEqual(summary.skipped_dates, [])
+        # gamma's creation is already recorded by the scan itself.
+        self.assertEqual(
+            [e[1:5] for e in self.events() if e[7] == "scan"],
+            [("gamma", "created", None, "public")],
+        )
+        # alpha's change (internal, from the last import file, to public, the baseline)
+        # is still bridged even though gamma's unrelated event exists on the same date...
+        self.assertEqual(
+            [e[1:6] for e in self.imported_events() if e[5] >= "2026-09-21"],
+            [("alpha", "changed", "internal", "public", "2026-09-21")],
+        )
+        # ...and gamma's creation isn't duplicated into the import's own events, because
+        # it exactly matches what the scan already recorded.
+        self.assertNotIn("gamma", [e[1] for e in self.imported_events()])
+
     def test_scan_snapshots_of_other_dates_are_untouched(self):
         self.scan(self.github_repos, datetime(2026, 9, 25, 3, 0, tzinfo=UTC))
         scan_rows = self.session.query(RepositoryStatsVisibilitySnapshot).count()

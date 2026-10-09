@@ -14,8 +14,9 @@ Repositories GitHub no longer has under that name get a stable negative id, so t
 clash with real ids and the scan job records them as deleted.
 
 The visibility job owns every date from its first successful run onwards: import files
-for those dates are skipped. If that first run was a baseline (it wrote no events), the
-import adds the events between its last file and that run's snapshot, so nothing is lost.
+for those dates are skipped. The import adds the events between its last file and that
+first run's snapshot, dropping any that run (or a later one the same day) already wrote,
+so nothing is lost and nothing is duplicated.
 
 Safe to re-run: each run replaces the organisation's earlier import (its snapshots before
 the first scan date and its "import" events) in one transaction. Any error rolls back the
@@ -176,12 +177,14 @@ def import_visibility_audit_reports(
 
 
 def _bridge_events(repository, org, plan, first_scan_date):
-    """Events between the last imported file and the visibility job's first snapshot, if
-    that first run was a baseline (it found nothing to compare with, so wrote no events).
-    None when there's nothing to bridge."""
+    """Events between the last imported file and the visibility job's first snapshot.
+    The visibility job runs more than once a day, so a "scan" event already recorded on
+    first_scan_date doesn't mean that first run wrote it - events only store a date, not
+    which run produced them. So the bridge is always computed, then any event it would
+    produce that's already recorded (by the same org/date/source/github_id/type/from/to)
+    is dropped, leaving only what's genuinely missing. None when there's nothing left to
+    bridge."""
     if first_scan_date is None or not plan.snapshots:
-        return None
-    if repository.has_events_on(org, first_scan_date, "scan"):
         return None
     scan = repository.find_snapshots_for_org_on(org, first_scan_date)
     if not scan:
@@ -201,7 +204,15 @@ def _bridge_events(repository, org, plan, first_scan_date):
         )
         for s in scan
     }
-    return diff_records(before, after, last_on, first_scan_date)
+    events = diff_records(before, after, last_on, first_scan_date)
+    already_recorded = repository.find_event_keys_on(org, first_scan_date, "scan")
+    events = [
+        e
+        for e in events
+        if (e.github_id, e.event_type, e.from_visibility, e.to_visibility)
+        not in already_recorded
+    ]
+    return events or None
 
 
 def _log_summary(summary: ImportSummary) -> None:
