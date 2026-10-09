@@ -70,6 +70,18 @@ spec:
               value: {{ .Values.app.deployment.env.SENTRY_DSN_KEY | quote }}
             - name: SENTRY_ENV
               value: {{ .Values.app.deployment.env.SENTRY_ENV | quote }}
+            {{- with .Values.app.deployment.env.GITHUB_STATS_ACCESS_TEAM }}
+            - name: GITHUB_STATS_ACCESS_TEAM
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_ID }}
+            - name: GITHUB_STATS_OAUTH_CLIENT_ID
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_SECRET }}
+            - name: GITHUB_STATS_OAUTH_CLIENT_SECRET
+              value: {{ . | quote }}
+            {{- end }}
 
           ports:
             - name: http

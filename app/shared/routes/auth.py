@@ -2,6 +2,9 @@ import logging
 
 from flask import Blueprint, current_app, redirect, session, url_for
 
+from app.projects.repository_stats.services.visibility_access import (
+    SESSION_KEY as STATS_ACCESS_SESSION_KEY,
+)
 from app.shared.config.app_config import app_config
 from app.shared.services.auth0_service import Auth0_Service
 
@@ -26,6 +29,7 @@ def login():
 
 @auth_route.route("/logout", methods=["GET", "POST"])
 def logout():
+    # Clears the Microsoft sign-in and the Repository Stats GitHub sign-in together.
     session.clear()
     return auth0_service.logout(url_for("main.index", _external=True, _scheme="https"))
 
@@ -33,6 +37,8 @@ def logout():
 @auth_route.route("/callback", methods=["GET", "POST"])
 def callback():
     session["user"] = auth0_service.get_access_token()
+    # A new sign-in always gets a fresh Repository Stats team check.
+    session.pop(STATS_ACCESS_SESSION_KEY, None)
     path = session.pop("post_auth_redirect_path", None)
     if path:
         return redirect(path)

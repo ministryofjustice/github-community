@@ -1,0 +1,265 @@
+{% extends "shared/components/base.html" %}
+{% from "govuk_frontend_jinja/components/tag/macro.html" import govukTag %}
+{% from "govuk_frontend_jinja/components/select/macro.html" import govukSelect %}
+{% from "govuk_frontend_jinja/components/pagination/macro.html" import govukPagination %}
+{% from "govuk_frontend_jinja/components/inset-text/macro.html" import govukInsetText %}
+
+{% set visibility_url = url_for("repository_stats_main.visibility_changes") %}
+{% set csv_url = url_for("repository_stats_main.visibility_changes_csv") %}
+{% set errors = page.date_errors %}
+{% set changes = page.changes %}
+{% set tag_classes = {
+  "public": "govuk-tag--red",
+  "internal": "govuk-tag--green",
+  "private": "govuk-tag--grey"
+} %}
+
+{% macro fmt(value) -%}
+  {%- if value %}{{ value.day }} {{ value.strftime("%B %Y") }}{% endif -%}
+{%- endmacro %}
+
+{% macro visibility_tag(visibility) -%}
+  {{- govukTag({
+    "text": visibility | capitalize,
+    "classes": tag_classes.get(visibility, "govuk-tag--grey")
+  }) | trim -}}
+{%- endmacro %}
+
+{% macro activity_html(item) -%}
+  {%- if item.kind == "created" -%}
+    New, created as {{ visibility_tag(item.to_visibility) }}
+  {%- elif item.kind == "deleted" -%}
+    Deleted, was {{ visibility_tag(item.from_visibility) }}
+  {%- else -%}
+    {{ visibility_tag(item.from_visibility) }} to {{ visibility_tag(item.to_visibility) }}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro repository_link(repository) -%}
+  <a class="govuk-link" href="{{ repository.github_url }}" target="_blank" rel="noopener noreferrer">{{ repository.name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>
+{%- endmacro %}
+
+{% macro stats(items) %}
+  <dl class="app-visibility-stats app-visibility-stats--{{ items | length }}">
+    {% for label, value in items %}
+      <div class="app-visibility-stats__item">
+        <dt class="app-visibility-stats__label">{{ label }}</dt>
+        <dd class="app-visibility-stats__value">{{ value }}</dd>
+      </div>
+    {% endfor %}
+  </dl>
+{% endmacro %}
+
+{% macro hidden_inputs(exclude) %}
+  {% for name, value in query.to_params().items() if name not in exclude %}
+    <input type="hidden" name="{{ name }}" value="{{ value }}">
+  {% endfor %}
+{% endmacro %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
+{% endblock %}
+
+{% block pageTitle %}
+  {% if errors %}Error: {% endif %}Repository visibility changes - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats", "href": url_for("repository_stats_main.index")},
+      {"text": "Repository visibility changes"}
+    ]
+  }) }}
+
+  {% if errors %}
+    {% set error_list = [] %}
+    {% if errors.get("from") %}
+      {% set _ = error_list.append({"text": errors["from"], "href": "#from"}) %}
+    {% endif %}
+    {% if errors.get("to") %}
+      {% set _ = error_list.append({"text": errors["to"], "href": "#to"}) %}
+    {% endif %}
+    {{ govukErrorSummary({"titleText": "There is a problem", "errorList": error_list}) }}
+  {% endif %}
+
+  <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Repository visibility changes</h1>
+  <div class="govuk-!-margin-bottom-6">
+    <p class="govuk-body-l govuk-!-margin-bottom-4">Track repository visibility changes, new repositories and deleted repositories.</p>
+    <p class="govuk-body-s">Showing changes since: {{ history_start_date }}</p>
+    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+  </div>
+
+  {# Filters #}
+  <form method="get" action="{{ visibility_url }}" class="app-visibility-filters" id="visibility-filters" novalidate>
+    <h2 class="govuk-visually-hidden">Filter repositories</h2>
+    {{ hidden_inputs(["org", "business_unit", "q", "from", "to", "page"]) }}
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        {% set org_items = [{"value": "", "text": "All organisations", "selected": not query.filters.org}] %}
+        {% for org in page.organisations %}
+          {% set _ = org_items.append({"value": org, "text": page.organisation_name(org), "selected": org == query.filters.org}) %}
+        {% endfor %}
+        {{ govukSelect({"id": "org", "name": "org", "label": {"text": "Organisation"}, "items": org_items}) }}
+      </div>
+      <div class="govuk-grid-column-one-third">
+        {% set bu_items = [{"value": "", "text": "All business units", "selected": not query.filters.business_unit}] %}
+        {% for business_unit in page.business_units %}
+          {% set _ = bu_items.append({"value": business_unit, "text": business_unit, "selected": business_unit == query.filters.business_unit}) %}
+        {% endfor %}
+        {{ govukSelect({"id": "business_unit", "name": "business_unit", "label": {"text": "Business unit"}, "items": bu_items}) }}
+      </div>
+      <div class="govuk-grid-column-one-third">
+        {{ govukInput({
+          "id": "q",
+          "name": "q",
+          "label": {"text": "Repository name"},
+          "value": query.filters.q,
+          "spellcheck": false,
+          "autocomplete": "off"
+        }) }}
+      </div>
+    </div>
+    <div class="app-visibility-filter-row">
+      <div class="app-visibility-dates" id="visibility-dates">
+      {% set date_limits = {} %}
+      {% if page.earliest_captured_on %}{% set _ = date_limits.update({"min": page.earliest_captured_on.isoformat()}) %}{% endif %}
+      {% if page.today %}{% set _ = date_limits.update({"max": page.today.isoformat()}) %}{% endif %}
+      {{ govukInput({
+        "label": {"text": "From"},
+        "id": "from",
+        "name": "from",
+        "type": "date",
+        "value": query.from_value,
+        "attributes": date_limits,
+        "errorMessage": {"text": errors["from"]} if errors.get("from") else None
+      }) }}
+      {{ govukInput({
+        "label": {"text": "To"},
+        "id": "to",
+        "name": "to",
+        "type": "date",
+        "value": query.to_value,
+        "attributes": date_limits,
+        "errorMessage": {"text": errors["to"]} if errors.get("to") else None
+      }) }}
+      </div>
+      <div class="app-visibility-filter-actions">
+        {{ govukButton({"text": "Apply filters"}) }}
+        <a class="govuk-link" id="clear-filters" href="{{ visibility_url }}">Clear filters</a>
+      </div>
+    </div>
+  </form>
+
+  {% set changes_heading = page.changes_heading %}
+  {% if changes_heading %}
+    <h2 class="govuk-heading-m">{{ changes_heading }}</h2>
+  {% endif %}
+  {% if not page.latest_captured_on %}
+    <p class="govuk-body">No visibility snapshots have been captured yet.</p>
+  {% endif %}
+  <p class="govuk-body app-visibility-estate">Current repositories: <strong>{{ page.counts.total }}</strong> <span aria-hidden="true">·</span> Public <strong>{{ page.counts.public }}</strong> <span aria-hidden="true">·</span> Internal <strong>{{ page.counts.internal }}</strong> <span aria-hidden="true">·</span> Private <strong>{{ page.counts.private }}</strong></p>
+
+  {% if changes %}
+    {{ stats([
+      ("Visibility changes", changes.total_changes),
+      ("New repositories", changes.created_count),
+      ("Deleted repositories", changes.deleted_count)
+    ]) }}
+
+    {% set transition_rows = [] %}
+    {% for transition in changes.transitions %}
+      {% set _ = transition_rows.append([
+        {"html": visibility_tag(transition.from_visibility)},
+        {"html": visibility_tag(transition.to_visibility)},
+        {"text": transition.count | string, "format": "numeric"}
+      ]) %}
+    {% endfor %}
+    {{ govukTable({
+      "caption": "Changes by transition",
+      "captionClasses": "govuk-visually-hidden",
+      "classes": "govuk-!-margin-bottom-6",
+      "head": [{"text": "From"}, {"text": "To"}, {"text": "Changes", "format": "numeric"}],
+      "rows": transition_rows
+    }) }}
+
+    {% set activity_page = changes.activity_page %}
+    <h2 class="govuk-heading-m" id="activity-table">{{ changes.activity_label }} ({{ activity_page.total_items }})</h2>
+    <form method="get" action="{{ visibility_url }}#activity-table" novalidate>
+      {{ hidden_inputs(["activity", "page"]) }}
+      {% set activity_items = [] %}
+      {% for value, text in page.activity_options %}
+        {% set _ = activity_items.append({"value": value, "text": text, "selected": value == query.activity}) %}
+      {% endfor %}
+      <div class="app-visibility-controls">
+        {{ govukSelect({"id": "activity", "name": "activity", "label": {"text": "Activity type"}, "items": activity_items}) }}
+        {{ govukButton({"text": "Show activity", "classes": "govuk-button--secondary govuk-!-margin-bottom-0"}) }}
+        {% if activity_page.total_items %}
+          <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 app-visibility-controls__end" role="button" draggable="false" data-module="govuk-button" href="{{ csv_url }}{{ query.csv_query_string(query.from_value, query.to_value) }}">Download CSV</a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if activity_page.total_items %}
+      <div class="app-table-scroll" role="region" aria-label="Visibility changes table" tabindex="0">
+        <table class="govuk-table">
+          <caption class="govuk-table__caption govuk-visually-hidden">{{ changes.activity_label }}, select a column heading to sort</caption>
+          <thead class="govuk-table__head">
+            <tr class="govuk-table__row">
+              {% for key, label in page.sort_columns %}
+                <th scope="col" class="govuk-table__header" aria-sort="{{ query.aria_sort(key) }}">
+                  <a class="govuk-link app-visibility-sort" href="{{ visibility_url }}{{ query.sort_query_string(key) }}#activity-table">
+                    {{- label -}}
+                    {%- if query.sort == key %} <span aria-hidden="true">{{ "▲" if query.direction == "asc" else "▼" }}</span>{% endif -%}
+                  </a>
+                </th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody class="govuk-table__body">
+            {% for item in activity_page.items %}
+              <tr class="govuk-table__row">
+                <td class="govuk-table__cell">
+                  {% if item.repository_deleted %}{{ item.name }}{% else %}{{ repository_link(item) }}{% endif %}
+                </td>
+                <td class="govuk-table__cell app-visibility-org-cell">{{ page.organisation_name(item.org) }}</td>
+                <td class="govuk-table__cell">{{ item.business_unit_text }}</td>
+                <td class="govuk-table__cell app-visibility-nowrap">{{ activity_html(item) }}</td>
+                <td class="govuk-table__cell app-visibility-nowrap">{{ fmt(item.occurred_on) }}</td>
+                <td class="govuk-table__cell">{{ item.by }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <p class="govuk-body">Showing {{ activity_page.first_item_number }} to {{ activity_page.last_item_number }} of {{ activity_page.total_items }}</p>
+      {% if activity_page.total_pages > 1 %}
+        {% set pagination_items = [] %}
+        {% for number in changes.activity_page_numbers %}
+          {% if number is none %}
+            {% set _ = pagination_items.append({"ellipsis": true}) %}
+          {% else %}
+            {% set _ = pagination_items.append({
+              "number": number,
+              "href": visibility_url ~ query.query_string(page=number) ~ "#activity-table",
+              "current": number == activity_page.page
+            }) %}
+          {% endif %}
+        {% endfor %}
+        {{ govukPagination({
+          "landmarkLabel": "Activity table pages",
+          "previous": {"href": visibility_url ~ query.query_string(page=activity_page.page - 1) ~ "#activity-table"} if activity_page.page > 1 else None,
+          "next": {"href": visibility_url ~ query.query_string(page=activity_page.page + 1) ~ "#activity-table"} if activity_page.page < activity_page.total_pages else None,
+          "items": pagination_items
+        }) }}
+      {% endif %}
+    {% else %}
+      {{ govukInsetText({"text": "Nothing to show from " ~ fmt(page.date_range.from_date) ~ " to " ~ fmt(page.date_range.to_date) ~ ". Try a wider date range, another activity type or clear your filters."}) }}
+    {% endif %}
+  {% else %}
+    {{ govukInsetText({"text": "Enter a valid date range to see visibility changes."}) }}
+  {% endif %}
+{% endblock %}
