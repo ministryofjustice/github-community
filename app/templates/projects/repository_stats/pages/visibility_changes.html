@@ -98,7 +98,7 @@
     {{ hidden_inputs(["org", "business_unit", "q", "from", "to", "page"]) }}
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
-        {% set org_items = [{"value": "", "text": "All organisations", "selected": not query.filters.org}] %}
+        {% set org_items = [{"value": "all", "text": "All organisations", "selected": query.filters.org in ("", "all")}] %}
         {% for org in page.organisations %}
           {% set _ = org_items.append({"value": org, "text": page.organisation_name(org), "selected": org == query.filters.org}) %}
         {% endfor %}

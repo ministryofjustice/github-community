@@ -292,8 +292,21 @@ class VisibilityService:
             shown_ids=frozenset(r.github_id for r in shown),
         )
 
+    def _default_organisation(self, query: VisibilityQuery) -> VisibilityQuery:
+        """When no organisation was requested at all, default to the only one with
+        data instead of showing the misleading 'All organisations'. Only applies when
+        exactly one organisation has data, and never overrides an explicit choice
+        (including explicitly picking 'All organisations')."""
+        if query.filters.org:
+            return query
+        organisations = self.repository.find_organisations()
+        if len(organisations) != 1:
+            return query
+        return replace(query, filters=replace(query.filters, org=organisations[0]))
+
     def get_changes_page(self, query: VisibilityQuery) -> VisibilityPage:
         """The visibility changes page: current totals, change counts and activity."""
+        query = self._default_organisation(query)
         context = self._context(query)
         dates = context.snapshot_dates
         latest = dates[-1] if dates else None
@@ -368,6 +381,7 @@ class VisibilityService:
 
     def get_activity_csv(self, query: VisibilityQuery) -> tuple[str, str] | None:
         """(filename, CSV text) for every matching activity row, or None for invalid dates."""
+        query = self._default_organisation(query)
         context = self._context(query)
         if not context.date_range.is_valid:
             return None

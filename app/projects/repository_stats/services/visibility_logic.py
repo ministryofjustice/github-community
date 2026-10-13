@@ -266,11 +266,18 @@ class VisibilityFilters:
     q: str = ""
 
     @property
+    def org_filter(self) -> str:
+        """The organisation actually filtered on: '' for every organisation, including
+        the explicit 'all' choice (kept distinct from '' so it survives round-tripping
+        through generated links instead of being dropped as a default)."""
+        return "" if self.org == "all" else self.org
+
+    @property
     def is_active(self) -> bool:
-        return bool(self.org or self.business_unit or self.q)
+        return bool(self.org_filter or self.business_unit or self.q)
 
     def matches(self, org: str, name: str, business_units: Sequence[str]) -> bool:
-        if self.org and org != self.org:
+        if self.org_filter and org != self.org_filter:
             return False
         if self.business_unit and self.business_unit not in business_units:
             return False
@@ -317,14 +324,16 @@ class VisibilityQuery:
     @property
     def estate_filter_applied(self) -> bool:
         """Organisation, business unit or name set: the filters that apply to both pages."""
-        return any((self.filters.org, self.filters.business_unit, self.filters.q))
+        return any(
+            (self.filters.org_filter, self.filters.business_unit, self.filters.q)
+        )
 
     @property
     def filter_applied(self) -> bool:
         """Organisation, business unit, name or dates set. Activity, sort and page don't count."""
         return any(
             (
-                self.filters.org,
+                self.filters.org_filter,
                 self.filters.business_unit,
                 self.filters.q,
                 self.from_value,
@@ -373,9 +382,15 @@ def parse_visibility_query(
     if activity not in ACTIVITY_LABELS:
         activity = DEFAULT_ACTIVITY
 
+    # "org" absent means no choice was made yet (a default may apply); submitted blank
+    # or "all" both mean the user explicitly chose "All organisations", kept as the
+    # "all" sentinel so it survives round-tripping through generated links.
+    raw_org = args.get("org")
+    org = "" if raw_org is None else (raw_org.strip() or "all")
+
     return VisibilityQuery(
         filters=VisibilityFilters(
-            org=(args.get("org") or "").strip(),
+            org=org,
             business_unit=(args.get("business_unit") or "").strip(),
             q=(args.get("q") or "").strip(),
         ),

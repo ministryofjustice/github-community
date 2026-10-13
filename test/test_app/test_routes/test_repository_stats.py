@@ -160,6 +160,20 @@ class EmptyVisibilityRepository(FakeVisibilityRepository):
     last_run_finished_at = None
 
 
+class SingleOrgVisibilityRepository(FakeVisibilityRepository):
+    """Only ministryofjustice has data: the mas-model snapshot is dropped."""
+
+    def __init__(self):
+        super().__init__()
+        self.snapshots = {
+            captured_on: [s for s in snaps if s.org != OTHER_ORG]
+            for captured_on, snaps in self.snapshots.items()
+        }
+
+    def find_organisations(self):
+        return [ORG]
+
+
 def teams_by_name(slugs_by_name):
     return RepositoryTeams(
         by_name={
@@ -1339,6 +1353,46 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             f"{CHANGES_URL}/changes.csv?org=&amp;business_unit=&amp;q=&amp;from=&amp;to=&amp;activity=all&amp;sort=date&amp;dir=desc",
             body,
         )
+
+
+class TestDefaultOrganisation(RepositoryStatsTestCase):
+    """When only one organisation has data, the changes page defaults to it instead
+    of the misleading 'All organisations', while still letting the user pick that
+    explicitly."""
+
+    repository_class = SingleOrgVisibilityRepository
+
+    def selected_org_option(self, body):
+        select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
+        return re.search(r'<option value="([^"]*)"[^>]*selected', select).group(1)
+
+    def test_defaults_to_the_only_organisation_with_data(self):
+        _, body = self.get(CHANGES_URL)
+        self.assertEqual(self.selected_org_option(body), ORG)
+        self.assertIn(f'<option value="{ORG}"', body)
+
+    def test_all_organisations_can_still_be_chosen_explicitly(self):
+        _, body = self.get(f"{CHANGES_URL}?org=all")
+        self.assertEqual(self.selected_org_option(body), "all")
+
+    def test_explicit_all_survives_a_sort_link(self):
+        _, body = self.get(f"{CHANGES_URL}?org=all&activity=all")
+        link = re.search(
+            r'<a class="govuk-link app-visibility-sort" href="([^"]+)">Repository</a>',
+            body,
+        )
+        self.assertIn("org=all", link.group(1).replace("&amp;", "&"))
+
+    def test_default_does_not_apply_with_more_than_one_organisation(self):
+        self.repository.find_organisations = lambda: [ORG, OTHER_ORG]
+        _, body = self.get(CHANGES_URL)
+        self.assertEqual(self.selected_org_option(body), "all")
+
+    def test_archived_page_keeps_all_organisations_by_default(self):
+        _, body = self.get(ARCHIVED_URL)
+        select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
+        self.assertIn('<option value="all"', select)
+        self.assertRegex(select, r'<option value="all"[^>]*selected')
 
 
 class TestOrganisationDisplayNames(RepositoryStatsTestCase):
