@@ -40,9 +40,7 @@ class TechnicalStandardService:
         team_owners = self.__get_authoritative_owners(
             repository, repository.team_owners_names
         )
-        checks = get_all_technical_standard_checks(
-            repository, business_unit_owners or team_owners
-        )
+        checks = get_all_technical_standard_checks(repository)
 
         return TechnicalStandardReportView(
             name=repository.name,

@@ -107,6 +107,7 @@ class GithubService:
     ) -> List[RepositoryInfo]:
         response = []
         team_parent_cache = {}
+        team_maintainer_count_cache = {}
         repositories: list
         if not repo_name:
             repositories = list(
@@ -141,6 +142,16 @@ class GithubService:
                 teams_with_any_access_parents,
             ) = self.__get_teams_with_access(repo, teams_to_ignore, team_parent_cache)
 
+            admin_team_maintainer_counts = {}
+            for team_slug in teams_with_admin_access:
+                if team_slug not in team_maintainer_count_cache:
+                    team_maintainer_count_cache[team_slug] = (
+                        self.github_client.get_team_maintainer_count(team_slug)
+                    )
+                admin_team_maintainer_counts[team_slug] = (
+                    team_maintainer_count_cache[team_slug]
+                )
+
             response.append(
                 RepositoryInfoFactory.from_github_repo(
                     repo,
@@ -149,6 +160,7 @@ class GithubService:
                     teams_with_any_access,
                     teams_with_any_access_parents,
                     self.github_client,
+                    admin_team_maintainer_counts,
                 )
             )
             counter += 1

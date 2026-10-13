@@ -17,15 +17,62 @@ class RepositoryInfoFactory:
         teams_with_any,
         teams_with_any_parents,
         github_client: GitHubClient,
+        team_admin_maintainer_counts: Optional[dict[str, int]] = None,
     ):
+        custom_properties = github_client.get_repository_custom_properties(repo.name)
+
         basic_info = BasicRepositoryInfo(
             name=repo.name,
             visibility=repo.visibility,
             description=repo.description,
             default_branch_name=repo.default_branch,
             license=repo.license.key if repo.license else None,
+            license_path=getattr(repo.license, "path", None)
+            if repo.license
+            else None,
             delete_branch_on_merge=repo.delete_branch_on_merge,
+            business_unit=custom_properties.get("business-unit"),
         )
+
+        codeowners_file_present = None
+        codeowners_file_valid = None
+        for codeowners_path in (
+            ".github/CODEOWNERS",
+            "CODEOWNERS",
+            "docs/CODEOWNERS",
+        ):
+            try:
+                codeowners_file = repo.get_contents(
+                    codeowners_path, ref=repo.default_branch
+                )
+                codeowners_file_present = True
+                content = getattr(codeowners_file, "decoded_content", None)
+                if content is not None:
+                    if isinstance(content, bytes):
+                        content = content.decode("utf-8", errors="replace")
+                    has_owner_rules = any(
+                        line.strip() and not line.lstrip().startswith("#")
+                        for line in content.splitlines()
+                    )
+                    try:
+                        codeowners_errors = github_client.get_codeowners_errors(
+                            repo.name
+                        )
+                        codeowners_file_valid = (
+                            has_owner_rules
+                            and codeowners_errors.get("errors") == []
+                        )
+                    except Exception as e:
+                        logger.debug("Error validating CODEOWNERS file: %s", e)
+                break
+            except Exception as e:
+                if getattr(e, "status", None) == 404:
+                    codeowners_file_present = False
+                    continue
+                logger.debug("Error getting CODEOWNERS file: %s", e)
+                break
+        if codeowners_file_present is False:
+            codeowners_file_valid = False
 
         security_and_analysis = repo.security_and_analysis
         security_analysis = SecurityAndAnalysisInfo(
@@ -48,25 +95,79 @@ class RepositoryInfoFactory:
             ),
         )
 
+        open_high_critical_code_scanning_alerts = None
         try:
-            default_branch_protection = repo.get_branch(
-                repo.default_branch
-            ).get_protection()
+            code_scanning_alerts = github_client.get_open_code_scanning_alerts(
+                repo.name
+            )
+            open_high_critical_code_scanning_alerts = sum(
+                1
+                for alert in code_scanning_alerts
+                if alert.get("state") == "open"
+                and (
+                    (
+                        (alert.get("rule") or {}).get(
+                            "security_severity_level"
+                        )
+                        or ""
+                    ).lower()
+                    in {"high", "critical"}
+                )
+            )
+        except Exception as e:
+            logger.debug("Error getting Code Scanning alerts: %s", e)
+
+        open_high_critical_dependabot_alerts = None
+        try:
+            dependabot_alerts = github_client.get_open_dependabot_alerts(repo.name)
+            open_high_critical_dependabot_alerts = sum(
+                1
+                for alert in dependabot_alerts
+                if alert.get("state") == "open"
+                and (
+                    (
+                        (alert.get("security_advisory") or {}).get("severity")
+                        or ""
+                    ).lower()
+                    in {"high", "critical"}
+                )
+            )
+        except Exception as e:
+            logger.debug("Error getting Dependabot alerts: %s", e)
+
+        security_alerts = SecurityAlertsInfo(
+            open_high_critical_code_scanning_count=(
+                open_high_critical_code_scanning_alerts
+            ),
+            open_high_critical_dependabot_count=(
+                open_high_critical_dependabot_alerts
+            ),
+        )
+
+        try:
+            raw_protection = repo.get_branch(repo.default_branch).get_protection()
+            protection_present = raw_protection is not None
+            raw_enforce_admins = getattr(raw_protection, "enforce_admins", None)
+            enforce_admins_enabled = (
+                raw_enforce_admins
+                if isinstance(raw_enforce_admins, bool)
+                else getattr(raw_enforce_admins, "enabled", None)
+            )
             pr = (
-                default_branch_protection.required_pull_request_reviews
-                if default_branch_protection
+                raw_protection.required_pull_request_reviews
+                if raw_protection
                 else None
             )
             default_branch_protection = BranchProtectionInfo(
-                enabled=getattr(default_branch_protection, "enabled", False),
+                present=protection_present,
+                enforce_admins_enabled=enforce_admins_enabled,
+                enabled=getattr(raw_protection, "enabled", False),
                 allow_force_pushes=getattr(
-                    default_branch_protection, "allow_force_pushes", False
+                    raw_protection, "allow_force_pushes", False
                 ),
-                enforce_admins=getattr(
-                    default_branch_protection, "enforce_admins", False
-                ),
+                enforce_admins=getattr(raw_protection, "enforce_admins", False),
                 required_signatures=getattr(
-                    default_branch_protection, "required_signatures", False
+                    raw_protection, "required_signatures", False
                 ),
                 dismiss_stale_reviews=getattr(pr, "dismiss_stale_reviews", False),
                 require_code_owner_reviews=getattr(
@@ -83,9 +184,16 @@ class RepositoryInfoFactory:
             default_branch_protection = None
             logger.debug("Error getting default branch protection: %s", e)
 
+        ruleset_details_by_id = {}
+        rulesets_response = None
+        all_rulesets_enforced_without_bypass = None
         try:
-            response = github_client.get_branch_rulesets(repo.name, repo.default_branch)
-            rules_by_type = {r["type"]: r for r in response if "type" in r}
+            rulesets_response = github_client.get_branch_rulesets(
+                repo.name, repo.default_branch
+            )
+            rules_by_type = {
+                r["type"]: r for r in rulesets_response if "type" in r
+            }
 
             pull_request = rules_by_type.get("pull_request", {})
             pull_request_parameters = pull_request.get("parameters", {})
@@ -95,6 +203,8 @@ class RepositoryInfoFactory:
                 if pull_request_ruleset_id
                 else {}
             )
+            if pull_request_ruleset_id is not None:
+                ruleset_details_by_id[pull_request_ruleset_id] = pull_request_ruleset
             pull_request_rulset_enforcenment = pull_request_ruleset.get(
                 "enforcement", None
             )
@@ -111,20 +221,30 @@ class RepositoryInfoFactory:
                 if required_signatures_ruleset_id
                 else {}
             )
+            if required_signatures_ruleset_id is not None:
+                ruleset_details_by_id[
+                    required_signatures_ruleset_id
+                ] = required_signatures_ruleset
             required_signatures_ruleset_enforcement = required_signatures_ruleset.get(
                 "enforcement", None
             )
             required_signatures_ruleset_bypass_actors = required_signatures_ruleset.get(
                 "bypass_actors"
             )
+            required_signatures_ruleset_enforced_without_bypass = None
+            if required_signatures_ruleset_id is not None:
+                required_signatures_ruleset_enforced_without_bypass = (
+                    required_signatures_ruleset_enforcement == "active"
+                    and required_signatures_ruleset_bypass_actors == []
+                )
 
             default_branch_ruleset = BranchRulesetInfo(
-                enabled=True if response and len(response) > 0 else False,
+                enabled=bool(rulesets_response),
                 pull_request_enforcement=pull_request_rulset_enforcenment,
                 pull_request_bypass_actors_length=len(
                     pull_request_rulseset_bypass_actors
                 )
-                if pull_request_rulseset_bypass_actors
+                if pull_request_rulseset_bypass_actors is not None
                 else None,
                 pull_request_required_approving_review_count=pull_request_parameters.get(
                     "required_approving_review_count", None
@@ -135,28 +255,76 @@ class RepositoryInfoFactory:
                 pull_request_require_code_owner_review=pull_request_parameters.get(
                     "require_code_owner_review", None
                 ),
+                pull_request_require_last_push_approval=pull_request_parameters.get(
+                    "require_last_push_approval", None
+                ),
                 required_signatures_enforcement=required_signatures_ruleset_enforcement,
+                required_signatures_ruleset_enforced_without_bypass=(
+                    required_signatures_ruleset_enforced_without_bypass
+                ),
                 required_signatures_ruleset_bypass_actors_length=len(
                     required_signatures_ruleset_bypass_actors
                 )
-                if required_signatures_ruleset_bypass_actors
+                if required_signatures_ruleset_bypass_actors is not None
                 else None,
             )
         except Exception as e:
             default_branch_ruleset = None
             logger.debug("Error getting default branch rules: %s", e)
 
+        if rulesets_response is not None:
+            try:
+                ruleset_ids = {
+                    rule.get("ruleset_id")
+                    for rule in rulesets_response
+                    if rule.get("ruleset_id") is not None
+                }
+                if not ruleset_ids:
+                    all_rulesets_enforced_without_bypass = False
+                else:
+                    for ruleset_id in ruleset_ids.difference(
+                        ruleset_details_by_id
+                    ):
+                        ruleset_details_by_id[
+                            ruleset_id
+                        ] = github_client.get_repository_ruleset(
+                            repo.name, ruleset_id
+                        )
+
+                    all_rulesets_enforced_without_bypass = all(
+                        ruleset_details_by_id[ruleset_id].get("enforcement")
+                        == "active"
+                        and ruleset_details_by_id[ruleset_id].get(
+                            "bypass_actors"
+                        )
+                        == []
+                        for ruleset_id in ruleset_ids
+                    )
+            except Exception as e:
+                logger.debug(
+                    "Error checking all ruleset enforcement and bypasses: %s", e
+                )
+
+        if default_branch_ruleset is not None:
+            default_branch_ruleset.all_rulesets_enforced_without_bypass = (
+                all_rulesets_enforced_without_bypass
+            )
+
         repository_access = RepositoryAccess(
             teams_with_admin=teams_with_admin,
             teams_with_admin_parents=teams_with_admin_parents,
             teams=teams_with_any,
             teams_parents=teams_with_any_parents,
+            team_admin_maintainer_counts=team_admin_maintainer_counts or {},
         )
 
         return RepositoryInfo(
             basic=basic_info,
             access=repository_access,
+            codeowners_file_present=codeowners_file_present,
+            codeowners_file_valid=codeowners_file_valid,
             security_and_analysis=security_analysis,
+            security_alerts=security_alerts,
             default_branch_protection=default_branch_protection
             or BranchProtectionInfo(),
             default_branch_ruleset=default_branch_ruleset or BranchRulesetInfo(),
@@ -171,6 +339,8 @@ class BasicRepositoryInfo:
     default_branch_name: str
     description: Optional[str] = None
     license: Optional[str] = None
+    license_path: Optional[str] = None
+    business_unit: Optional[str] = None
 
 
 @dataclass
@@ -183,7 +353,15 @@ class SecurityAndAnalysisInfo:
 
 
 @dataclass
+class SecurityAlertsInfo:
+    open_high_critical_code_scanning_count: Optional[int] = None
+    open_high_critical_dependabot_count: Optional[int] = None
+
+
+@dataclass
 class BranchProtectionInfo:
+    present: Optional[bool] = None
+    enforce_admins_enabled: Optional[bool] = None
     enabled: Optional[bool] = None
     allow_force_pushes: Optional[bool] = None
     enforce_admins: Optional[bool] = None
@@ -196,12 +374,15 @@ class BranchProtectionInfo:
 
 @dataclass
 class BranchRulesetInfo:
+    all_rulesets_enforced_without_bypass: Optional[bool] = None
+    required_signatures_ruleset_enforced_without_bypass: Optional[bool] = None
     enabled: Optional[bool] = None
     pull_request_enforcement: Optional[str] = None
     pull_request_bypass_actors_length: Optional[int] = None
     pull_request_required_approving_review_count: Optional[int] = None
     pull_request_dismiss_stale_reviews_on_push: Optional[bool] = None
     pull_request_require_code_owner_review: Optional[bool] = None
+    pull_request_require_last_push_approval: Optional[bool] = None
     required_signatures_enforcement: Optional[str] = None
     required_signatures_ruleset_bypass_actors_length: Optional[int] = None
 
@@ -212,15 +393,19 @@ class RepositoryAccess:
     teams_with_admin_parents: List[str]
     teams: List[str]
     teams_parents: List[str]
+    team_admin_maintainer_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
 class RepositoryInfo:
     basic: BasicRepositoryInfo
     access: RepositoryAccess
+    codeowners_file_present: Optional[bool] = None
+    codeowners_file_valid: Optional[bool] = None
     security_and_analysis: SecurityAndAnalysisInfo = field(
         default_factory=SecurityAndAnalysisInfo
     )
+    security_alerts: SecurityAlertsInfo = field(default_factory=SecurityAlertsInfo)
     default_branch_protection: BranchProtectionInfo = field(
         default_factory=BranchProtectionInfo
     )
@@ -234,9 +419,12 @@ class RepositoryInfo:
         return cls(
             basic=BasicRepositoryInfo(**data["basic"]),
             access=RepositoryAccess(**data["access"]),
+            codeowners_file_present=data.get("codeowners_file_present"),
+            codeowners_file_valid=data.get("codeowners_file_valid"),
             security_and_analysis=SecurityAndAnalysisInfo(
                 **data.get("security_and_analysis", {})
             ),
+            security_alerts=SecurityAlertsInfo(**data.get("security_alerts", {})),
             default_branch_protection=BranchProtectionInfo(
                 **data.get("default_branch_protection", {})
             ),
