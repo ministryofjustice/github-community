@@ -1,0 +1,44 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats"}
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl">GitHub Repository Stats</h1>
+  <p class="govuk-body-l">View estate-wide statistics and reports across GitHub Enterprise organisations.</p>
+
+  <section>
+    <h2 class="govuk-heading-l">Reports</h2>
+
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('repository_stats_main.repository_overview') }}">Repository overview</a>
+        </h3>
+        <p class="govuk-body-s">View repository totals by organisation, business unit and team.</p>
+      </div>
+
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('repository_stats_main.visibility_changes') }}">Repository visibility changes</a>
+        </h3>
+        <p class="govuk-body-s">Track visibility changes, new repositories and deleted repositories over time.</p>
+      </div>
+
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="{{ url_for('repository_stats_main.archived_repositories') }}">Archived repositories</a>
+        </h3>
+        <p class="govuk-body-s">Find archived public repositories and track progress towards making them internal.</p>
+      </div>
+    </div>
+  </section>
+{% endblock %}

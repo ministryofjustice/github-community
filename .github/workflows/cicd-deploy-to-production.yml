@@ -34,6 +34,8 @@ env:
   GITHUB_APP_CLIENT_ID: ${{ vars.GH_APP_CLIENT_ID }}
   GITHUB_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
   GITHUB_APP_INSTALLATION_ID: ${{ vars.GH_APP_INSTALLATION_ID }}
+  GITHUB_STATS_OAUTH_CLIENT_ID: ${{ secrets.GH_STATS_OAUTH_PROD_CLIENT_ID }}
+  GITHUB_STATS_OAUTH_CLIENT_SECRET: ${{ secrets.GH_STATS_OAUTH_PROD_CLIENT_SECRET }}
   SENTRY_DSN_KEY: ${{ secrets.SENTRY_DSN_KEY }}
 
 jobs:
@@ -119,6 +121,8 @@ jobs:
             --set app.deployment.env.GITHUB_APP_CLIENT_ID="${GITHUB_APP_CLIENT_ID}" \
             --set app.deployment.env.GITHUB_APP_PRIVATE_KEY="${GITHUB_APP_PRIVATE_KEY}" \
             --set app.deployment.env.GITHUB_APP_INSTALLATION_ID="${GITHUB_APP_INSTALLATION_ID}" \
+            --set app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_ID="${GITHUB_STATS_OAUTH_CLIENT_ID}" \
+            --set app.deployment.env.GITHUB_STATS_OAUTH_CLIENT_SECRET="${GITHUB_STATS_OAUTH_CLIENT_SECRET}" \
             --set app.deployment.env.SENTRY_DSN_KEY="${SENTRY_DSN_KEY}" \
             --set app.deployment.image.repository="${ECR_REGISTRY}/${ECR_REPOSITORY}" \
             --set app.deployment.image.tag="${IMAGE_TAG}"

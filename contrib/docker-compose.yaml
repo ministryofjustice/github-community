@@ -42,20 +42,36 @@ services:
       - ADMIN_GITHUB_TOKEN=test
       - GITHUB_APP_INSTALLATION_ID=12345678
 
+      # Repository Stats access: "org/team-slug". Leave unset for open access.
+      - GITHUB_STATS_ACCESS_TEAM=ministryofjustice/repository-stats-viewers
+      # GitHub OAuth App for the "Continue with GitHub" step. Only used when
+      # AUTH_ENABLED is true. Callback: <host>/repository-stats/github/callback
+      # - GITHUB_STATS_OAUTH_CLIENT_ID=
+      # - GITHUB_STATS_OAUTH_CLIENT_SECRET=
+
       # Local
       - LOGGING_LEVEL=DEBUG
       - AUTH_ENABLED=false
       - ADD_STUB_VALUES_TO_DATABASE=true
     ports:
       - "4567:4567"
+    # Gunicorn only listens once "alembic upgrade head" has finished (see entrypoint.sh),
+    # so a healthy app means every migration has run.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 4567), 2).close()"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
     depends_on:
       database:
         condition: service_healthy
 
   db-seed:
     image: docker.io/postgres:18-alpine@sha256:9636ae7feacd8d630303eede7f95cd0f472d514e7864422c6aa8ea07b2171df8
+    # Wait for the app, so the stub SQL only runs once all migrations have finished.
     depends_on:
-      - database
+      app:
+        condition: service_healthy
     environment:
       PGPASSWORD: admin
     networks:
@@ -70,5 +86,6 @@ services:
         until psql -h database -U admin -d admin -c "SELECT 1 FROM alembic_version" >/dev/null 2>&1; do sleep 1; done;
         echo "Running stub SQL files...";
         psql -h database -U admin -d admin -f "/db-init/01-stub-repository-standards-data.sql";
+        psql -h database -U admin -d admin -f "/db-init/03-stub-repository-stats-data.sql";
         echo "Database seeding complete.";
       '

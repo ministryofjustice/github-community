@@ -1,0 +1,50 @@
+{% extends "shared/components/base.html" %}
+
+{% if problem == "cancelled" %}
+  {% set heading = "You didn't confirm your GitHub account" %}
+  {% set button_text = "Continue with GitHub" %}
+{% elif problem == "state" %}
+  {% set heading = "Your GitHub sign-in has expired" %}
+  {% set button_text = "Start again" %}
+{% elif problem == "failed" %}
+  {% set heading = "We couldn't confirm your GitHub account" %}
+  {% set button_text = "Try again" %}
+{% elif problem == "not_configured" %}
+  {% set heading = "Sorry, GitHub sign-in isn't available" %}
+  {% set button_text = "Try again" %}
+{% else %}
+  {% set heading = "Sorry, we can't check your access right now" %}
+  {% set button_text = "Try again" %}
+{% endif %}
+
+{% block pageTitle %}
+  {{ heading }} - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats"}
+    ]
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-l">{{ heading }}</h1>
+      {% if problem == "cancelled" %}
+        <p class="govuk-body">You need to continue with GitHub to use Repository Stats, so we can check if you're a member of the GitHub team that gives access.</p>
+        <p class="govuk-body">We only read your GitHub username. We don't ask for any permissions.</p>
+      {% elif problem == "state" %}
+        <p class="govuk-body">This can happen if you went back to an old page, took too long, or started signing in in another tab.</p>
+        <p class="govuk-body">Start again to confirm your GitHub account.</p>
+      {% elif problem == "failed" %}
+        <p class="govuk-body">Something went wrong when GitHub sent you back to us.</p>
+      {% else %}
+        <p class="govuk-body">We couldn't reach GitHub to check your access to Repository Stats. Try again later.</p>
+        <p class="govuk-body">If this keeps happening, post in <a class="govuk-link" href="{{ slack_channel_url }}" target="_blank" rel="noopener noreferrer">{{ slack_channel_name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.</p>
+      {% endif %}
+      {{ govukButton({"text": button_text, "href": retry_href}) }}
+    </div>
+  </div>
+{% endblock %}
