@@ -19,7 +19,7 @@ dependencies = [
   "pynacl==1.6.2",
   "sentry-sdk==2.66.1",
   "urllib3==2.7.0",
-  "werkzeug==3.1.8",
+  "werkzeug==3.1.9",
 ]
 
 [dependency-groups]
