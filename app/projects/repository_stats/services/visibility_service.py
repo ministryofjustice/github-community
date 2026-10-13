@@ -6,7 +6,9 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Protocol
 
 from app.projects.repository_stats.config.collection_config import (
+    DEFAULT_ORG,
     RECORD_VISIBILITY_JOB_NAME,
+    SHOW_ALL_ORGANISATIONS_OPTION,
 )
 from app.projects.repository_stats.services.business_units import (
     BusinessUnitSource,
@@ -293,16 +295,18 @@ class VisibilityService:
         )
 
     def _default_organisation(self, query: VisibilityQuery) -> VisibilityQuery:
-        """When no organisation was requested at all, default to the only one with
-        data instead of showing the misleading 'All organisations'. Only applies when
-        exactly one organisation has data, and never overrides an explicit choice
-        (including explicitly picking 'All organisations')."""
-        if query.filters.org:
+        """When no organisation was requested at all, default it instead of showing
+        'All organisations', which isn't offered while SHOW_ALL_ORGANISATIONS_OPTION is
+        off. Never overrides an explicit choice. Prefers DEFAULT_ORG when it has data,
+        falling back to the first organisation with data so this still works if
+        DEFAULT_ORG is ever renamed or unavailable."""
+        if SHOW_ALL_ORGANISATIONS_OPTION or query.filters.org:
             return query
         organisations = self.repository.find_organisations()
-        if len(organisations) != 1:
+        if not organisations:
             return query
-        return replace(query, filters=replace(query.filters, org=organisations[0]))
+        default = DEFAULT_ORG if DEFAULT_ORG in organisations else organisations[0]
+        return replace(query, filters=replace(query.filters, org=default))
 
     def get_changes_page(self, query: VisibilityQuery) -> VisibilityPage:
         """The visibility changes page: current totals, change counts and activity."""
@@ -357,6 +361,7 @@ class VisibilityService:
     def get_archived_page(self, query: VisibilityQuery) -> VisibilityPage:
         """The archived repositories page. Dates never apply, so they are dropped here."""
         query = VisibilityQuery(filters=query.filters, only_public=query.only_public)
+        query = self._default_organisation(query)
         context = self._context(query)
         dates = context.snapshot_dates
         latest = dates[-1] if dates else None

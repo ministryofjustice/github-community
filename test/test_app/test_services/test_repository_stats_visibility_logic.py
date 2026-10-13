@@ -268,17 +268,16 @@ class TestQueryParsing(unittest.TestCase):
         )
         self.assertEqual(ascending.aria_sort("repository"), "ascending")
 
-    def test_explicit_all_organisations_is_kept_distinct_from_unset(self):
-        """Submitting the 'org' field blank or as 'all' both mean the user explicitly
-        chose 'All organisations', normalised to the 'all' sentinel so it survives
-        round-tripping through generated links instead of being dropped like an unset
-        default would be."""
+    def test_an_empty_or_missing_org_both_parse_to_unresolved(self):
+        """Neither a missing 'org' key nor an explicitly blank one picks an
+        organisation: the service layer fills in the default when none is offered by
+        the user (SHOW_ALL_ORGANISATIONS_OPTION off)."""
         self.assertEqual(parse_visibility_query({}).filters.org, "")
-        self.assertEqual(parse_visibility_query({"org": ""}).filters.org, "all")
-        self.assertEqual(parse_visibility_query({"org": "all"}).filters.org, "all")
-        query = parse_visibility_query({"org": "all"})
-        self.assertEqual(query.to_params()["org"], "all")
-        self.assertEqual(parse_visibility_query(query.to_params()), query)
+        self.assertEqual(parse_visibility_query({"org": ""}).filters.org, "")
+        self.assertEqual(
+            parse_visibility_query({"org": "ministryofjustice"}).filters.org,
+            "ministryofjustice",
+        )
 
 
 class TestFilters(unittest.TestCase):
@@ -294,10 +293,10 @@ class TestFilters(unittest.TestCase):
         )
         self.assertFalse(VisibilityFilters(business_unit="LAA").matches(ORG, "x", []))
 
-    def test_explicit_all_organisations_matches_everything(self):
-        self.assertTrue(VisibilityFilters(org="all").matches(ORG, "x", ()))
-        self.assertTrue(VisibilityFilters(org="all").matches("other-org", "x", ()))
-        self.assertFalse(VisibilityFilters(org="all").is_active)
+    def test_an_empty_org_matches_every_organisation(self):
+        self.assertTrue(VisibilityFilters(org="").matches(ORG, "x", ()))
+        self.assertTrue(VisibilityFilters(org="").matches("other-org", "x", ()))
+        self.assertFalse(VisibilityFilters(org="").is_active)
 
 
 class TestCounts(unittest.TestCase):

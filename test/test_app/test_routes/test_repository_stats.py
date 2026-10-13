@@ -160,20 +160,6 @@ class EmptyVisibilityRepository(FakeVisibilityRepository):
     last_run_finished_at = None
 
 
-class SingleOrgVisibilityRepository(FakeVisibilityRepository):
-    """Only ministryofjustice has data: the mas-model snapshot is dropped."""
-
-    def __init__(self):
-        super().__init__()
-        self.snapshots = {
-            captured_on: [s for s in snaps if s.org != OTHER_ORG]
-            for captured_on, snaps in self.snapshots.items()
-        }
-
-    def find_organisations(self):
-        return [ORG]
-
-
 def teams_by_name(slugs_by_name):
     return RepositoryTeams(
         by_name={
@@ -992,7 +978,9 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         )
         self.assertNotIn(NO_HEADING, body)
         self.assertIn(LAST_UPDATED_LINE, body)
-        self.assertNotIn("Summary", body)
+        # The default organisation filter (SHOW_ALL_ORGANISATIONS_OPTION is off) counts
+        # as a filter, so the Summary heading always shows while it's applied.
+        self.assertIn('<h2 class="govuk-heading-m">Summary, all dates</h2>', body)
         self.assertIn(
             '<input class="govuk-input" id="from" name="from" type="date" value="" min="2026-08-01" max="2026-10-01">',
             body,
@@ -1001,7 +989,7 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             '<input class="govuk-input" id="to" name="to" type="date" value="" min="2026-08-01" max="2026-10-01">',
             body,
         )
-        self.assertIn(estate_line(34, 3, 31, 0), body)
+        self.assertIn(estate_line(33, 2, 31, 0), body)
         for label in ("Visibility changes", "New repositories", "Deleted repositories"):
             self.assertIn(f'<dt class="app-visibility-stats__label">{label}</dt>', body)
         self.assertIn(
@@ -1063,7 +1051,7 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
 
     def test_organisations_from_the_data(self):
         _, body = self.get(CHANGES_URL)
-        self.assertIn(f'<option value="{ORG}">{ORG}</option>', body)
+        self.assertIn(f'<option value="{ORG}" selected>{ORG}</option>', body)
         self.assertIn(f'<option value="{OTHER_ORG}">{OTHER_ORG}</option>', body)
         _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}")
         self.assertIn(
@@ -1095,6 +1083,9 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
                 self.assertIn(LAST_UPDATED_LINE, body)
 
     def test_activity_sort_and_page_keep_unfiltered_view(self):
+        # Activity, sort and page never count as filters themselves; the Summary
+        # heading shown here comes only from the default organisation filter, which
+        # applies the same way regardless of these params.
         for params in (
             "activity=new",
             "sort=repository&dir=asc",
@@ -1105,11 +1096,13 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
                 _, body = self.get(f"{CHANGES_URL}?{params}")
                 self.assertNotIn(NO_HEADING, body)
                 self.assertIn(LAST_UPDATED_LINE, body)
-                self.assertNotIn("Summary,", body)
+                self.assertIn(
+                    '<h2 class="govuk-heading-m">Summary, all dates</h2>', body
+                )
 
     def test_current_repositories_line(self):
         _, body = self.get(f"{CHANGES_URL}?from=2026-09-01&to=2026-09-05")
-        self.assertIn(estate_line(34, 3, 31, 0), body)
+        self.assertIn(estate_line(33, 2, 31, 0), body)
         _, body = self.get(f"{CHANGES_URL}?business_unit=HMPPS")
         self.assertIn(estate_line(1, 0, 1, 0), body)
 
@@ -1350,49 +1343,65 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         )
         _, body = self.get(CHANGES_URL)
         self.assertIn(
-            f"{CHANGES_URL}/changes.csv?org=&amp;business_unit=&amp;q=&amp;from=&amp;to=&amp;activity=all&amp;sort=date&amp;dir=desc",
+            f"{CHANGES_URL}/changes.csv?org={ORG}&amp;business_unit=&amp;q=&amp;from=&amp;to=&amp;activity=all&amp;sort=date&amp;dir=desc",
             body,
         )
 
 
 class TestDefaultOrganisation(RepositoryStatsTestCase):
-    """When only one organisation has data, the changes page defaults to it instead
-    of the misleading 'All organisations', while still letting the user pick that
-    explicitly."""
-
-    repository_class = SingleOrgVisibilityRepository
+    """While SHOW_ALL_ORGANISATIONS_OPTION is off, the Organisation filter offers only
+    organisations with data and no 'All organisations' choice; it defaults to
+    ministryofjustice (DEFAULT_ORG) whenever no organisation was requested, on both
+    pages, so old bookmarks with an empty or missing organisation still work."""
 
     def selected_org_option(self, body):
         select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
         return re.search(r'<option value="([^"]*)"[^>]*selected', select).group(1)
 
-    def test_defaults_to_the_only_organisation_with_data(self):
+    def test_changes_page_defaults_to_ministryofjustice(self):
         _, body = self.get(CHANGES_URL)
         self.assertEqual(self.selected_org_option(body), ORG)
-        self.assertIn(f'<option value="{ORG}"', body)
+        self.assertNotIn("All organisations", body)
 
-    def test_all_organisations_can_still_be_chosen_explicitly(self):
-        _, body = self.get(f"{CHANGES_URL}?org=all")
-        self.assertEqual(self.selected_org_option(body), "all")
+    def test_archived_page_defaults_to_ministryofjustice(self):
+        _, body = self.get(ARCHIVED_URL)
+        self.assertEqual(self.selected_org_option(body), ORG)
+        self.assertNotIn("All organisations", body)
 
-    def test_explicit_all_survives_a_sort_link(self):
-        _, body = self.get(f"{CHANGES_URL}?org=all&activity=all")
+    def test_an_explicit_organisation_choice_is_kept(self):
+        _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}")
+        self.assertEqual(self.selected_org_option(body), OTHER_ORG)
+
+    def test_an_empty_org_param_also_defaults(self):
+        """Old links built from a hidden input with no org value, e.g. '?org=', land
+        on the default too, same as one with no org param at all."""
+        _, body = self.get(f"{CHANGES_URL}?org=")
+        self.assertEqual(self.selected_org_option(body), ORG)
+
+    def test_default_survives_a_sort_link(self):
+        _, body = self.get(f"{CHANGES_URL}?activity=all")
         link = re.search(
             r'<a class="govuk-link app-visibility-sort" href="([^"]+)">Repository</a>',
             body,
         )
-        self.assertIn("org=all", link.group(1).replace("&amp;", "&"))
+        self.assertIn(f"org={ORG}", link.group(1).replace("&amp;", "&"))
 
-    def test_default_does_not_apply_with_more_than_one_organisation(self):
-        self.repository.find_organisations = lambda: [ORG, OTHER_ORG]
+    def test_default_also_applies_with_only_one_organisation_available(self):
+        self.repository.find_organisations = lambda: [ORG]
         _, body = self.get(CHANGES_URL)
-        self.assertEqual(self.selected_org_option(body), "all")
+        self.assertEqual(self.selected_org_option(body), ORG)
 
-    def test_archived_page_keeps_all_organisations_by_default(self):
+    def test_archived_repositories_are_shown_again_for_the_default_organisation(self):
+        """Regression: the default organisation must actually match real rows, so the
+        page shows repositories rather than 'No archived public repositories match
+        your filters' while the progress line (which ignores filters) still counts
+        every organisation."""
         _, body = self.get(ARCHIVED_URL)
-        select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
-        self.assertIn('<option value="all"', select)
-        self.assertRegex(select, r'<option value="all"[^>]*selected')
+        self.assertIn('<div id="archived-no-match" hidden>', body)
+        self.assertNotIn('id="archived-table" hidden', body)
+        self.assertIn(
+            "1 of 2 archived public repositories have been made internal</p>", body
+        )
 
 
 class TestOrganisationDisplayNames(RepositoryStatsTestCase):
@@ -1448,7 +1457,10 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
 
     def test_csv_sort_by_organisation_matches_the_table(self):
         # "Analytical Example" sorts before "Example Justice Organisation",
-        # the reverse of the two organisations' login order.
+        # the reverse of the two organisations' login order. Exercised with
+        # SHOW_ALL_ORGANISATIONS_OPTION patched on, since with it off the page only
+        # ever shows one organisation at a time and this multi-organisation ordering
+        # can't otherwise be reached.
         self.repository.events.append(
             VisibilityEvent(
                 300,
@@ -1461,12 +1473,18 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
                 "internal",
             )
         )
-        params = "activity=all&from=2026-08-01&to=2026-09-25&sort=organisation&dir=asc"
-        _, body = self.get(f"{CHANGES_URL}?{params}")
-        table = body.split('id="activity-table"', 1)[1]
-        table_order = re.findall(r"github.com/([\w.-]+)/[\w.-]+\"", table)
+        params = (
+            "org=&activity=all&from=2026-08-01&to=2026-09-25&sort=organisation&dir=asc"
+        )
+        with patch(
+            "app.projects.repository_stats.services.visibility_service.SHOW_ALL_ORGANISATIONS_OPTION",
+            True,
+        ):
+            _, body = self.get(f"{CHANGES_URL}?{params}")
+            table = body.split('id="activity-table"', 1)[1]
+            table_order = re.findall(r"github.com/([\w.-]+)/[\w.-]+\"", table)
 
-        response = self.client.get(f"{CHANGES_URL}/changes.csv?{params}")
+            response = self.client.get(f"{CHANGES_URL}/changes.csv?{params}")
         rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))[1:]
         csv_order = [row[1] for row in rows]
 

@@ -12,6 +12,9 @@ from flask import (
     url_for,
 )
 
+from app.projects.repository_stats.config.collection_config import (
+    SHOW_ALL_ORGANISATIONS_OPTION,
+)
 from app.projects.repository_stats.config.visibility_config import (
     VISIBILITY_ARCHIVED_DEADLINE,
     VISIBILITY_HISTORY_START_DATE,
@@ -135,6 +138,7 @@ def visibility_changes():
         page=page,
         query=page.query,
         history_start_date=VISIBILITY_HISTORY_START_DATE,
+        show_all_organisations_option=SHOW_ALL_ORGANISATIONS_OPTION,
     )
 
 
@@ -171,6 +175,7 @@ def archived_repositories():
         query=page.query,
         slack_channel_name=VISIBILITY_SLACK_CHANNEL_NAME,
         slack_channel_url=VISIBILITY_SLACK_CHANNEL_URL,
+        show_all_organisations_option=SHOW_ALL_ORGANISATIONS_OPTION,
     )
 
 
