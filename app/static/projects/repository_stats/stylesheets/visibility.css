@@ -1,0 +1,390 @@
+/* Repository Stats visibility changes and archived repositories pages only. Colours are GOV.UK Frontend palette values. */
+
+.app-visibility-filters {
+  background-color: #f3f2f1;
+  padding: 20px 20px 5px;
+  margin-bottom: 30px;
+}
+
+/* Archived page: a tighter filter panel (selects row, checkbox, then the button). */
+.app-visibility-filters--compact .govuk-grid-row .govuk-form-group {
+  margin-bottom: 20px;
+}
+
+/* Let this banner's text use the banner's full width, not GOV.UK's reading measure. */
+.app-visibility-banner--full-width .govuk-notification-banner__content > * {
+  max-width: none;
+}
+
+/* GOV.UK's banner gap is 40-50px; 30px here. Two classes so it beats GOV.UK's media query. */
+.govuk-notification-banner.app-visibility-banner--full-width {
+  margin-bottom: 30px;
+}
+
+.app-visibility-filters .govuk-select,
+.app-visibility-filters .govuk-input {
+  width: 100%;
+}
+
+/* Second filter row: From, To, then Apply filters and Clear filters, bottom-aligned. */
+.app-visibility-filter-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  margin-bottom: 15px;
+}
+
+.app-visibility-filter-row .govuk-form-group,
+.app-visibility-filter-row .govuk-button {
+  margin-bottom: 0;
+}
+
+.app-visibility-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.app-visibility-filter-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+}
+
+/* Stat blocks: a <dl> where each group holds a small label (dt) above a big number (dd). */
+.app-visibility-stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 15px;
+  margin: 0 0 30px;
+  padding: 0;
+}
+
+.app-visibility-stats__item {
+  padding: 0 0 10px;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.app-visibility-stats__label {
+  margin: 0 0 5px;
+  color: #505a5f;
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.app-visibility-stats__value {
+  margin: 0;
+  color: #0b0c0c;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* A row of form controls, bottom-aligned so buttons line up with the inputs. */
+.app-visibility-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px 20px;
+  margin-bottom: 30px;
+}
+
+.app-visibility-controls .govuk-form-group,
+.app-visibility-controls .govuk-button {
+  margin-bottom: 0;
+}
+
+.app-visibility-estate {
+  padding-bottom: 15px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.app-visibility-progress-summary {
+  display: flex;
+  flex-direction: column;
+  max-width: 640px;
+}
+
+.app-visibility-secondary-text {
+  color: #505a5f;
+}
+
+.app-visibility-progress {
+  height: 20px;
+  background-color: #f3f2f1;
+  border: 1px solid #b1b4b6;
+  margin-bottom: 20px;
+  max-width: 640px;
+}
+
+.app-visibility-progress__bar {
+  height: 100%;
+  background-color: #00703c;
+}
+
+.app-visibility-sort {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-visibility-sort:hover {
+  text-decoration: underline;
+}
+
+.app-visibility-nowrap {
+  white-space: nowrap;
+}
+
+@media (min-width: 641px) {
+  .app-visibility-filter-row {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .app-visibility-dates {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  /* Keep long inline errors from pushing the buttons onto a new line. */
+  .app-visibility-filter-row .govuk-form-group {
+    max-width: 15em;
+  }
+
+  .app-visibility-filter-actions {
+    flex-direction: row;
+    align-items: center;
+    /* Match the height of the date inputs so the button lines up with them. */
+    min-height: 40px;
+  }
+
+  .app-visibility-stats--4 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .app-visibility-stats--3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .app-visibility-controls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+
+  .app-visibility-progress-summary {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 20px;
+  }
+
+  .app-visibility-controls__end {
+    margin-left: auto;
+  }
+}
+
+/* Archived page: rows and messages hidden by the server or archived-filters.js. */
+#archived-results [hidden] {
+  display: none;
+}
+
+/* With JavaScript the list filters as you type, so the Apply filters button isn't needed. */
+.app-visibility-filters--live .app-visibility-filter-actions .govuk-button {
+  display: none;
+}
+
+/* Repository overview: expandable organisation and business unit rows. */
+.app-overview-row--all {
+  background-color: #f3f2f1;
+}
+
+.app-overview-row--all .govuk-table__header {
+  padding-left: 10px;
+}
+
+.app-overview-strong {
+  font-weight: 700;
+}
+
+.app-overview-toggle {
+  display: inline-block;
+  position: relative;
+  padding-left: 25px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-overview-toggle:hover {
+  text-decoration: underline;
+}
+
+/* Triangle like the GOV.UK details component: right when closed, down when open. */
+.app-overview-toggle::before {
+  content: "";
+  position: absolute;
+  top: 0.3em;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: 7px 0 7px 12.124px;
+  border-left-color: currentcolor;
+}
+
+.app-overview-toggle--open::before {
+  top: 0.4em;
+  border-width: 12.124px 7px 0;
+  border-top-color: currentcolor;
+  border-left-color: transparent;
+}
+
+.app-overview-name--business-unit {
+  padding-left: 30px;
+}
+
+/* "Business unit" or "Team", once above each group of rows. A plain line: regular
+   weight, not shaded, and no rule between it and the first row of its group. */
+.app-overview-group-label {
+  padding-bottom: 0;
+  border-bottom: 0;
+  color: #505a5f;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+/* Lined up with the business unit names (cell indent plus toggle triangle). */
+.app-overview-group-label--business-unit {
+  padding-left: 55px;
+}
+
+/* Lined up with the team names (cell indent plus the rule beside them). */
+.app-overview-group-label--team {
+  padding-left: 67px;
+}
+
+/* An expanded business unit and its teams share a light grey background. */
+.app-overview-row--expanded,
+.app-overview-row--team {
+  background-color: #f8f8f8;
+}
+
+.app-overview-name--team {
+  /* Business unit indent (30px) plus its toggle's triangle (25px), so team names
+     line up under the business unit name. */
+  padding-left: 55px;
+  font-weight: 400;
+}
+
+/* Grey rule directly beside the team name. */
+.app-overview-team-name {
+  display: block;
+  padding-left: 10px;
+  border-left: 2px solid #b1b4b6;
+}
+
+/* Column widths shared by the outer table and every open business unit's nested
+   team table (below), so the team columns line up with the Organisation / Total /
+   Public / Internal / Private headings above them. */
+.app-overview-table,
+.app-overview-team-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.app-overview-col--name {
+  width: 52%;
+}
+
+.app-overview-col--numeric {
+  width: 12%;
+}
+
+/* An open business unit's teams live in their own small table, inside a <td> of
+   the outer table, boxed to a fixed height and scrolling independently - so the
+   organisation and business unit rows around it never move, and two or more open
+   business units each scroll on their own rather than sharing one long list. */
+.app-overview-teambox-cell {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.app-overview-teambox {
+  max-height: 430px;
+  overflow-y: auto;
+  background-color: #f8f8f8;
+}
+
+.app-overview-team-table {
+  margin-bottom: 0;
+}
+
+/* Wide tables scroll sideways inside their own focusable region on narrow screens. */
+.app-table-scroll {
+  overflow-x: auto;
+}
+
+.app-table-scroll:focus {
+  outline: 3px solid #ffdd00;
+  outline-offset: 0;
+}
+
+/* Freeze the header row (like Excel's freeze panes) so column titles stay visible
+   while scrolling a long table. Used by both the Repository overview and Archived
+   repositories tables. position: sticky works against the page itself as long as
+   no ancestor sets overflow to anything but visible - see .app-table-scroll--overview
+   below, which drops the overview's own horizontal-scroll ancestor at normal widths
+   so this isn't broken there. A solid background stops scrolled-past rows showing
+   through underneath the frozen header. */
+.app-table-scroll thead.govuk-table__head th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: #ffffff;
+  box-shadow: inset 0 -1px 0 #b1b4b6;
+}
+
+/* Every row a toggle link can jump to (organisation or business unit) gets this,
+   so landing on it via its #id doesn't tuck it underneath the frozen header
+   above. Approximates the header row's height. */
+.app-overview-row--org,
+.app-overview-row--business-unit {
+  scroll-margin-top: 48px;
+}
+
+/* Repository overview only: no horizontal-scroll ancestor at normal widths, so the
+   frozen thead above has nothing between it and the page to stick to - position:
+   sticky stops working the moment any ancestor's overflow is anything but visible.
+   Falls back to the shared .app-table-scroll horizontal scroll (and its own focus
+   outline) only on narrow screens, where five columns plus long names might not
+   otherwise fit. */
+.app-table-scroll--overview {
+  overflow-x: visible;
+}
+
+@media (max-width: 40.0625em) {
+  .app-table-scroll--overview {
+    overflow-x: auto;
+  }
+}
+
+/* GOV.UK error red is 4.3:1 on the grey filter panel; this darker red is 5.7:1. */
+.app-visibility-filters .govuk-error-message {
+  color: #b52a16;
+}
+
+/* Organisation names (e.g. "Criminal Injuries Compensation Authority") wrap onto two lines. */
+.app-visibility-org-cell {
+  max-width: 12em;
+}
+
+/* Long unbroken names wrap rather than widen the table. */
+.app-table-scroll .govuk-table__cell {
+  overflow-wrap: break-word;
+}

@@ -1,0 +1,33 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}
+  You don't have access to Repository Stats yet - GitHub Repository Stats
+{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      {"text": "Home", "href": "/"},
+      {"text": "GitHub Repository Stats"}
+    ]
+  }) }}
+
+  <div class="govuk-grid-row">
+    <div class="govuk-grid-column-two-thirds">
+      <h1 class="govuk-heading-l">You don't have access to Repository Stats yet</h1>
+      <p class="govuk-body">Repository Stats is only available to members of a specific GitHub team.</p>
+      {% if github_login %}
+        <p class="govuk-body">You confirmed your GitHub account as <strong>{{ github_login }}</strong>.</p>
+      {% endif %}
+      <p class="govuk-body">To ask for access, post in <a class="govuk-link" href="{{ slack_channel_url }}" target="_blank" rel="noopener noreferrer">{{ slack_channel_name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.</p>
+      {% if github_login %}
+        <h2 class="govuk-heading-m">Wrong GitHub account?</h2>
+        <p class="govuk-body">If you have more than one GitHub account, use the one you use for work. You may need to sign out of github.com first, or GitHub will sign you straight back in to the same account.</p>
+        <form method="post" action="{{ url_for('repository_stats_main.github_switch_account') }}" novalidate>
+          {{ govukButton({"text": "Use a different GitHub account", "classes": "govuk-button--secondary"}) }}
+        </form>
+      {% endif %}
+      <p class="govuk-body"><a class="govuk-link" href="/">Go to the GitHub Community homepage</a></p>
+    </div>
+  </div>
+{% endblock %}
