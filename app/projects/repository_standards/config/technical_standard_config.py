@@ -187,7 +187,7 @@ def get_code_owner_reviews_check(
         "Must have code owner reviews",
         "6-must-have-code-owner-reviews",
         status,
-        "HMPPS is exempt. Other repositories require a valid CODEOWNERS file and enforced code-owner approval on the default branch.",
+        "Changes to the default branch must be reviewed and approved by the designated code owners for the affected areas of the repository.",
     )
 
 

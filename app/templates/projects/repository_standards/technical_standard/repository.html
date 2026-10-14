@@ -1,8 +1,12 @@
 {% extends "shared/components/base.html" %}
+{% from "projects/repository_standards/technical_standard/macros.html" import technical_standard_badge %}
 
 {% block pageTitle %}{{ repository.name }}{% endblock %}
 
 {% block content %}
+  {% set badge_url = url_for("repository_standards_api.get_repository_badge", repository_name=repository.name, _external=True) %}
+  {% set report_url = url_for("technical_standard.repository", repository_name=repository.name, _external=True) %}
+  {% set badge_markdown = "[![MOJ Repository Compliance Badge](" ~ badge_url ~ ")](" ~ report_url ~ ")" %}
   {{ govukBreadcrumbs({
     "items": [
       { "text": "Home", "href": "/" },
@@ -15,13 +19,41 @@
 
   <h1 class="govuk-heading-xl">{{ repository.name }}</h1>
 
-  <p class="govuk-body">
-    {% if repository.compliant %}
-      <strong class="govuk-tag govuk-tag--green">Compliance met</strong>
-    {% else %}
-      <strong class="govuk-tag govuk-tag--red">Compliance not met</strong>
+  <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Owner</dt>
+      <dd class="govuk-summary-list__value">{{ repository.authoritative_business_unit_owners | join(", ") or "Not identified" }}</dd>
+    </div>
+
+    {% if repository.authoritative_team_owners %}
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Team</dt>
+      <dd class="govuk-summary-list__value">{{ repository.authoritative_team_owners | join(", ") }}</dd>
+    </div>
     {% endif %}
-  </p>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Description</dt>
+      <dd class="govuk-summary-list__value">{{ repository.description or "Not provided" }}</dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Compliance</dt>
+      <dd class="govuk-summary-list__value">{{ technical_standard_badge(repository) }}</dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Repository</dt>
+      <dd class="govuk-summary-list__value">
+        <a href="https://github.com/ministryofjustice/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View repository on GitHub</a>
+      </dd>
+    </div>
+  </section>
+
+  {{ govukDetails({
+    "summaryText": "How do I add the badge to my README file?",
+    "text": badge_markdown
+  }) }}
 
   <table class="govuk-table">
     <thead class="govuk-table__head">

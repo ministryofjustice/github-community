@@ -5,6 +5,7 @@ from app.projects.repository_standards.config.technical_standard_config import (
     FAIL,
     PASS,
     get_authoritative_owner_check,
+    get_all_technical_standard_checks,
     get_branch_protection_enforced_for_admins_check,
     get_code_owner_reviews_check,
     get_main_default_branch_check,
@@ -145,6 +146,55 @@ class TestAuthoritativeOwnerCheck(unittest.TestCase):
         check = get_authoritative_owner_check(repository)
 
         self.assertEqual(check.status, FAIL)
+
+
+class TestPassingRepositoryFixture(unittest.TestCase):
+    def test_complete_hmpps_main_mit_fixture_passes_all_checks(self):
+        repository = SimpleNamespace(
+            data=SimpleNamespace(
+                basic=SimpleNamespace(
+                    business_unit="HMPPS",
+                    default_branch_name="main",
+                    license="mit",
+                    license_path="LICENSE",
+                ),
+                access=SimpleNamespace(
+                    teams_with_admin=["team-alpha"],
+                    team_admin_maintainer_counts={"team-alpha": 2},
+                ),
+                default_branch_protection=SimpleNamespace(
+                    present=True,
+                    enforce_admins_enabled=True,
+                    required_signatures=True,
+                    required_approving_review_count=1,
+                    require_last_push_approval=True,
+                    require_code_owner_reviews=True,
+                    dismiss_stale_reviews=True,
+                ),
+                default_branch_ruleset=SimpleNamespace(
+                    enabled=False,
+                    all_rulesets_enforced_without_bypass=False,
+                    required_signatures_ruleset_enforced_without_bypass=None,
+                    pull_request_enforcement=None,
+                    pull_request_bypass_actors_length=None,
+                    pull_request_required_approving_review_count=None,
+                    pull_request_require_last_push_approval=None,
+                    pull_request_require_code_owner_review=None,
+                    pull_request_dismiss_stale_reviews_on_push=None,
+                ),
+                security_alerts=SimpleNamespace(
+                    open_high_critical_code_scanning_count=0,
+                    open_high_critical_dependabot_count=0,
+                ),
+                codeowners_file_present=True,
+                codeowners_file_valid=True,
+            )
+        )
+
+        checks = get_all_technical_standard_checks(repository)
+
+        self.assertEqual(len(checks), 9)
+        self.assertTrue(all(check.status == PASS for check in checks))
 
 
 class TestBranchProtectionEnforcedForAdminsCheck(unittest.TestCase):
@@ -522,6 +572,21 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
         check = get_pull_request_review_protection_check(repository)
 
         self.assertEqual(check.status, FAIL)
+
+    def test_guidance_link_uses_the_standard_heading_anchor(self):
+        repository = make_review_repository(
+            classic_count=1,
+            classic_latest_push=True,
+        )
+
+        check = get_pull_request_review_protection_check(repository)
+
+        self.assertEqual(
+            check.link_to_guidance,
+            "https://octo-documentation.justice.gov.uk/docs/standards/"
+            "github-repository-technical-standard.html"
+            "#2-must-have-pull-request-review-protection",
+        )
 
     def test_passes_active_ruleset_with_both_requirements(self):
         repository = make_review_repository(

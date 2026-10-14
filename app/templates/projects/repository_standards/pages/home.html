@@ -22,25 +22,38 @@
 
     <section>
     <h2 class="govuk-heading-m">
-      GitHub Repository Technical Standard Reports<strong class="govuk-tag govuk-tag--blue">Preview</strong>
+      Reports
     </h2>
     <p class="govuk-body-s">
       View compliance reports against the updated
       <a class="govuk-link" href="https://octo-documentation.justice.gov.uk/docs/standards/github-repository-technical-standard.html" rel="noopener noreferrer" target="_blank">GitHub repository technical standard</a>.
     </p>
-    <div class="govuk-warning-text">
-      <span class="govuk-warning-text__icon" aria-hidden="true">!</span>
-      <strong class="govuk-warning-text__text">
-        <span class="govuk-visually-hidden">Warning</span>
-        This is a preview and some checks are not yet implemented.
-      </strong>
-    </div>
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
         <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
           <a class="govuk-link" href="/repository-standards/technical-standard/repositories">View All Repositories</a>
         </h3>
         <p class="govuk-body-s">View compliance against the GitHub repository technical standard for all repositories.</p>
+      </div>
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/technical-standard/business-units">View Business Units Reports</a>
+        </h3>
+        <p class="govuk-body-s">View current-standard compliance grouped by business unit.</p>
+      </div>
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/technical-standard/teams">View Teams Reports</a>
+        </h3>
+        <p class="govuk-body-s">View current-standard compliance grouped by team.</p>
+      </div>
+    </div>
+    <div class="govuk-grid-row">
+      <div class="govuk-grid-column-one-third">
+        <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
+          <a class="govuk-link" href="/repository-standards/technical-standard/unowned-repositories">View Unowned Repositories Report</a>
+        </h3>
+        <p class="govuk-body-s">View repositories without an authoritative business-unit or team owner.</p>
       </div>
     </div>
   </section>
@@ -70,10 +83,16 @@
   <hr class="govuk-section-break govuk-section-break--l govuk-section-break--visible">
 
   <section>
-    <h2 class="govuk-heading-m">
-      Reports <strong class="govuk-tag govuk-tag--grey">Previous standard</strong>
-    </h2>
-    <p class="govuk-body-s">View compliance reports for repositories in the Ministry of Justice.</p>
+    <details class="govuk-details" data-module="govuk-details">
+      <summary class="govuk-details__summary">
+        <span class="govuk-details__summary-text">
+          Legacy reports
+        </span>
+      </summary>
+      <div class="govuk-details__text">
+    <div class="govuk-inset-text">
+      These reports use the <a class="govuk-link" href="/repository-standards/guidance">previous repository standards guidance</a> and have been superseded by the <a class="govuk-link" href="/repository-standards/technical-standard/repositories">current technical standard reports</a>.
+    </div>
 
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
@@ -114,7 +133,8 @@
     </div>
 
 
- 
+      </div>
+    </details>
   </section>
 
 {% endblock %}

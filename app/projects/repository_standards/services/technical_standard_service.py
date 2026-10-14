@@ -9,6 +9,8 @@ from app.projects.repository_standards.config.technical_standard_config import (
 from app.projects.repository_standards.models.technical_standard import (
     TechnicalStandardReportView,
 )
+from app.projects.repository_standards.db_models import Owner
+from app.projects.repository_standards.repositories.owner_repository import OwnerView
 from app.projects.repository_standards.repositories.asset_repository import (
     RepositoryView,
 )
@@ -56,6 +58,62 @@ class TechnicalStandardService:
         return [
             self.__get_report(repository)
             for repository in self.__asset_service.get_all_repositories()
+        ]
+
+    def get_owner_counts(
+        self, owners: List[Owner]
+    ) -> dict[int, dict[str, int]]:
+        counts = {
+            owner.id: {"repo_count": 0, "compliant_count": 0}
+            for owner in owners
+        }
+        if not owners:
+            return counts
+
+        owner_type = owners[0].type.name
+        if owner_type == "BUSINESS_UNIT":
+            owner_field_name = "authoritative_business_unit_owners"
+        elif owner_type == "TEAM":
+            owner_field_name = "authoritative_team_owners"
+        else:
+            raise ValueError(f"Unrecognised owner type: {owner_type}")
+
+        owner_ids_by_name = {owner.name: owner.id for owner in owners}
+        for repository in self.get_all_repositories():
+            owner_ids = {
+                owner_ids_by_name[name]
+                for name in getattr(repository, owner_field_name)
+                if name in owner_ids_by_name
+            }
+            for owner_id in owner_ids:
+                counts[owner_id]["repo_count"] += 1
+                if repository.compliant:
+                    counts[owner_id]["compliant_count"] += 1
+
+        return counts
+
+    def get_repositories_for_owner(
+        self, owner: OwnerView
+    ) -> List[TechnicalStandardReportView]:
+        if owner.type == "BUSINESS_UNIT":
+            owner_field_name = "authoritative_business_unit_owners"
+        elif owner.type == "TEAM":
+            owner_field_name = "authoritative_team_owners"
+        else:
+            return []
+
+        return [
+            repository
+            for repository in self.get_all_repositories()
+            if owner.name in getattr(repository, owner_field_name)
+        ]
+
+    def get_unowned_repositories(self) -> List[TechnicalStandardReportView]:
+        return [
+            repository
+            for repository in self.get_all_repositories()
+            if not repository.authoritative_business_unit_owners
+            and not repository.authoritative_team_owners
         ]
 
     def get_repository_by_name(self, name: str) -> TechnicalStandardReportView | None:

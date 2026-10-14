@@ -1,0 +1,5 @@
+{% macro technical_standard_badge(repository) -%}
+  {% set badge_name = "compliant" if repository.compliant else "non-compliant" %}
+  {% set alt_text = "MOJ compliant" if repository.compliant else "MOJ non-compliant" %}
+  <img src="{{ url_for('technical_standard.report_badge', status=badge_name) }}" alt="{{ alt_text }}" />
+{%- endmacro %}
