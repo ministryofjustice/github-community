@@ -525,10 +525,10 @@ class TestStaleReviewsCheck(unittest.TestCase):
 
 
 class TestMitLicenseCheck(unittest.TestCase):
-    def test_passes_when_github_detects_mit_license_file(self):
+    def test_passes_when_github_detects_mit_license_without_a_path(self):
         repository = SimpleNamespace(
             data=SimpleNamespace(
-                basic=SimpleNamespace(license="mit", license_path="LICENSE")
+                basic=SimpleNamespace(license="mit", license_path=None)
             )
         )
 
@@ -539,7 +539,6 @@ class TestMitLicenseCheck(unittest.TestCase):
     def test_fails_for_non_mit_or_missing_license_metadata(self):
         cases = [
             SimpleNamespace(license="apache-2.0", license_path="LICENSE"),
-            SimpleNamespace(license="mit", license_path=None),
             SimpleNamespace(license=None, license_path=None),
         ]
 

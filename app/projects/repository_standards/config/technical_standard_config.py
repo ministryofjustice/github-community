@@ -242,15 +242,14 @@ def get_stale_reviews_check(
 
 def get_mit_license_check(repository: RepositoryView) -> TechnicalStandardCheck:
     license_key = (repository.data.basic.license or "").strip().casefold()
-    license_path = (repository.data.basic.license_path or "").strip()
-    status = PASS if license_key == "mit" and license_path else FAIL
+    status = PASS if license_key == "mit" else FAIL
 
     return _check(
         9,
         "Must use MIT license",
         "9-must-use-mit-license",
         status,
-        "GitHub must identify an MIT license file in the repository.",
+        "GitHub must identify the repository's license as MIT.",
     )
 
 
