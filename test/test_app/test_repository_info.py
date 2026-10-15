@@ -10,6 +10,9 @@ from app.projects.repository_standards.models.repository_info import RepositoryI
 
 class TestRepositoryInfoFactory(unittest.TestCase):
     def test_stores_business_unit_custom_property(self):
+        class NotFound(Exception):
+            status = 404
+
         empty_security_setting = SimpleNamespace(status=None)
         repo = SimpleNamespace(
             name="example-repo",
@@ -26,7 +29,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
                 secret_scanning_non_provider_patterns=empty_security_setting,
             ),
             get_branch=lambda branch: SimpleNamespace(
-                get_protection=lambda: None
+                get_protection=Mock(side_effect=NotFound())
             ),
         )
         repo.get_contents = Mock(

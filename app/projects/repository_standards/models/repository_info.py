@@ -181,7 +181,10 @@ class RepositoryInfoFactory:
                 ),
             )
         except Exception as e:
-            default_branch_protection = None
+            if getattr(e, "status", None) == 404:
+                default_branch_protection = BranchProtectionInfo(present=False)
+            else:
+                default_branch_protection = None
             logger.debug("Error getting default branch protection: %s", e)
 
         ruleset_details_by_id = {}
