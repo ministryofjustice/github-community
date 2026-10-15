@@ -189,9 +189,24 @@ class GitHubClient:
         )
 
     def get_open_dependabot_alerts(self, repo: str) -> List[Dict[str, Any]]:
-        return self.__get_paginated_repository_alerts(
-            f"/repos/{self.org}/{repo}/dependabot/alerts"
-        )
+        alerts = []
+        url = f"{self.base_url}/repos/{self.org}/{repo}/dependabot/alerts"
+        params = {"state": "open", "per_page": 100}
+        self.session.headers.update({"Authorization": f"Bearer {self.__get_token()}"})
+
+        while url:
+            response = self.session.get(url, params=params)
+            if not response.ok:
+                raise ValueError(
+                    f"Error calling URL: [{url}], Status Code: "
+                    f"[{response.status_code}], Response: {response.text}"
+                )
+
+            alerts.extend(response.json())
+            url = response.links.get("next", {}).get("url")
+            params = None
+
+        return alerts
 
     def get_team_maintainer_count(self, team_slug: str) -> int:
         members = self.__call(

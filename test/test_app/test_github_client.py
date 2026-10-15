@@ -102,18 +102,53 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
         )
 
     def test_gets_open_dependabot_alerts(self):
-        with patch.object(
-            self.client,
-            "_GitHubClient__call",
-            return_value=[{"state": "open"}],
-        ) as github_call:
+        response = unittest.mock.Mock(
+            ok=True,
+            links={},
+        )
+        response.json.return_value = [{"state": "open"}]
+        with (
+            patch.object(self.client, "_GitHubClient__get_token", return_value="token"),
+            patch.object(self.client.session, "get", return_value=response) as request,
+        ):
             alerts = self.client.get_open_dependabot_alerts("example-repo")
 
         self.assertEqual(alerts, [{"state": "open"}])
-        github_call.assert_called_once_with(
-            "GET",
-            "/repos/ministryofjustice/example-repo/dependabot/alerts",
-            params={"state": "open", "per_page": 100, "page": 1},
+        request.assert_called_once_with(
+            "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts",
+            params={"state": "open", "per_page": 100},
+        )
+
+    def test_follows_dependabot_next_link(self):
+        first_response = unittest.mock.Mock(ok=True)
+        first_response.json.return_value = [{"number": 1}]
+        first_response.links = {
+            "next": {
+                "url": "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts?after=cursor&per_page=100&state=open"
+            }
+        }
+        second_response = unittest.mock.Mock(ok=True, links={})
+        second_response.json.return_value = [{"number": 2}]
+
+        with (
+            patch.object(self.client, "_GitHubClient__get_token", return_value="token"),
+            patch.object(
+                self.client.session,
+                "get",
+                side_effect=[first_response, second_response],
+            ) as request,
+        ):
+            alerts = self.client.get_open_dependabot_alerts("example-repo")
+
+        self.assertEqual(alerts, [{"number": 1}, {"number": 2}])
+        self.assertEqual(request.call_count, 2)
+        request.assert_any_call(
+            "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts",
+            params={"state": "open", "per_page": 100},
+        )
+        request.assert_any_call(
+            "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts?after=cursor&per_page=100&state=open",
+            params=None,
         )
 
 
