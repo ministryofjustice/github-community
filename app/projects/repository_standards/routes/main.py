@@ -290,12 +290,6 @@ def repository_compliance_report(repository_name: str):
         repository=repository,
     )
 
-
-@repository_standards_main.route("/contact-us", methods=["GET"])
-def contact_us():
-    return render_template("projects/repository_standards/pages/contact_us.html")
-
-
 @repository_standards_main.route("/guidance", methods=["GET"])
 def guidance():
     return render_template("projects/repository_standards/pages/guidance.html")

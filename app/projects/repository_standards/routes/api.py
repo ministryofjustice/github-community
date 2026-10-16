@@ -1,8 +1,11 @@
 import requests
 from flask import Blueprint, Response, request
 
-from app.projects.repository_standards.services.repository_compliance_service import (
-    get_repository_compliance_service,
+from app.projects.repository_standards.services.technical_standard_badge import (
+    get_technical_standard_badge_shield_url,
+)
+from app.projects.repository_standards.services.technical_standard_service import (
+    get_technical_standard_service,
 )
 
 repository_standards_api = Blueprint("repository_standards_api", __name__)
@@ -18,9 +21,12 @@ def get_repository_badge(repository_name: str):
         if style_parameter in valid_badge_styles
         else default_badge_style
     )
-    repository_compliance_service = get_repository_compliance_service()
-    shields_url = repository_compliance_service.get_repository_compliance_badge_shield_url_by_name(
-        repository_name, style
+    repository = get_technical_standard_service().get_repository_by_name(
+        repository_name
+    )
+    shields_url = get_technical_standard_badge_shield_url(
+        repository.compliant if repository else None,
+        style,
     )
     shields_response = requests.get(shields_url, stream=True)
     return Response(

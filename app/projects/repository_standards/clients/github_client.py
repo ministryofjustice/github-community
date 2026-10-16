@@ -151,3 +151,67 @@ class GitHubClient:
         Docs: https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#get-a-repository-ruleset
         """
         return self.__call("GET", f"/repos/{self.org}/{repo}/rulesets/{ruleset_id}")
+
+    def get_repository_custom_properties(self, repo: str) -> Dict[str, Any]:
+        values = self.__call(
+            "GET",
+            f"/repos/{self.org}/{repo}/properties/values",
+        )
+        return {
+            item["property_name"]: item.get("value")
+            for item in values
+            if "property_name" in item
+        }
+
+    def get_codeowners_errors(self, repo: str) -> Dict[str, Any]:
+        return self.__call(
+            "GET",
+            f"/repos/{self.org}/{repo}/codeowners/errors",
+        )
+
+    def __get_paginated_repository_alerts(self, path: str) -> List[Dict[str, Any]]:
+        alerts = []
+        page = 1
+        while True:
+            page_alerts = self.__call(
+                "GET",
+                path,
+                params={"state": "open", "per_page": 100, "page": page},
+            )
+            alerts.extend(page_alerts)
+            if len(page_alerts) < 100:
+                return alerts
+            page += 1
+
+    def get_open_code_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        return self.__get_paginated_repository_alerts(
+            f"/repos/{self.org}/{repo}/code-scanning/alerts"
+        )
+
+    def get_open_dependabot_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        alerts = []
+        url = f"{self.base_url}/repos/{self.org}/{repo}/dependabot/alerts"
+        params = {"state": "open", "per_page": 100}
+        self.session.headers.update({"Authorization": f"Bearer {self.__get_token()}"})
+
+        while url:
+            response = self.session.get(url, params=params)
+            if not response.ok:
+                raise ValueError(
+                    f"Error calling URL: [{url}], Status Code: "
+                    f"[{response.status_code}], Response: {response.text}"
+                )
+
+            alerts.extend(response.json())
+            url = response.links.get("next", {}).get("url")
+            params = None
+
+        return alerts
+
+    def get_team_maintainer_count(self, team_slug: str) -> int:
+        members = self.__call(
+            "GET",
+            f"/orgs/{self.org}/teams/{team_slug}/members",
+            params={"role": "maintainer", "per_page": 2},
+        )
+        return min(len(members), 2)

@@ -19,6 +19,12 @@ from app.projects.repository_standards.services.asset_service import (
     get_asset_service,
 )
 
+MOJ_CROWN_LOGO = "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAflBMVEULDAwaGxsbGxsbHBwpKioqKioqKys5OTk5OjpISEhISUlJSUlXWFhYWFhYWVlmZ2dnZ2dnaGh1dnZ2dnZ2d3eEhYWFhYWFhoaUlJSUlZWVlZWjo6OjpKSkpKSkpKSys7Ozs7PBwsLCwsLDw8PR0dHR0tLS0tLg4ODh4eHw8PD////0W6DbAAACOElEQVQYGdXB4XYbJxAG0A8pi6YYuqPMdlgiLETWK+D9X7Cpj6PjpO2J/+Ze/KaOFh8j1eJDfDL4iOPaLH7NiqyqQvgFK0zz8+RCAODwv47MgBRg4gAYh39z+If3Ro1P1jJ5A5Az+Nmn4AwgLNvzbSv3QskArkbCj0zgwBNMdtWtNWQWxpS3dl/xE82XnYG6pZK5yd4NPt/a6JXwQLAwpeZrNeBS9t56ah7gKNso4Qhr8MrfdwepeW0BVNcYgvdZgDmke8+Ua8Gb5Cu4llztE2fSmJxNLlH05FOUXDzeTFhh4ku7VQ5x8fQnLJ6ClD7U4WImPAjDtvv4OrHzvLgzK7v1cq9juCMpHripbWMbPX8+XXPiSOK4nNIYoxcnjDfaV7uPfl/62J7nWf44k7Ct6lwbo2juweDVqnYdbQJiTrprCtHNjjM5QFqPPm54ZRKkjTp7eJl5Cecnf37y56xneL1+rQy1eMW3KKOPsbJ6f02UtGlSJubRK+dUVrwhuDF0fHGBXdI5Srkkr+yWEbkxToTvtO8xNeeE/e7nL7roykJh7lzKTnigez9M22hbnJVilnQtgVZdCfN0qBMeaG9AKNcqs5bMkywiM7sDsAAZ77ShHjg4TEUNO9GjygGASfAveG/ZEgCaZ7nQRDL75Gd3BHkqJ7znLqpx3/NLlyl4yKnlOZdvtgvhPTfyKlteVBKckYlUpbTntcR9wg+WKP4AwMbtL5K6Eb4h1nzGfzPrlpzetoAPOOA39TfuoTeEaSFm3gAAAABJRU5ErkJggg=="
+
+
+# Remove a duplicated fragment so the embedded image matches the legacy badge SVG.
+MOJ_CROWN_LOGO = MOJ_CROWN_LOGO.replace("KSkpKSkpKSys7", "KSkpKSys7", 1)
+
 
 class RepositoryComplianceService:
     class OwnerComplianceCounts(TypedDict):
@@ -160,7 +166,6 @@ class RepositoryComplianceService:
         self, repository_name: str, style: str = "for-the-badge"
     ) -> str:
         repository = self.get_repository_by_name(repository_name)
-        logo = "iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAflBMVEULDAwaGxsbGxsbHBwpKioqKioqKys5OTk5OjpISEhISUlJSUlXWFhYWFhYWVlmZ2dnZ2dnaGh1dnZ2dnZ2d3eEhYWFhYWFhoaUlJSUlZWVlZWjo6OjpKSkpKSys7Ozs7PBwsLCwsLDw8PR0dHR0tLS0tLg4ODh4eHw8PD////0W6DbAAACOElEQVQYGdXB4XYbJxAG0A8pi6YYuqPMdlgiLETWK+D9X7Cpj6PjpO2J/+Ze/KaOFh8j1eJDfDL4iOPaLH7NiqyqQvgFK0zz8+RCAODwv47MgBRg4gAYh39z+If3Ro1P1jJ5A5Az+Nmn4AwgLNvzbSv3QskArkbCj0zgwBNMdtWtNWQWxpS3dl/xE82XnYG6pZK5yd4NPt/a6JXwQLAwpeZrNeBS9t56ah7gKNso4Qhr8MrfdwepeW0BVNcYgvdZgDmke8+Ua8Gb5Cu4llztE2fSmJxNLlH05FOUXDzeTFhh4ku7VQ5x8fQnLJ6ClD7U4WImPAjDtvv4OrHzvLgzK7v1cq9juCMpHripbWMbPX8+XXPiSOK4nNIYoxcnjDfaV7uPfl/62J7nWf44k7Ct6lwbo2juweDVqnYdbQJiTrprCtHNjjM5QFqPPm54ZRKkjTp7eJl5Cecnf37y56xneL1+rQy1eMW3KKOPsbJ6f02UtGlSJubRK+dUVrwhuDF0fHGBXdI5Srkkr+yWEbkxToTvtO8xNeeE/e7nL7roykJh7lzKTnigez9M22hbnJVilnQtgVZdCfN0qBMeaG9AKNcqs5bMkywiM7sDsAAZ77ShHjg4TEUNO9GjygGASfAveG/ZEgCaZ7nQRDL75Gd3BHkqJ7znLqpx3/NLlyl4yKnlOZdvtgvhPTfyKlteVBKckYlUpbTntcR9wg+WKP4AwMbtL5K6Eb4h1nzGfzPrlpzetoAPOOA39TfuoTeEaSFm3gAAAABJRU5ErkJggg=="
         label = "MoJ Compliant"
 
         badge_config = {
@@ -181,7 +186,7 @@ class RepositoryComplianceService:
         color = config["color"]
         message = config["message"]
 
-        return f"https://img.shields.io/badge/{quote(label)}-{quote(message)}-{color}?style={style}&labelColor=0b0c0c&logo=data:image/png;base64,{logo}"
+        return f"https://img.shields.io/badge/{quote(label)}-{quote(message)}-{color}?style={style}&labelColor=0b0c0c&logo=data:image/png;base64,{MOJ_CROWN_LOGO}"
 
 
 def get_repository_compliance_service() -> RepositoryComplianceService:

@@ -25,6 +25,7 @@ class RepositoryView:
         team_owner_names: List[str],
         team_admin_owner_names: List[str],
         data: RepositoryInfo,
+        last_updated: datetime | None = None,
     ):
         self.id = id
         self.name = name
@@ -35,6 +36,7 @@ class RepositoryView:
         self.team_owners_names = team_owner_names
         self.team_admin_owners_names = team_admin_owner_names
         self.data = data
+        self.last_updated = last_updated
 
     @classmethod
     def from_asset(cls, asset: Asset):
@@ -65,6 +67,7 @@ class RepositoryView:
                 owner.name for owner in admin_owners if owner.type.name == "TEAM"
             ],
             data=RepositoryInfo.from_dict(asset.data),
+            last_updated=asset.last_updated,
         )
 
 
