@@ -35,6 +35,20 @@ def repositories():
     )
 
 
+@technical_standard.route("/checks-overview", methods=["GET"])
+@requires_auth
+def checks_overview():
+    service = get_technical_standard_service()
+    repositories = service.get_all_repositories()
+    checks = service.get_check_summaries(repositories)
+    return render_template(
+        f"{TEMPLATES}/checks_overview.html",
+        repositories=repositories,
+        checks=checks,
+        show_not_checked=any(check["not_checked_count"] for check in checks),
+    )
+
+
 @technical_standard.route("/business-units", methods=["GET"])
 @requires_auth
 def business_units():
@@ -63,9 +77,7 @@ def business_unit(owner_id: str):
         title=owner.name,
         parent_title="Business Units",
         parent_url="/repository-standards/technical-standard/business-units",
-        repositories=get_technical_standard_service().get_repositories_for_owner(
-            owner
-        ),
+        repositories=get_technical_standard_service().get_repositories_for_owner(owner),
     )
 
 
@@ -97,9 +109,7 @@ def team(owner_id: str):
         title=owner.name,
         parent_title="Teams",
         parent_url="/repository-standards/technical-standard/teams",
-        repositories=get_technical_standard_service().get_repositories_for_owner(
-            owner
-        ),
+        repositories=get_technical_standard_service().get_repositories_for_owner(owner),
     )
 
 

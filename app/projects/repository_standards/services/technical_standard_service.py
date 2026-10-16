@@ -52,6 +52,7 @@ class TechnicalStandardService:
             authoritative_business_unit_owners=business_unit_owners,
             authoritative_team_owners=team_owners,
             description=repository.data.basic.description,
+            last_updated=getattr(repository, "last_updated", None),
         )
 
     def get_all_repositories(self) -> List[TechnicalStandardReportView]:
@@ -59,6 +60,41 @@ class TechnicalStandardService:
             self.__get_report(repository)
             for repository in self.__asset_service.get_all_repositories()
         ]
+
+    def get_check_summaries(
+        self, repositories: List[TechnicalStandardReportView]
+    ) -> list[dict]:
+        repository_count = len(repositories)
+        summaries = {}
+
+        for repository in repositories:
+            for check in repository.checks:
+                summary = summaries.setdefault(
+                    check.number,
+                    {
+                        "number": check.number,
+                        "name": check.name,
+                        "link_to_guidance": check.link_to_guidance,
+                        "pass_count": 0,
+                        "fail_count": 0,
+                    },
+                )
+                if check.status == "pass":
+                    summary["pass_count"] += 1
+                elif check.status == FAIL:
+                    summary["fail_count"] += 1
+
+        for summary in summaries.values():
+            summary["not_checked_count"] = (
+                repository_count - summary["pass_count"] - summary["fail_count"]
+            )
+            summary["pass_rate"] = (
+                summary["pass_count"] / repository_count * 100
+                if repository_count
+                else 0
+            )
+
+        return sorted(summaries.values(), key=lambda summary: summary["number"])
 
     def get_owner_counts(
         self, owners: List[Owner]

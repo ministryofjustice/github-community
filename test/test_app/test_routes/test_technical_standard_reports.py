@@ -1,9 +1,14 @@
 import unittest
+from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from flask import Flask
 
+from app.projects.repository_standards.models.technical_standard import (
+    TechnicalStandardCheck,
+    TechnicalStandardReportView,
+)
 from app.projects.repository_standards.routes.api import repository_standards_api
 from app.projects.repository_standards.routes.main import repository_standards_main
 from app.projects.repository_standards.routes.technical_standard import (
@@ -13,11 +18,12 @@ from app.shared.config.jinja_config import configure_jinja
 
 
 def make_report(name, compliant, business_units=None, teams=None):
-    return SimpleNamespace(
+    return TechnicalStandardReportView(
         name=name,
         compliant=compliant,
         checks=[],
         description=None,
+        last_updated=None,
         authoritative_business_unit_owners=business_units or [],
         authoritative_team_owners=teams or [],
     )
@@ -57,6 +63,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         ]
         self.service = SimpleNamespace(
             get_all_repositories=lambda: self.repositories,
+            get_check_summaries=lambda repositories: [],
             get_repository_by_name=lambda name: next(
                 (repository for repository in self.repositories if repository.name == name),
                 None,
@@ -105,6 +112,125 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn("technical-standard/business-units", body)
         self.assertIn("technical-standard/teams", body)
         self.assertIn("technical-standard/unowned-repositories", body)
+        self.assertIn("technical-standard/checks-overview", body)
+
+    def test_technical_standard_home_does_not_repeat_checks_overview_link(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(
+            "technical-standard/checks-overview", response.get_data(as_text=True)
+        )
+
+    def test_checks_overview_sorts_and_displays_check_totals(self):
+        self.service.get_check_summaries = lambda repositories: [
+            {
+                "number": 1,
+                "name": "Must have an authoritative owner",
+                "link_to_guidance": "https://example.test/standard#owner",
+                "pass_count": 1,
+                "fail_count": 1,
+                "not_checked_count": 0,
+                "pass_rate": 50,
+            }
+        ]
+
+        response = self.client.get(
+            "/repository-standards/technical-standard/checks-overview"
+        )
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Compliance by requirement", body)
+        self.assertIn("Must have an authoritative owner", body)
+        self.assertIn('data-sort-value="1">1</td>', body)
+        self.assertIn('data-sort-value="50">50%</td>', body)
+        self.assertIn('aria-sort="ascending">Requirement', body)
+        self.assertIn('aria-sort="none">Pass rate', body)
+        self.assertNotIn(">Not checked</th>", body)
+
+    def test_checks_overview_shows_not_checked_only_when_results_are_missing(self):
+        self.service.get_check_summaries = lambda repositories: [
+            {
+                "number": 1,
+                "name": "Must have an authoritative owner",
+                "link_to_guidance": "https://example.test/standard#owner",
+                "pass_count": 1,
+                "fail_count": 0,
+                "not_checked_count": 1,
+                "pass_rate": 50,
+            }
+        ]
+
+        response = self.client.get(
+            "/repository-standards/technical-standard/checks-overview"
+        )
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(">Not checked</th>", body)
+        self.assertIn('data-sort-value="1">1</td>', body)
+
+    def test_checks_overview_shows_empty_repository_state(self):
+        self.repositories.clear()
+
+        response = self.client.get(
+            "/repository-standards/technical-standard/checks-overview"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No repository data is available.", response.get_data(as_text=True))
+
+    def test_assessment_guidance_route_is_removed(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/how-checks-are-assessed"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_progress_and_snapshot_time_render_on_lists_and_detail(self):
+        report = self.repositories[0]
+        report.checks = [
+            TechnicalStandardCheck(
+                number, "Requirement", "pass" if number < 9 else "fail",
+                "Description", "/standard",
+            )
+            for number in range(1, 10)
+        ]
+        report.last_updated = datetime(2026, 10, 15, 3, 24)
+        for suffix in (
+            "repositories", "business-units/1", "teams/2", "repositories/repo-one"
+        ):
+            with self.subTest(suffix=suffix):
+                response = self.client.get(
+                    f"/repository-standards/technical-standard/{suffix}"
+                )
+                self.assertEqual(response.status_code, 200)
+                body = response.get_data(as_text=True)
+                self.assertIn("8/9 (89%)", body)
+                self.assertIn('datetime="2026-10-15T03:24:00"', body)
+                self.assertIn("15 October 2026 at 03:24", body)
+                if suffix == "repositories/repo-one":
+                    self.assertIn("View standard", body)
+                else:
+                    self.assertIn('data-sort-value="88.888', body)
+                    self.assertIn("Last updated:", body)
+                    self.assertIn("15 October 2026 at 03:24</time>.", body)
+                    self.assertNotIn("latest repository", body)
+
+    def test_empty_list_and_unknown_snapshot_times_render(self):
+        body = self.client.get(
+            "/repository-standards/technical-standard/repositories/repo-one"
+        ).get_data(as_text=True)
+        self.assertIn("Not available", body)
+        self.assertIn("0/0 (0%)", body)
+        self.repositories.clear()
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Not available", response.get_data(as_text=True))
 
     def test_owner_summary_routes_render(self):
         for path, owner_name in (

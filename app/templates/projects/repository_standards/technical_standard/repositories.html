@@ -1,5 +1,5 @@
 {% extends "shared/components/base.html" %}
-{% from "projects/repository_standards/technical_standard/macros.html" import technical_standard_badge %}
+{% from "projects/repository_standards/technical_standard/macros.html" import technical_standard_badge, check_progress, latest_snapshot %}
 
 {% block pageTitle %}Technical Standard – Repositories{% endblock %}
 
@@ -14,6 +14,7 @@
   }) }}
 
   <h1 class="govuk-heading-xl">Repositories</h1>
+  {{ latest_snapshot(repositories) }}
 
   {% set total_count = repositories | length %}
   {% set compliant_count = compliant_repositories | length %}
@@ -44,11 +45,13 @@
   </section>
 
   <h2 class="govuk-heading-l">Repositories</h2>
+  <div class="moj-scrollable-pane" style="position: relative" role="region" aria-label="Repositories" tabindex="0">
   <table class="govuk-table" data-module="moj-sortable-table">
     <thead class="govuk-table__head">
       <tr class="govuk-table__row">
         <th scope="col" class="govuk-table__header" aria-sort="ascending">Repository</th>
         <th scope="col" class="govuk-table__header" aria-sort="none">Compliance</th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">Checks passed</th>
         <th scope="col" class="govuk-table__header" aria-sort="none">Owner</th>
         <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Report</span></th>
       </tr>
@@ -60,6 +63,7 @@
         <td class="govuk-table__cell">
           {{ technical_standard_badge(repo) }}
         </td>
+        <td class="govuk-table__cell" data-sort-value="{{ repo.compliance_percentage }}">{{ check_progress(repo) }}</td>
         <td class="govuk-table__cell">
           {{ repo.authoritative_business_unit_owners | join(", ") or repo.authoritative_team_owners | join(", ") or "Not identified" }}
         </td>
@@ -70,4 +74,5 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 {% endblock %}
