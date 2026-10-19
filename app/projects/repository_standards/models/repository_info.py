@@ -10,6 +10,76 @@ logger = logging.getLogger(__name__)
 
 class RepositoryInfoFactory:
     @staticmethod
+    def _get_effective_branch_rulesets(rules, details_by_id, repo_name, github_client):
+        qualifying = {"pull_request": [], "required_signatures": []}
+        unknown = {"pull_request": False, "required_signatures": False}
+        failed_ids = set()
+        for rule in rules:
+            rule_type = rule.get("type")
+            if rule_type not in qualifying:
+                continue
+            ruleset_id = rule.get("ruleset_id")
+            if ruleset_id is None or ruleset_id in failed_ids:
+                unknown[rule_type] = True
+                continue
+            try:
+                if ruleset_id not in details_by_id:
+                    details_by_id[ruleset_id] = github_client.get_repository_ruleset(
+                        repo_name, ruleset_id
+                    )
+                details = details_by_id[ruleset_id]
+                if details.get("target") in {"repository", "tag", "push"}:
+                    continue
+                if details.get("target") != "branch":
+                    unknown[rule_type] = True
+                    continue
+                if details.get("enforcement") is None or details.get("bypass_actors") is None:
+                    unknown[rule_type] = True
+                    continue
+                if details.get("enforcement") == "active" and details.get("bypass_actors") == []:
+                    qualifying[rule_type].append(rule.get("parameters", {}))
+            except Exception as error:
+                failed_ids.add(ruleset_id)
+                unknown[rule_type] = True
+                logger.debug("Error getting branch ruleset %s: %s", ruleset_id, error)
+
+        result = BranchRulesetInfo(enabled=bool(rules))
+        reviews = qualifying["pull_request"]
+        if reviews:
+            result.pull_request_enforcement = "active"
+            result.pull_request_bypass_actors_length = 0
+
+        counts = [
+            parameters["required_approving_review_count"]
+            for parameters in reviews
+            if parameters.get("required_approving_review_count") is not None
+        ]
+        result.pull_request_required_approving_review_count = max(counts) if counts else None
+        for parameter, field_name in (
+            ("require_last_push_approval", "pull_request_require_last_push_approval"),
+            ("require_code_owner_review", "pull_request_require_code_owner_review"),
+            ("dismiss_stale_reviews_on_push", "pull_request_dismiss_stale_reviews_on_push"),
+        ):
+            values = [parameters.get(parameter) for parameters in reviews]
+            value = (
+                True if True in values
+                else None if unknown["pull_request"] or None in values
+                else False
+            )
+            setattr(result, field_name, value)
+
+        signing_enforced = (
+            True if qualifying["required_signatures"]
+            else None if unknown["required_signatures"]
+            else False
+        )
+        result.required_signatures_ruleset_enforced_without_bypass = signing_enforced
+        if signing_enforced:
+            result.required_signatures_enforcement = "active"
+            result.required_signatures_ruleset_bypass_actors_length = 0
+        return result
+
+    @staticmethod
     def _get_repository_branch_ruleset_status(
         rules, details_by_id, repo_name, github_client
     ) -> tuple[bool, bool]:
@@ -233,82 +303,8 @@ class RepositoryInfoFactory:
             rulesets_response = github_client.get_branch_rulesets(
                 repo.name, repo.default_branch
             )
-            rules_by_type = {
-                r["type"]: r for r in rulesets_response if "type" in r
-            }
-
-            pull_request = rules_by_type.get("pull_request", {})
-            pull_request_parameters = pull_request.get("parameters", {})
-            pull_request_ruleset_id = pull_request.get("ruleset_id", None)
-            pull_request_ruleset = (
-                github_client.get_repository_ruleset(repo.name, pull_request_ruleset_id)
-                if pull_request_ruleset_id
-                else {}
-            )
-            if pull_request_ruleset_id is not None:
-                ruleset_details_by_id[pull_request_ruleset_id] = pull_request_ruleset
-            pull_request_rulset_enforcenment = pull_request_ruleset.get(
-                "enforcement", None
-            )
-            pull_request_rulseset_bypass_actors = pull_request_ruleset.get(
-                "bypass_actors", None
-            )
-
-            required_signatures = rules_by_type.get("required_signatures", {})
-            required_signatures_ruleset_id = required_signatures.get("ruleset_id", None)
-            required_signatures_ruleset = (
-                github_client.get_repository_ruleset(
-                    repo.name, required_signatures_ruleset_id
-                )
-                if required_signatures_ruleset_id
-                else {}
-            )
-            if required_signatures_ruleset_id is not None:
-                ruleset_details_by_id[
-                    required_signatures_ruleset_id
-                ] = required_signatures_ruleset
-            required_signatures_ruleset_enforcement = required_signatures_ruleset.get(
-                "enforcement", None
-            )
-            required_signatures_ruleset_bypass_actors = required_signatures_ruleset.get(
-                "bypass_actors"
-            )
-            required_signatures_ruleset_enforced_without_bypass = None
-            if required_signatures_ruleset_id is not None:
-                required_signatures_ruleset_enforced_without_bypass = (
-                    required_signatures_ruleset_enforcement == "active"
-                    and required_signatures_ruleset_bypass_actors == []
-                )
-
-            default_branch_ruleset = BranchRulesetInfo(
-                enabled=bool(rulesets_response),
-                pull_request_enforcement=pull_request_rulset_enforcenment,
-                pull_request_bypass_actors_length=len(
-                    pull_request_rulseset_bypass_actors
-                )
-                if pull_request_rulseset_bypass_actors is not None
-                else None,
-                pull_request_required_approving_review_count=pull_request_parameters.get(
-                    "required_approving_review_count", None
-                ),
-                pull_request_dismiss_stale_reviews_on_push=pull_request_parameters.get(
-                    "dismiss_stale_reviews_on_push", None
-                ),
-                pull_request_require_code_owner_review=pull_request_parameters.get(
-                    "require_code_owner_review", None
-                ),
-                pull_request_require_last_push_approval=pull_request_parameters.get(
-                    "require_last_push_approval", None
-                ),
-                required_signatures_enforcement=required_signatures_ruleset_enforcement,
-                required_signatures_ruleset_enforced_without_bypass=(
-                    required_signatures_ruleset_enforced_without_bypass
-                ),
-                required_signatures_ruleset_bypass_actors_length=len(
-                    required_signatures_ruleset_bypass_actors
-                )
-                if required_signatures_ruleset_bypass_actors is not None
-                else None,
+            default_branch_ruleset = RepositoryInfoFactory._get_effective_branch_rulesets(
+                rulesets_response, ruleset_details_by_id, repo.name, github_client
             )
         except Exception as e:
             default_branch_ruleset = None
