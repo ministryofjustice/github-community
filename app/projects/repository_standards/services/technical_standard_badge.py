@@ -8,10 +8,12 @@ from app.projects.repository_standards.services.repository_compliance_service im
 def get_technical_standard_badge_svg(compliant: bool) -> str:
         if compliant:
                 message = "COMPLIANT"
-                color = "00703c"
+                color = "cce2d8"
+                text_color = "005a30"
         else:
                 message = "NON-COMPLIANT"
-                color = "d4351c"
+                color = "f4cdc6"
+                text_color = "2a0b06"
 
         label_width = 64
         status_width = 136
@@ -27,7 +29,7 @@ def get_technical_standard_badge_svg(compliant: bool) -> str:
     <image x="9" y="7" width="14" height="14" href="data:image/png;base64,{MOJ_CROWN_LOGO}" />
     <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
         <text x="43" y="18">MOJ</text>
-        <text x="{status_center}" y="18" font-weight="bold">{message}</text>
+        <text x="{status_center}" y="18" font-weight="bold" fill="#{text_color}">{message}</text>
     </g>
 </svg>'''
 
@@ -37,10 +39,10 @@ def get_technical_standard_badge_shield_url(
 ) -> str:
     if compliant is True:
         message = "COMPLIANT"
-        color = "00703c"
+        color = "cce2d8"
     elif compliant is False:
         message = "NON-COMPLIANT"
-        color = "d4351c"
+        color = "f4cdc6"
     else:
         message = "NOT FOUND"
         color = "b1b4b6"

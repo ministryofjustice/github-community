@@ -10,6 +10,7 @@ class TechnicalStandardCheck:
     status: str
     description: str
     link_to_guidance: str
+    recommendations: List[str] = field(default_factory=list)
 
 
 @dataclass

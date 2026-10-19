@@ -1,6 +1,11 @@
 import unittest
 from types import SimpleNamespace
 
+from app.projects.repository_standards.models.repository_info import (
+    BasicRepositoryInfo,
+    RepositoryAccess,
+    RepositoryInfo,
+)
 from app.projects.repository_standards.config.technical_standard_config import (
     FAIL,
     PASS,
@@ -114,6 +119,129 @@ def make_security_alerts_repository(code_scanning_count, dependabot_count):
     )
 
 
+class TestCheckRecommendations(unittest.TestCase):
+    def test_all_failed_requirements_have_recommendations(self):
+        repository = SimpleNamespace(data=RepositoryInfo(
+            basic=BasicRepositoryInfo("repo", "public", True, "master"),
+            access=RepositoryAccess([], [], [], []),
+        ))
+        checks = get_all_technical_standard_checks(repository)
+        self.assertEqual(len(checks), 9)
+        for check in checks:
+            with self.subTest(number=check.number):
+                self.assertEqual(check.status, FAIL)
+                self.assertTrue(check.recommendations)
+
+    def test_owner_advice_only_lists_missing_requirements(self):
+        check = get_authoritative_owner_check(
+            make_repository(None, ["team"], {"team": 2})
+        )
+        self.assertEqual(check.recommendations, [
+            "Set the repository's business-unit custom property."
+        ])
+
+    def test_latest_push_advice_does_not_request_more_reviews(self):
+        check = get_pull_request_review_protection_check(
+            make_review_repository(classic_count=1, classic_latest_push=False)
+        )
+        self.assertEqual(check.recommendations, [
+            "Enable Require approval of the most recent reviewable push."
+        ])
+
+    def test_ruleset_bypass_advice_does_not_request_enabled_settings(self):
+        check = get_pull_request_review_protection_check(
+            make_review_repository(
+                classic_present=False,
+                ruleset_enabled=True,
+                ruleset_enforcement="active",
+                ruleset_bypass_actors=1,
+                ruleset_count=1,
+                ruleset_latest_push=True,
+            )
+        )
+        self.assertEqual(check.recommendations, [
+            "Remove bypass actors from the pull request ruleset."
+        ])
+
+    def test_unknown_review_setting_is_not_reported_as_disabled(self):
+        check = get_pull_request_review_protection_check(
+            make_review_repository(classic_count=1, classic_latest_push=None)
+        )
+        self.assertEqual(len(check.recommendations), 1)
+        self.assertIn("could not be verified", check.recommendations[0])
+
+    def test_passing_ruleset_has_no_classic_protection_advice(self):
+        check = get_pull_request_review_protection_check(
+            make_review_repository(
+                ruleset_enabled=True,
+                ruleset_enforcement="active",
+                ruleset_bypass_actors=0,
+                ruleset_count=1,
+                ruleset_latest_push=True,
+            )
+        )
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.recommendations, [])
+
+    def test_unknown_protection_does_not_claim_bypass_is_enabled(self):
+        check = get_branch_protection_enforced_for_admins_check(
+            make_admin_enforcement_repository()
+        )
+        self.assertEqual(len(check.recommendations), 2)
+        self.assertTrue(all("unavailable" in item for item in check.recommendations))
+
+    def test_codeowners_advice_only_requests_missing_file(self):
+        check = get_code_owner_reviews_check(
+            make_code_owner_reviews_repository(
+                codeowners_present=False,
+                classic_present=True,
+                classic_requires_codeowners=True,
+            )
+        )
+        self.assertEqual(len(check.recommendations), 1)
+        self.assertIn("Add one on the default branch", check.recommendations[0])
+
+    def test_stale_review_advice_is_separate_from_latest_push(self):
+        check = get_stale_reviews_check(
+            make_review_repository(classic_latest_push=True)
+        )
+        self.assertEqual(check.recommendations, [
+            "Enable Dismiss stale pull request approvals when new commits are pushed."
+        ])
+
+    def test_alert_recommendations_do_not_include_counts(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(12, 3)
+        )
+        self.assertEqual(check.recommendations, [
+            "Resolve High/Critical Code Scanning alerts.",
+            "Resolve High/Critical Dependabot alerts.",
+        ])
+
+    def test_unavailable_alerts_do_not_claim_scanning_is_disabled(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(None, 0)
+        )
+        self.assertEqual(check.recommendations, [
+            "Code Scanning data is unavailable. Check that Code Scanning is enabled."
+        ])
+
+    def test_passing_security_check_has_no_recommendations(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(0, 0)
+        )
+        self.assertEqual(check.recommendations, [])
+
+    def test_mixed_alert_data_has_distinct_recommendations(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(10, None)
+        )
+        self.assertEqual(check.recommendations, [
+            "Resolve High/Critical Code Scanning alerts.",
+            "Dependabot data is unavailable. Check that Dependabot alerts are enabled.",
+        ])
+
+
 class TestAuthoritativeOwnerCheck(unittest.TestCase):
     def test_passes_when_property_and_admin_team_requirements_are_met(self):
         repository = make_repository(
@@ -195,6 +323,7 @@ class TestPassingRepositoryFixture(unittest.TestCase):
 
         self.assertEqual(len(checks), 9)
         self.assertTrue(all(check.status == PASS for check in checks))
+        self.assertTrue(all(not check.recommendations for check in checks))
 
 
 class TestBranchProtectionEnforcedForAdminsCheck(unittest.TestCase):

@@ -76,6 +76,14 @@
         <td class="govuk-table__cell govuk-!-font-weight-bold">
           {{ check.number }}. {{ check.name }}
           <p class="govuk-body-s">{{ check.description }}</p>
+          {% if check.status == "fail" and check.recommendations %}
+            <p class="govuk-body-s govuk-!-font-weight-bold govuk-!-margin-bottom-1">What to change</p>
+            <ul class="govuk-list govuk-list--bullet govuk-body-s govuk-!-font-weight-regular">
+              {% for recommendation in check.recommendations %}
+                <li>{{ recommendation }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
         </td>
         <td class="govuk-table__cell">
           {% if check.status == "pass" %}

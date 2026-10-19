@@ -189,6 +189,38 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
+    def test_failed_checks_show_recommendations_but_passing_checks_do_not(self):
+        self.repositories[0].checks = [
+            TechnicalStandardCheck(
+                5, "Security alerts", "fail", "Description", "/standard",
+                ["Resolve High/Critical Code Scanning alerts.", "Verify <access>."],
+            ),
+            TechnicalStandardCheck(
+                7, "Default branch", "pass", "Description", "/standard",
+                ["This recommendation must not appear."],
+            ),
+        ]
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories/repo-one"
+        )
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(body.count("What to change"), 1)
+        self.assertIn("Resolve High/Critical Code Scanning alerts.", body)
+        self.assertIn("Verify &lt;access&gt;.", body)
+        self.assertNotIn("This recommendation must not appear.", body)
+
+    def test_report_without_recommendations_has_no_empty_action_lists(self):
+        self.repositories[0].checks = [
+            TechnicalStandardCheck(1, "Owner", "fail", "Description", "/standard")
+        ]
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories/repo-one"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("What to change", response.get_data(as_text=True))
+
     def test_progress_and_snapshot_time_render_on_lists_and_detail(self):
         report = self.repositories[0]
         report.checks = [

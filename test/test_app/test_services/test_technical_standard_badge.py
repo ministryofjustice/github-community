@@ -15,8 +15,8 @@ from app.projects.repository_standards.services.technical_standard_badge import 
 class TestTechnicalStandardBadge(unittest.TestCase):
     def test_report_badge_svgs_have_status_colors_labels_and_crown(self):
         badge_cases = (
-            (True, "MOJ: COMPLIANT", "#00703c"),
-            (False, "MOJ: NON-COMPLIANT", "#d4351c"),
+            (True, "MOJ: COMPLIANT", "#cce2d8"),
+            (False, "MOJ: NON-COMPLIANT", "#f4cdc6"),
         )
 
         for compliant, expected_title, expected_color in badge_cases:
@@ -42,6 +42,10 @@ class TestTechnicalStandardBadge(unittest.TestCase):
                 self.assertIsNone(text_nodes[0].get("font-weight"))
                 self.assertEqual(text_nodes[1].text, expected_title.split(": ")[1])
                 self.assertEqual(text_nodes[1].get("font-weight"), "bold")
+                self.assertEqual(
+                    text_nodes[1].get("fill"),
+                    "#005a30" if compliant else "#2a0b06",
+                )
 
     def test_compliant_and_non_compliant_report_badges_have_equal_width(self):
         compliant_badge = ElementTree.fromstring(
@@ -58,7 +62,7 @@ class TestTechnicalStandardBadge(unittest.TestCase):
         parsed_url = urlparse(badge_url)
         query = parse_qs(parsed_url.query)
 
-        self.assertEqual(parsed_url.path, "/badge/MOJ-COMPLIANT-00703c")
+        self.assertEqual(parsed_url.path, "/badge/MOJ-COMPLIANT-cce2d8")
         self.assertEqual(query["style"], ["for-the-badge"])
         self.assertEqual(query["labelColor"], ["0b0c0c"])
         self.assertEqual(
@@ -68,7 +72,7 @@ class TestTechnicalStandardBadge(unittest.TestCase):
     def test_non_compliant_badge_uses_red_status(self):
         badge_url = get_technical_standard_badge_shield_url(False, "flat")
 
-        self.assertIn("/badge/MOJ-NON-COMPLIANT-d4351c", badge_url)
+        self.assertIn("/badge/MOJ-NON-COMPLIANT-f4cdc6", badge_url)
         self.assertIn("style=flat", badge_url)
 
     def test_unknown_repository_badge_uses_neutral_status(self):

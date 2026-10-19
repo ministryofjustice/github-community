@@ -18,7 +18,8 @@ GUIDANCE_URL = "https://octo-documentation.justice.gov.uk/docs/standards/github-
 
 
 def _check(
-    number: int, name: str, anchor: str, status: str, description: str
+    number: int, name: str, anchor: str, status: str, description: str,
+    recommendations: list[str] | None = None,
 ) -> TechnicalStandardCheck:
     return TechnicalStandardCheck(
         number=number,
@@ -26,6 +27,7 @@ def _check(
         status=status,
         description=description,
         link_to_guidance=f"{GUIDANCE_URL}#{anchor}",
+        recommendations=(recommendations or []) if status == FAIL else [],
     )
 
 
@@ -45,6 +47,43 @@ def get_all_technical_standard_checks(
     ]
 
 
+def _review_recommendations(protection, rulesets, settings) -> list[str]:
+    if protection.present is True:
+        source = protection
+        prefix = "classic"
+        recommendations = []
+    elif rulesets.enabled is True:
+        source = rulesets
+        prefix = "ruleset"
+        recommendations = []
+        if rulesets.pull_request_enforcement != "active":
+            recommendations.append(
+                "Verify that the pull request ruleset is active and applies to the default branch."
+            )
+        bypass_count = rulesets.pull_request_bypass_actors_length
+        if bypass_count is None:
+            recommendations.append(
+                "The ruleset bypass list could not be verified. Check access and refresh the report."
+            )
+        elif bypass_count > 0:
+            recommendations.append("Remove bypass actors from the pull request ruleset.")
+    else:
+        return [
+            "Review the default branch protection settings or an active ruleset with no bypass actors. "
+            + " ".join(action for classic, ruleset, action in settings)
+        ]
+
+    for classic, ruleset, action in settings:
+        value = getattr(source, classic if prefix == "classic" else ruleset, None)
+        if value is None:
+            recommendations.append(
+                f"The setting could not be verified. Check access and refresh the report: {action}"
+            )
+        elif value is False or value == 0:
+            recommendations.append(action)
+    return recommendations
+
+
 def get_authoritative_owner_check(
     repository: RepositoryView,
 ) -> TechnicalStandardCheck:
@@ -61,6 +100,14 @@ def get_authoritative_owner_check(
         if property_is_set and has_admin_team_with_two_maintainers
         else FAIL
     )
+    recommendations = []
+    if not property_is_set:
+        recommendations.append("Set the repository's business-unit custom property.")
+    if not has_admin_team_with_two_maintainers:
+        recommendations.append(
+            "Ensure a team has Admin access and at least two team maintainers; "
+            "verify team membership access if maintainer data is unavailable."
+        )
 
     return _check(
         1,
@@ -68,6 +115,7 @@ def get_authoritative_owner_check(
         "1-must-have-an-authoritative-owner",
         status,
         "The business-unit property is set, and a team with Admin access has at least two maintainers.",
+        recommendations,
     )
 
 
@@ -93,6 +141,22 @@ def get_branch_protection_enforced_for_admins_check(
     )
     has_protection = protection.present is True or rulesets.enabled is True
     status = PASS if has_protection and classic_safe and rulesets_safe else FAIL
+    recommendations = []
+    if protection.present is False and rulesets.enabled is False:
+        recommendations.append("Protect the default branch using branch protection or an active ruleset.")
+    if protection.present is None:
+        recommendations.append("Classic branch protection data is unavailable. Check access and refresh the report.")
+    elif protection.present is True and not classic_safe:
+        recommendations.append(
+            "Verify that classic branch protection applies to administrators "
+            "by enabling Do not allow bypassing the above settings."
+        )
+    if rulesets.enabled is None:
+        recommendations.append("Ruleset data is unavailable. Check access and refresh the report.")
+    elif rulesets.enabled is True and not rulesets_safe:
+        recommendations.append(
+            "Verify that all applicable rulesets are active and their bypass lists are empty."
+        )
 
     return _check(
         3,
@@ -100,6 +164,7 @@ def get_branch_protection_enforced_for_admins_check(
         "3-must-have-branch-protection-applied-to-administrators",
         status,
         "Default branch protection must apply to administrators and maintainers, with no bypass actors unless an approved exception is documented.",
+        recommendations,
     )
 
 
@@ -125,6 +190,10 @@ def get_signed_commits_check(repository: RepositoryView) -> TechnicalStandardChe
         "4-must-have-signed-commits",
         status,
         "Only commits with a valid verified signature are permitted on the default branch.",
+        [
+            "Signed-commit enforcement was not confirmed. Enable Require signed commits "
+            "on the default branch using classic protection or an active ruleset with no bypass actors."
+        ],
     )
 
 
@@ -140,6 +209,17 @@ def get_no_high_critical_security_alerts_check(
         if code_scanning_count == 0 and dependabot_count == 0
         else FAIL
     )
+    recommendations = []
+    for source, count, setting in (
+        ("Code Scanning", code_scanning_count, "Code Scanning is enabled"),
+        ("Dependabot", dependabot_count, "Dependabot alerts are enabled"),
+    ):
+        if count is None:
+            recommendations.append(
+                f"{source} data is unavailable. Check that {setting}."
+            )
+        elif count > 0:
+            recommendations.append(f"Resolve High/Critical {source} alerts.")
 
     return _check(
         5,
@@ -147,6 +227,7 @@ def get_no_high_critical_security_alerts_check(
         "5-must-have-no-outstanding-high-or-critical-security-alerts",
         status,
         "No open High or Critical Code Scanning or Dependabot alerts; unavailable alert data does not pass.",
+        recommendations,
     )
 
 
@@ -181,6 +262,21 @@ def get_code_owner_reviews_check(
         )
         else FAIL
     )
+    recommendations = []
+    if repository.data.codeowners_file_present is not True:
+        recommendations.append(
+            "A CODEOWNERS file was not confirmed. Add one on the default branch "
+            "in .github/CODEOWNERS, CODEOWNERS or docs/CODEOWNERS."
+        )
+    elif repository.data.codeowners_file_valid is not True:
+        recommendations.append(
+            "Verify that CODEOWNERS contains ownership entries and has no GitHub validation errors."
+        )
+    if not (classic_enforces_code_owner_reviews or ruleset_enforces_code_owner_reviews):
+        recommendations.extend(_review_recommendations(protection, rulesets, [
+            ("require_code_owner_reviews", "pull_request_require_code_owner_review",
+             "Enable Require review from Code Owners."),
+        ]))
 
     return _check(
         6,
@@ -188,6 +284,7 @@ def get_code_owner_reviews_check(
         "6-must-have-code-owner-reviews",
         status,
         "Changes to the default branch must be reviewed and approved by the designated code owners for the affected areas of the repository.",
+        recommendations,
     )
 
 
@@ -206,6 +303,7 @@ def get_main_default_branch_check(
         "7-must-use-main-as-the-default-branch",
         status,
         "The default branch must be main; branch protection and governance checks are collected for the repository default branch.",
+        ["Set main as the repository's default branch."],
     )
 
 
@@ -237,6 +335,10 @@ def get_stale_reviews_check(
         "8-must-dismiss-stale-reviews-on-new-changes",
         status,
         "Default-branch protection must dismiss approvals when new commits are pushed.",
+        _review_recommendations(protection, rulesets, [
+            ("dismiss_stale_reviews", "pull_request_dismiss_stale_reviews_on_push",
+             "Enable Dismiss stale pull request approvals when new commits are pushed."),
+        ]) if status == FAIL else [],
     )
 
 
@@ -250,6 +352,7 @@ def get_mit_license_check(repository: RepositoryView) -> TechnicalStandardCheck:
         "9-must-use-mit-license",
         status,
         "GitHub must identify the repository's license as MIT.",
+        ["Add or update the repository's license so GitHub recognises it as MIT."],
     )
 
 
@@ -280,4 +383,10 @@ def get_pull_request_review_protection_check(
         "2-must-have-pull-request-review-protection",
         status,
         "The default branch requires at least one approval, including approval of the most recent reviewable push.",
+        _review_recommendations(protection, ruleset, [
+            ("required_approving_review_count", "pull_request_required_approving_review_count",
+             "Require at least one approving pull request review."),
+            ("require_last_push_approval", "pull_request_require_last_push_approval",
+             "Enable Require approval of the most recent reviewable push."),
+        ]) if status == FAIL else [],
     )
