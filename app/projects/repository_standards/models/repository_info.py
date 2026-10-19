@@ -10,6 +10,45 @@ logger = logging.getLogger(__name__)
 
 class RepositoryInfoFactory:
     @staticmethod
+    def _get_repository_branch_ruleset_status(
+        rules, details_by_id, repo_name, github_client
+    ) -> tuple[bool, bool]:
+        repository_branch_rulesets = []
+        for ruleset_id in {rule.get("ruleset_id") for rule in rules}:
+            if ruleset_id is None:
+                raise ValueError("Applicable rule has no ruleset ID")
+            sources = {
+                rule.get("ruleset_source_type")
+                for rule in rules
+                if rule.get("ruleset_id") == ruleset_id
+            }
+            if len(sources) == 1 and sources <= {"Organization", "Enterprise"}:
+                continue
+            details = details_by_id.get(ruleset_id)
+            if details is None:
+                details = github_client.get_repository_ruleset(repo_name, ruleset_id)
+                details_by_id[ruleset_id] = details
+            source = details.get("source_type")
+            if source is None and len(sources) == 1:
+                source = next(iter(sources))
+            if source in {"Organization", "Enterprise"}:
+                continue
+            if source != "Repository":
+                raise ValueError("Ruleset source could not be verified")
+            target = details.get("target")
+            if target in {"repository", "tag", "push"}:
+                continue
+            if target != "branch":
+                raise ValueError("Ruleset target could not be verified")
+            repository_branch_rulesets.append(details)
+
+        return bool(repository_branch_rulesets), all(
+            details.get("enforcement") == "active"
+            and details.get("bypass_actors") == []
+            for details in repository_branch_rulesets
+        )
+
+    @staticmethod
     def from_github_repo(
         repo,
         teams_with_admin,
@@ -312,6 +351,15 @@ class RepositoryInfoFactory:
             default_branch_ruleset.all_rulesets_enforced_without_bypass = (
                 all_rulesets_enforced_without_bypass
             )
+            if rulesets_response is not None:
+                try:
+                    enabled, enforced = RepositoryInfoFactory._get_repository_branch_ruleset_status(
+                        rulesets_response, ruleset_details_by_id, repo.name, github_client
+                    )
+                    default_branch_ruleset.repository_branch_rulesets_enabled = enabled
+                    default_branch_ruleset.repository_branch_rulesets_enforced_without_bypass = enforced
+                except Exception as error:
+                    logger.debug("Error checking repository branch rulesets: %s", error)
 
         repository_access = RepositoryAccess(
             teams_with_admin=teams_with_admin,
@@ -377,6 +425,8 @@ class BranchProtectionInfo:
 
 @dataclass
 class BranchRulesetInfo:
+    repository_branch_rulesets_enabled: Optional[bool] = None
+    repository_branch_rulesets_enforced_without_bypass: Optional[bool] = None
     all_rulesets_enforced_without_bypass: Optional[bool] = None
     required_signatures_ruleset_enforced_without_bypass: Optional[bool] = None
     enabled: Optional[bool] = None

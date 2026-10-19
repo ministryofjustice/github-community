@@ -9,6 +9,61 @@ from app.projects.repository_standards.models.repository_info import RepositoryI
 
 
 class TestRepositoryInfoFactory(unittest.TestCase):
+    def test_repository_branch_ruleset_scope_excludes_inherited_visibility_policy(self):
+        client = Mock()
+        rules = [
+            {"type": "pull_request", "ruleset_id": 18430120,
+             "ruleset_source_type": "Repository"},
+            {"type": "repository_visibility", "ruleset_id": 25238409,
+             "ruleset_source_type": "Organization"},
+        ]
+        details = {18430120: {
+            "target": "branch", "enforcement": "active", "bypass_actors": [],
+        }}
+        result = RepositoryInfoFactory._get_repository_branch_ruleset_status(
+            rules, details, ".github", client
+        )
+        self.assertEqual(result, (True, True))
+        client.get_repository_ruleset.assert_not_called()
+
+    def test_local_branch_rulesets_still_require_active_enforcement_without_bypasses(self):
+        for enforcement, bypasses in (
+            ("active", [{"actor_type": "Team"}]),
+            ("evaluate", []),
+            ("active", None),
+        ):
+            with self.subTest(enforcement=enforcement, bypasses=bypasses):
+                result = RepositoryInfoFactory._get_repository_branch_ruleset_status(
+                    [{"ruleset_id": 123, "ruleset_source_type": "Repository"}],
+                    {123: {"target": "branch", "enforcement": enforcement,
+                           "bypass_actors": bypasses}},
+                    "repo", Mock(),
+                )
+                self.assertEqual(result, (True, False))
+
+    def test_repository_branch_ruleset_scope_requires_verified_source_and_target(self):
+        for source, target, raises, expected in (
+            ("Repository", "branch", False, (True, True)),
+            ("Repository", "repository", False, (False, True)),
+            ("Organization", "branch", False, (False, True)),
+            (None, "branch", True, None),
+            ("Repository", None, True, None),
+        ):
+            with self.subTest(source=source, target=target):
+                details = {123: {
+                    "source_type": source, "target": target,
+                    "enforcement": "active", "bypass_actors": [],
+                }}
+                arguments = ([{"ruleset_id": 123}], details, "repo", Mock())
+                if raises:
+                    with self.assertRaises(ValueError):
+                        RepositoryInfoFactory._get_repository_branch_ruleset_status(*arguments)
+                else:
+                    self.assertEqual(
+                        RepositoryInfoFactory._get_repository_branch_ruleset_status(*arguments),
+                        expected,
+                    )
+
     def test_stores_business_unit_custom_property(self):
         class NotFound(Exception):
             status = 404
@@ -66,10 +121,15 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             },
             {"type": "required_signatures", "ruleset_id": 789},
             {"type": "required_status_checks", "ruleset_id": 456},
+            {"type": "repository_visibility", "ruleset_id": 25238409,
+             "ruleset_source_type": "Organization"},
         ]
-        github_client.get_repository_ruleset.return_value = {
+        github_client.get_repository_ruleset.side_effect = lambda name, ruleset_id: {
             "enforcement": "active",
-            "bypass_actors": [],
+            "bypass_actors": [{"actor_type": "EnterpriseOwner"}]
+            if ruleset_id == 25238409 else [],
+            "source_type": "Organization" if ruleset_id == 25238409 else "Repository",
+            "target": "repository" if ruleset_id == 25238409 else "branch",
         }
 
         result = RepositoryInfoFactory.from_github_repo(
@@ -116,8 +176,18 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         )
         self.assertIs(
             result.default_branch_ruleset.all_rulesets_enforced_without_bypass,
+            False,
+        )
+        self.assertIs(
+            result.default_branch_ruleset.repository_branch_rulesets_enabled,
             True,
         )
+        self.assertIs(
+            result.default_branch_ruleset.repository_branch_rulesets_enforced_without_bypass,
+            True,
+        )
+        roundtrip = RepositoryInfo.from_dict(result.to_dict())
+        self.assertIs(roundtrip.default_branch_ruleset.repository_branch_rulesets_enabled, True)
         self.assertIs(
             result.default_branch_ruleset.required_signatures_ruleset_enforced_without_bypass,
             True,
@@ -228,6 +298,10 @@ class TestRepositoryInfoDeserialization(unittest.TestCase):
         self.assertIsNone(result.basic.business_unit)
         self.assertIsNone(result.codeowners_file_present)
         self.assertIsNone(result.codeowners_file_valid)
+        self.assertIsNone(result.default_branch_ruleset.repository_branch_rulesets_enabled)
+        self.assertIsNone(
+            result.default_branch_ruleset.repository_branch_rulesets_enforced_without_bypass
+        )
         self.assertIsNone(
             result.security_alerts.open_high_critical_code_scanning_count
         )

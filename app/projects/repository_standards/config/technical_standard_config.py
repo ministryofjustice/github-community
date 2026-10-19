@@ -124,6 +124,7 @@ def get_branch_protection_enforced_for_admins_check(
 ) -> TechnicalStandardCheck:
     protection = repository.data.default_branch_protection
     rulesets = repository.data.default_branch_ruleset
+    repository_rulesets_enabled = rulesets.repository_branch_rulesets_enabled
 
     classic_safe = (
         protection.present is False
@@ -133,16 +134,16 @@ def get_branch_protection_enforced_for_admins_check(
         )
     )
     rulesets_safe = (
-        rulesets.enabled is False
+        repository_rulesets_enabled is False
         or (
-            rulesets.enabled is True
-            and rulesets.all_rulesets_enforced_without_bypass is True
+            repository_rulesets_enabled is True
+            and rulesets.repository_branch_rulesets_enforced_without_bypass is True
         )
     )
-    has_protection = protection.present is True or rulesets.enabled is True
+    has_protection = protection.present is True or repository_rulesets_enabled is True
     status = PASS if has_protection and classic_safe and rulesets_safe else FAIL
     recommendations = []
-    if protection.present is False and rulesets.enabled is False:
+    if protection.present is False and repository_rulesets_enabled is False:
         recommendations.append("Protect the default branch using branch protection or an active ruleset.")
     if protection.present is None:
         recommendations.append("Classic branch protection data is unavailable. Check access and refresh the report.")
@@ -151,11 +152,11 @@ def get_branch_protection_enforced_for_admins_check(
             "Verify that classic branch protection applies to administrators "
             "by enabling Do not allow bypassing the above settings."
         )
-    if rulesets.enabled is None:
-        recommendations.append("Ruleset data is unavailable. Check access and refresh the report.")
-    elif rulesets.enabled is True and not rulesets_safe:
+    if repository_rulesets_enabled is None:
+        recommendations.append("Repository branch ruleset data is unavailable. Refresh the report data to verify its scope.")
+    elif repository_rulesets_enabled is True and not rulesets_safe:
         recommendations.append(
-            "Verify that all applicable rulesets are active and their bypass lists are empty."
+            "Verify that all applicable repository branch rulesets are active and their bypass lists are empty."
         )
 
     return _check(
@@ -163,7 +164,7 @@ def get_branch_protection_enforced_for_admins_check(
         "Must have branch protection applied to administrators",
         "3-must-have-branch-protection-applied-to-administrators",
         status,
-        "Default branch protection must apply to administrators and maintainers, with no bypass actors unless an approved exception is documented.",
+        "Classic default branch protection and repository-defined branch rulesets must apply to administrators, with no bypass actors. Inherited organisation and enterprise rulesets are not assessed by this check.",
         recommendations,
     )
 

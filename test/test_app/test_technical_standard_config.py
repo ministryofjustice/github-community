@@ -85,6 +85,8 @@ def make_admin_enforcement_repository(
                 all_rulesets_enforced_without_bypass=(
                     rulesets_enforced_without_bypass
                 ),
+                repository_branch_rulesets_enabled=rulesets_enabled,
+                repository_branch_rulesets_enforced_without_bypass=rulesets_enforced_without_bypass,
             ),
         )
     )
@@ -302,6 +304,8 @@ class TestPassingRepositoryFixture(unittest.TestCase):
                 default_branch_ruleset=SimpleNamespace(
                     enabled=False,
                     all_rulesets_enforced_without_bypass=False,
+                    repository_branch_rulesets_enabled=False,
+                    repository_branch_rulesets_enforced_without_bypass=True,
                     required_signatures_ruleset_enforced_without_bypass=None,
                     pull_request_enforcement=None,
                     pull_request_bypass_actors_length=None,
@@ -327,6 +331,35 @@ class TestPassingRepositoryFixture(unittest.TestCase):
 
 
 class TestBranchProtectionEnforcedForAdminsCheck(unittest.TestCase):
+    def test_inherited_bypasses_do_not_override_verified_repository_branch_rulesets(self):
+        repository = make_admin_enforcement_repository(
+            classic_present=False, rulesets_enabled=True,
+            rulesets_enforced_without_bypass=True,
+        )
+        repository.data.default_branch_ruleset.all_rulesets_enforced_without_bypass = False
+        check = get_branch_protection_enforced_for_admins_check(repository)
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.recommendations, [])
+
+    def test_inherited_rulesets_alone_do_not_satisfy_repository_protection(self):
+        repository = make_admin_enforcement_repository(
+            classic_present=False, rulesets_enabled=True,
+            rulesets_enforced_without_bypass=True,
+        )
+        repository.data.default_branch_ruleset.repository_branch_rulesets_enabled = False
+        self.assertEqual(get_branch_protection_enforced_for_admins_check(repository).status, FAIL)
+
+    def test_old_unscoped_snapshot_requires_refresh(self):
+        repository = make_admin_enforcement_repository(
+            classic_present=False, rulesets_enabled=True,
+            rulesets_enforced_without_bypass=True,
+        )
+        repository.data.default_branch_ruleset.repository_branch_rulesets_enabled = None
+        repository.data.default_branch_ruleset.repository_branch_rulesets_enforced_without_bypass = None
+        check = get_branch_protection_enforced_for_admins_check(repository)
+        self.assertEqual(check.status, FAIL)
+        self.assertIn("Refresh the report data", check.recommendations[0])
+
     def test_passes_when_classic_protection_enforces_for_admins(self):
         repository = make_admin_enforcement_repository(
             classic_present=True,
