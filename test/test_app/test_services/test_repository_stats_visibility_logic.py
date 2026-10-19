@@ -261,7 +261,7 @@ class TestQueryParsing(unittest.TestCase):
             query.sort_query_string("repository"), "?sort=repository&dir=asc"
         )
         self.assertEqual(query.aria_sort("date"), "descending")
-        self.assertEqual(query.aria_sort("by"), "none")
+        self.assertEqual(query.aria_sort("organisation"), "none")
         ascending = parse_visibility_query({"sort": "repository", "dir": "asc"})
         self.assertEqual(
             ascending.sort_query_string("repository"), "?sort=repository&dir=desc"
@@ -586,7 +586,7 @@ class TestCsv(unittest.TestCase):
         rows = list(csv.reader(io.StringIO(activity_csv(items))))
         self.assertEqual(
             rows[0],
-            ["repository", "organisation", "business_unit", "activity", "date", "by"],
+            ["repository", "organisation", "business_unit", "activity", "date"],
         )
         self.assertEqual(
             rows[1],
@@ -596,12 +596,10 @@ class TestCsv(unittest.TestCase):
                 "HMPPS, LAA",
                 "Public to internal",
                 "2026-08-02",
-                "Not known",
             ],
         )
-        self.assertEqual(
-            rows[2][3:], ["New, created as public", "2026-08-10", "'@octocat"]
-        )
+        self.assertEqual(rows[2][3:], ["New, created as public", "2026-08-10"])
+        self.assertEqual(len(rows[2]), 5)
 
     def test_filename(self):
         self.assertEqual(
