@@ -38,7 +38,7 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data, b"badge-image")
         self.assertEqual(response.content_type, "image/svg+xml")
-        self.assertIn("/badge/MOJ-COMPLIANT-00703c", shields_get.call_args.args[0])
+        self.assertIn("/badge/MOJ-COMPLIANT-cce2d8", shields_get.call_args.args[0])
         self.assertIn("style=flat", shields_get.call_args.args[0])
 
     def test_missing_repository_gets_neutral_badge(self):
