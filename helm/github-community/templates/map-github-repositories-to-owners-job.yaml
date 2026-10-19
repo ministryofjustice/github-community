@@ -51,6 +51,8 @@ spec:
                value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
              - name: GUNICORN_WORKERS
                value: "1"
+             - name: GITHUB_COLLECTION_WORKERS
+               value: {{ .Values.app.jobs.map_github_repositories_to_owners.workers | default 1 | quote }}
 
           restartPolicy: Never
           activeDeadlineSeconds: 7200

@@ -1,14 +1,94 @@
 import logging
 from calendar import timegm
 from time import gmtime, sleep, time
+from time import monotonic, perf_counter
+from threading import Lock
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Dict, List
 
 import jwt
 import requests
-from github import RateLimitExceededException
+from github import GithubRetry, RateLimitExceededException
+from requests.adapters import HTTPAdapter
 
 logger = logging.getLogger(__name__)
+
+
+class GitHubRequestCoordinator:
+    def __init__(self):
+        self._lock = Lock()
+        self._resume_at = 0.0
+        self.request_count = 0
+        self.request_seconds = 0.0
+
+    def defer(self, seconds: float):
+        with self._lock:
+            self._resume_at = max(self._resume_at, monotonic() + max(seconds, 0))
+        logger.warning("GitHub shared rate-limit cooldown: %.1fs", seconds)
+
+    def wait(self):
+        while True:
+            with self._lock:
+                remaining = self._resume_at - monotonic()
+            if remaining <= 0:
+                return
+            sleep(remaining)
+
+    def record_request(self, seconds: float):
+        with self._lock:
+            self.request_count += 1
+            self.request_seconds += seconds
+
+
+class CoordinatedGithubRetry(GithubRetry):
+    def __init__(self, coordinator: GitHubRequestCoordinator, **kwargs):
+        self.coordinator = coordinator
+        kwargs.setdefault("status_forcelist", [429, *range(500, 600)])
+        kwargs.setdefault("allowed_methods", frozenset({"GET", "HEAD"}))
+        super().__init__(**kwargs)
+
+    def new(self, **kwargs):
+        kwargs["coordinator"] = self.coordinator
+        return super().new(**kwargs)
+
+    def increment(self, method=None, url=None, response=None, **kwargs):
+        retry = super().increment(method, url, response, **kwargs)
+        if response is not None and response.status in (403, 429):
+            delay = retry.get_retry_after(response)
+            self.coordinator.defer(
+                delay if delay is not None else max(retry.get_backoff_time(), 60)
+            )
+        return retry
+
+    def sleep(self, response=None):
+        if response is not None and response.status in (403, 429):
+            self.coordinator.wait()
+        else:
+            super().sleep(response)
+
+
+class CoordinatedGitHubAdapter(HTTPAdapter):
+    def __init__(self, coordinator: GitHubRequestCoordinator):
+        self.coordinator = coordinator
+        super().__init__(max_retries=CoordinatedGithubRetry(
+            coordinator, total=3, backoff_factor=1
+        ))
+
+    def send(self, request, **kwargs):
+        self.coordinator.wait()
+        kwargs["timeout"] = kwargs.get("timeout") or (10, 60)
+        started = perf_counter()
+        try:
+            response = super().send(request, **kwargs)
+            logger.debug(
+                "GitHub REST %s %s status=%s duration=%.2fs remaining=%s reset=%s",
+                request.method, request.path_url.split("?")[0], response.status_code,
+                perf_counter() - started, response.headers.get("X-RateLimit-Remaining"),
+                response.headers.get("X-RateLimit-Reset"),
+            )
+            return response
+        finally:
+            self.coordinator.record_request(perf_counter() - started)
 
 
 def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Callable:
@@ -47,11 +127,17 @@ def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Ca
             )
 
             wait_time_buffer = 5
-            sleep(
+            wait_seconds = (
                 time_until_core_api_rate_limit_resets + wait_time_buffer
                 if time_until_core_api_rate_limit_resets
                 else 0
             )
+            coordinator = getattr(args[0], "_request_coordinator", None)
+            if coordinator is not None:
+                coordinator.defer(wait_seconds)
+                coordinator.wait()
+            else:
+                sleep(wait_seconds)
             return func(*args, **kwargs)
 
     return decorator
@@ -99,6 +185,7 @@ class GitHubClient:
         app_installation_id: int,
         org: str,
         base_url: str = "https://api.github.com",
+        request_coordinator: GitHubRequestCoordinator | None = None,
     ):
         self.org = org
         self.base_url = base_url.rstrip("/")
@@ -111,6 +198,8 @@ class GitHubClient:
 
         self.session = requests.Session()
         self.session.headers.update({"Accept": "application/vnd.github+json"})
+        if request_coordinator is not None:
+            self.session.mount("https://", CoordinatedGitHubAdapter(request_coordinator))
 
     def __get_token(self) -> str:
         now = datetime.now(timezone.utc)

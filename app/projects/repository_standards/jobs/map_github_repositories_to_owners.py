@@ -1,4 +1,5 @@
 import logging
+from time import perf_counter
 from typing import List
 
 from app.app import create_app
@@ -48,7 +49,16 @@ def main():
         logger.info("No owners found, exiting early")
         return
 
-    repositories: List[RepositoryInfo] = github_service.get_repositories()
+    collection_started = perf_counter()
+    repositories: List[RepositoryInfo] = github_service.get_repositories(
+        workers=app_config.github.collection_workers
+    )
+    logger.info(
+        "Collection phase complete: repositories=%s workers=%s elapsed=%.2fs",
+        len(repositories), app_config.github.collection_workers,
+        perf_counter() - collection_started,
+    )
+    mapping_started = perf_counter()
 
     for owner_config in owners_config:
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
@@ -97,6 +107,7 @@ def main():
     asset_service.remove_stale_assets()
     asset_service.remove_stale_relationships()
 
+    logger.info("Mapping and cleanup complete: elapsed=%.2fs", perf_counter() - mapping_started)
     logger.info("Complete!")
 
 

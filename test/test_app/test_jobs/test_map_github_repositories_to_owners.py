@@ -34,6 +34,22 @@ class TestMain(unittest.TestCase):
         with self.app.app_context():
             db.create_all()
 
+    def test_collection_failure_does_not_write_or_clean_up_assets(
+        self, mock_owner_service, mock_asset_service, mock_github_service
+    ):
+        mock_owner_service.return_value.find_all.return_value = [MagicMock()]
+        mock_github_service.return_value.get_repositories.side_effect = RuntimeError("Collection failed")
+        with (
+            patch("app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.collection_workers", 3),
+            self.app.app_context(),
+            self.assertRaisesRegex(RuntimeError, "Collection failed"),
+        ):
+            main()
+        mock_github_service.return_value.get_repositories.assert_called_once_with(workers=3)
+        mock_asset_service.return_value.update_asset_by_name.assert_not_called()
+        mock_asset_service.return_value.remove_stale_assets.assert_not_called()
+        mock_asset_service.return_value.remove_stale_relationships.assert_not_called()
+
     def test_when_team_has_direct_admin_access_then_admin_relationship_created(
         self,
         mock_owner_service: MagicMock,
@@ -85,6 +101,9 @@ class TestMain(unittest.TestCase):
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
+        )
+        mock_github_service.return_value.get_repositories.assert_called_once_with(
+            workers=1
         )
 
     def test_when_parent_team_has_admin_access_then_admin_relationship_created(

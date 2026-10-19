@@ -108,6 +108,31 @@ make app-start
 
 ## 🚀 Managing Deployments and CronJobs
 
+### Repository Standards Collection Concurrency
+
+The ownership-mapping CronJob uses `GITHUB_COLLECTION_WORKERS` (1 to 8,
+default 1). Helm sets this from
+`app.jobs.map_github_repositories_to_owners.workers`: dev uses 3 and production
+uses 1. This controls threads inside a single Job, not Kubernetes Pod parallelism
+or Gunicorn workers. The existing repository scope and 1,500-repository cap are
+unchanged.
+
+Workers have separate GitHub clients, HTTP sessions and team caches. They share
+a rate-limit cooldown; custom REST requests and retries wait for it, and workers
+check it before starting another repository. Requests retry rate limits and
+transient server errors up to three times. Database mapping remains serial and
+starts only after all repositories have been collected successfully.
+
+Compare `Collection phase complete` and `Mapping and cleanup complete` log lines
+with the previous benchmark. `Collected repository` logs give individual timings;
+`GitHub collection complete` includes custom REST request totals (not PyGithub
+request totals). Custom REST endpoint timings and remaining quota are logged at
+DEBUG level, and cooldowns at WARNING level.
+
+After a PR deployment updates the dev CronJob, its next scheduled run uses these
+settings unless another deployment replaces them. No manual trigger is required.
+Checkpoint/resume is not included: a Pod eviction still restarts collection.
+
 Occasionally, you may need to debug a failed deployment or failing CronJob in the Cloud Platform Kubernetes cluster. Replace `github-community-dev` with the namespace you’re working in. Below are some commands to help you debug issues.
 Before trying these commands, follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) guide.
 

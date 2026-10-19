@@ -56,6 +56,7 @@ app_config = SimpleNamespace(
         ),
     ),
     github=SimpleNamespace(
+        collection_workers=int(__get_env_var("GITHUB_COLLECTION_WORKERS") or "1"),
         app=SimpleNamespace(
             client_id=__get_env_var("GITHUB_APP_CLIENT_ID"),
             installation_id=int(__get_env_var("GITHUB_APP_INSTALLATION_ID") or 0),

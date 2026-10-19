@@ -1,7 +1,67 @@
 import unittest
+from io import BytesIO
 from unittest.mock import patch
 
 from app.projects.repository_standards.clients.github_client import GitHubClient
+from app.projects.repository_standards.clients.github_client import (
+    CoordinatedGithubRetry,
+    GitHubRequestCoordinator,
+)
+from urllib3.response import HTTPResponse
+from github import GithubException
+
+
+class TestCoordinatedGithubRetry(unittest.TestCase):
+    def test_rate_limit_cooldown_is_shared_by_retry_clones(self):
+        coordinator = unittest.mock.Mock()
+        retry = CoordinatedGithubRetry(coordinator, total=3)
+        response = HTTPResponse(status=429, headers={"Retry-After": "30"})
+        next_retry = retry.increment("GET", "/repos/org/repo", response)
+        self.assertIs(next_retry.coordinator, coordinator)
+        coordinator.defer.assert_called_once_with(30)
+        next_retry.sleep(response)
+        coordinator.wait.assert_called_once()
+
+    def test_permission_failure_is_not_retried_as_rate_limiting(self):
+        coordinator = unittest.mock.Mock()
+        retry = CoordinatedGithubRetry(coordinator, total=3)
+        response = HTTPResponse(
+            status=403,
+            body=BytesIO(b'{"message":"Resource not accessible by integration"}'),
+            preload_content=False,
+        )
+        with self.assertRaises(GithubException):
+            retry.increment("GET", "/repos/org/repo", response)
+        coordinator.defer.assert_not_called()
+
+    def test_primary_and_secondary_limits_share_cooldown(self):
+        for body in (
+            b'{"message":"API rate limit exceeded"}',
+            b'{"message":"You have exceeded a secondary rate limit"}',
+        ):
+            with self.subTest(body=body):
+                coordinator = unittest.mock.Mock()
+                retry = CoordinatedGithubRetry(coordinator, total=3)
+                response = HTTPResponse(
+                    status=403, body=BytesIO(body), preload_content=False,
+                    headers={"X-RateLimit-Reset": "9999999999"},
+                )
+                next_retry = retry.increment("GET", "/repos/org/repo", response)
+                coordinator.defer.assert_called_once()
+                self.assertGreaterEqual(coordinator.defer.call_args.args[0], 60)
+                next_retry.sleep(response)
+                coordinator.wait.assert_called_once()
+
+    def test_wait_does_not_hold_lock_or_shorten_an_existing_cooldown(self):
+        coordinator = GitHubRequestCoordinator()
+        with (
+            patch("app.projects.repository_standards.clients.github_client.monotonic", side_effect=[0, 0, 0, 30]),
+            patch("app.projects.repository_standards.clients.github_client.sleep") as wait,
+        ):
+            coordinator.defer(30)
+            coordinator.defer(5)
+            coordinator.wait()
+        wait.assert_called_once_with(30)
 
 
 class TestRepositoryCustomProperties(unittest.TestCase):
