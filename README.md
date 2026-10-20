@@ -30,6 +30,7 @@ The community currently provides the following projects and services:
 | Project Name              | Description                                                                                               |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- |
 | **Repository Standards**  | Improving code quality and security by centralizing knowledge and best practices for GitHub repositories. |
+| **Repository Stats** | Viewing repository visibility reports, new and deleted repositories, and archived public repositories across our GitHub organisations. See the [Repository Stats README](app/projects/repository_stats/README.md). |
 | **Shared GitHub Actions** | Providing reusable GitHub Actions to reduce technical debt, improve maintainability, and enhance quality. |
 | **...**                   | More projects to be added...                                                                              |
 

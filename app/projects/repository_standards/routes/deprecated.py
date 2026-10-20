@@ -69,7 +69,7 @@ def deprecated_reports_homepage():
         "color": "005ea5",
         "label": "MoJ Compliant",
         "labelColor": "231f20",
-        "message": "See https://github-community.service.justice.gov.uk/repository-standards/ or #github-community",
+        "message": "See https://github-community.service.justice.gov.uk/repository-standards/ or #ask-developer-experience",
         "schemaVersion": 1,
         "style": "for-the-badge",
     }
