@@ -44,11 +44,10 @@ SORT_COLUMNS = (
     ("business_unit", "Business unit"),
     ("activity", "Activity"),
     ("date", "Date"),
-    ("by", "By"),
 )
 SORT_KEYS = tuple(key for key, _ in SORT_COLUMNS)
 
-CSV_HEADERS = ("repository", "organisation", "business_unit", "activity", "date", "by")
+CSV_HEADERS = ("repository", "organisation", "business_unit", "activity", "date")
 CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 
 NOT_KNOWN = "Not known"
@@ -540,7 +539,6 @@ _SORT_VALUE: dict[str, Callable[[ActivityItem], object]] = {
     "business_unit": lambda item: item.business_unit_text.lower(),
     "activity": lambda item: item.label.lower(),
     "date": lambda item: item.occurred_on,
-    "by": lambda item: item.by.lower(),
 }
 
 
@@ -614,7 +612,6 @@ def activity_csv(items: Iterable[ActivityItem]) -> str:
                 item.business_unit_text,
                 item.label,
                 item.occurred_on.isoformat(),
-                item.by,
             )
         )
     return buffer.getvalue()

@@ -1106,21 +1106,28 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         _, body = self.get(f"{CHANGES_URL}?business_unit=HMPPS")
         self.assertIn(estate_line(1, 0, 1, 0), body)
 
-    def test_activity_table_unchanged(self):
+    def test_activity_table_omits_by_column(self):
         _, body = self.get(CHANGES_URL)
         head = body.split('id="activity-table"', 1)[1].split("</thead>", 1)[0]
         self.assertEqual(
-            len(re.findall(r'<a class="govuk-link app-visibility-sort"', head)), 6
+            len(re.findall(r'<a class="govuk-link app-visibility-sort"', head)), 5
         )
-        for label in (
-            "Repository",
-            "Organisation",
-            "Business unit",
-            "Activity",
-            "Date",
-            "By",
-        ):
-            self.assertIn(label, head)
+        headers = [
+            re.sub(
+                r"<[^>]+>",
+                "",
+                re.sub(r"<span\b[^>]*>.*?</span>", "", cell, flags=re.DOTALL),
+            ).strip()
+            for cell in re.findall(
+                r"<th\b[^>]*>(.*?)</th>",
+                head,
+                flags=re.DOTALL,
+            )
+        ]
+        self.assertEqual(
+            headers, ["Repository", "Organisation", "Business unit", "Activity", "Date"]
+        )
+        self.assertNotIn("By", headers)
         self.assertIn('aria-sort="descending"', head)
         self.assertEqual(body.count('id="activity"'), 1)
         self.assertEqual(body.count('id="activity-table"'), 1)
@@ -1617,8 +1624,9 @@ class TestActivityCsv(RepositoryStatsTestCase):
         rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
         self.assertEqual(
             rows[0],
-            ["repository", "organisation", "business_unit", "activity", "date", "by"],
+            ["repository", "organisation", "business_unit", "activity", "date"],
         )
+        self.assertTrue(all(len(row) == 5 for row in rows))
         self.assertEqual(len(rows), 34)
         deleted = [row for row in rows if row[3].startswith("Deleted")]
         self.assertEqual(deleted[0][0], "'=cmd|evil")
