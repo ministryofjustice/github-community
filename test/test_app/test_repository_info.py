@@ -5,6 +5,7 @@ from unittest.mock import Mock
 from app.projects.repository_standards.config.technical_standard_config import (
     get_all_technical_standard_checks,
 )
+from app.projects.repository_standards.clients.github_client import GitHubApiError
 from app.projects.repository_standards.models.repository_info import (
     RepositoryInfoFactory,
 )
@@ -12,6 +13,100 @@ from app.projects.repository_standards.models.repository_info import RepositoryI
 
 
 class TestRepositoryInfoFactory(unittest.TestCase):
+    def test_configured_codeql_without_repository_languages_is_saved_as_not_applicable(self):
+        class NotFound(Exception):
+            status = 404
+
+        setting = SimpleNamespace(status=None)
+        repo = SimpleNamespace(
+            name=".github", visibility="public", description=None,
+            default_branch="main", license=None, delete_branch_on_merge=True,
+            security_and_analysis=SimpleNamespace(**{
+                name: setting for name in (
+                    "secret_scanning", "secret_scanning_validity_checks",
+                    "secret_scanning_push_protection", "advanced_security",
+                    "secret_scanning_non_provider_patterns",
+                )
+            }),
+            get_contents=Mock(side_effect=NotFound()),
+            get_branch=Mock(return_value=SimpleNamespace(get_protection=lambda: None)),
+            get_languages=Mock(return_value={}),
+        )
+        client = Mock()
+        client.get_repository_custom_properties.return_value = {}
+        client.get_open_code_scanning_alerts.side_effect = GitHubApiError(
+            404, "no analysis found"
+        )
+        client.get_code_scanning_default_setup.return_value = {
+            "state": "configured", "languages": [],
+        }
+        client.get_open_dependabot_alerts.return_value = []
+        client.get_branch_rulesets.return_value = []
+
+        result = RepositoryInfoFactory.from_github_repo(
+            repo, [], [], [], [], client
+        )
+
+        self.assertEqual(
+            result.security_alerts.open_high_critical_code_scanning_count, 0
+        )
+        self.assertIs(result.security_alerts.code_scanning_not_applicable, True)
+        restored = RepositoryInfo.from_dict(result.to_dict())
+        self.assertIs(restored.security_alerts.code_scanning_not_applicable, True)
+
+    def test_only_confirmed_no_analysis_with_no_languages_is_not_applicable(self):
+        repo = SimpleNamespace(name=".github", get_languages=lambda: {})
+        client = Mock()
+        client.get_open_code_scanning_alerts.side_effect = GitHubApiError(
+            404, "no analysis found"
+        )
+        client.get_code_scanning_default_setup.return_value = {
+            "state": "configured", "languages": [],
+        }
+        result = RepositoryInfoFactory._get_code_scanning_alert_result(repo, client)
+        self.assertEqual(result, (0, True))
+
+    def test_other_alert_errors_remain_unavailable(self):
+        repo = SimpleNamespace(name=".github", get_languages=Mock(return_value={}))
+        for error in (
+            GitHubApiError(404, "Not Found"),
+            GitHubApiError(403, "Resource not accessible by integration"),
+        ):
+            with self.subTest(error=error):
+                client = Mock()
+                client.get_open_code_scanning_alerts.side_effect = error
+                self.assertEqual(
+                    RepositoryInfoFactory._get_code_scanning_alert_result(repo, client),
+                    (None, False),
+                )
+                client.get_code_scanning_default_setup.assert_not_called()
+                repo.get_languages.assert_not_called()
+
+    def test_code_scanning_not_applicable_requires_configured_setup_and_no_languages(self):
+        repo = SimpleNamespace(name=".github", get_languages=lambda: {})
+        client = Mock()
+        client.get_code_scanning_default_setup.return_value = {
+            "state": "configured", "languages": [],
+        }
+        self.assertTrue(
+            RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+        )
+        repo.get_languages = lambda: {"Python": 1200}
+        self.assertFalse(
+            RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+        )
+        repo.get_languages = lambda: {}
+        client.get_code_scanning_default_setup.return_value = {
+            "state": "not_configured", "languages": [],
+        }
+        self.assertFalse(
+            RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+        )
+        client.get_code_scanning_default_setup.side_effect = ValueError("unavailable")
+        self.assertFalse(
+            RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+        )
+
     def test_multiple_rulesets_collect_order_independent_compliance_results(self):
         rules = [
             {"type": "pull_request", "ruleset_id": 1, "ruleset_source_type": "Repository",

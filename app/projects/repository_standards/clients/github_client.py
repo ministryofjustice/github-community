@@ -14,6 +14,13 @@ from requests.adapters import HTTPAdapter
 logger = logging.getLogger(__name__)
 
 
+class GitHubApiError(ValueError):
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f"GitHub API returned HTTP {status_code}: {message}")
+
+
 class GitHubRequestCoordinator:
     def __init__(self):
         self._lock = Lock()
@@ -221,9 +228,11 @@ class GitHubClient:
         response = self.session.request(method, url, **kwargs)
 
         if not response.ok:
-            raise ValueError(
-                f"Error calling URL: [{url}], Status Code: [{response.status_code}], Response: {response.text}"
-            )
+            try:
+                error_message = response.json().get("message", response.text)
+            except ValueError:
+                error_message = response.text
+            raise GitHubApiError(response.status_code, str(error_message))
 
         return response.json()
 
@@ -275,6 +284,11 @@ class GitHubClient:
     def get_open_code_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
         return self.__get_paginated_repository_alerts(
             f"/repos/{self.org}/{repo}/code-scanning/alerts"
+        )
+
+    def get_code_scanning_default_setup(self, repo: str) -> Dict[str, Any]:
+        return self.__call(
+            "GET", f"/repos/{self.org}/{repo}/code-scanning/default-setup"
         )
 
     def get_open_dependabot_alerts(self, repo: str) -> List[Dict[str, Any]]:

@@ -3,12 +3,56 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from app.projects.repository_standards.clients.github_client import GitHubClient
+from app.projects.repository_standards.clients.github_client import (
+    GitHubApiError,
+    GitHubClient,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class RepositoryInfoFactory:
+    @staticmethod
+    def _get_code_scanning_alert_result(repo, github_client):
+        try:
+            alerts = github_client.get_open_code_scanning_alerts(repo.name)
+            count = sum(
+                1
+                for alert in alerts
+                if alert.get("state") == "open"
+                and (
+                    ((alert.get("rule") or {}).get("security_severity_level") or "")
+                    .lower()
+                    in {"high", "critical"}
+                )
+            )
+            return count, False
+        except Exception as error:
+            no_analysis_found = (
+                isinstance(error, GitHubApiError)
+                and error.status_code == 404
+                and error.message.strip().casefold() == "no analysis found"
+            )
+            if no_analysis_found and RepositoryInfoFactory._code_scanning_is_not_applicable(
+                repo, github_client
+            ):
+                return 0, True
+            logger.debug("Error getting Code Scanning alerts: %s", error)
+            return None, False
+
+    @staticmethod
+    def _code_scanning_is_not_applicable(repo, github_client) -> bool:
+        try:
+            default_setup = github_client.get_code_scanning_default_setup(repo.name)
+            return (
+                default_setup.get("state") == "configured"
+                and default_setup.get("languages") == []
+                and repo.get_languages() == {}
+            )
+        except Exception as error:
+            logger.debug("Unable to confirm Code Scanning is not applicable: %s", error)
+            return False
+
     @staticmethod
     def _get_effective_branch_rulesets(rules, details_by_id, repo_name, github_client):
         qualifying = {"pull_request": [], "required_signatures": []}
@@ -204,27 +248,10 @@ class RepositoryInfoFactory:
             ),
         )
 
-        open_high_critical_code_scanning_alerts = None
-        try:
-            code_scanning_alerts = github_client.get_open_code_scanning_alerts(
-                repo.name
-            )
-            open_high_critical_code_scanning_alerts = sum(
-                1
-                for alert in code_scanning_alerts
-                if alert.get("state") == "open"
-                and (
-                    (
-                        (alert.get("rule") or {}).get(
-                            "security_severity_level"
-                        )
-                        or ""
-                    ).lower()
-                    in {"high", "critical"}
-                )
-            )
-        except Exception as e:
-            logger.debug("Error getting Code Scanning alerts: %s", e)
+        (
+            open_high_critical_code_scanning_alerts,
+            code_scanning_not_applicable,
+        ) = RepositoryInfoFactory._get_code_scanning_alert_result(repo, github_client)
 
         open_high_critical_dependabot_alerts = None
         try:
@@ -251,6 +278,7 @@ class RepositoryInfoFactory:
             open_high_critical_dependabot_count=(
                 open_high_critical_dependabot_alerts
             ),
+            code_scanning_not_applicable=code_scanning_not_applicable,
         )
 
         try:
@@ -403,6 +431,7 @@ class SecurityAndAnalysisInfo:
 class SecurityAlertsInfo:
     open_high_critical_code_scanning_count: Optional[int] = None
     open_high_critical_dependabot_count: Optional[int] = None
+    code_scanning_not_applicable: Optional[bool] = None
 
 
 @dataclass

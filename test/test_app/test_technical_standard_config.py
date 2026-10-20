@@ -110,12 +110,15 @@ def make_signed_commits_repository(
     )
 
 
-def make_security_alerts_repository(code_scanning_count, dependabot_count):
+def make_security_alerts_repository(
+    code_scanning_count, dependabot_count, code_scanning_not_applicable=None
+):
     return SimpleNamespace(
         data=SimpleNamespace(
             security_alerts=SimpleNamespace(
                 open_high_critical_code_scanning_count=code_scanning_count,
                 open_high_critical_dependabot_count=dependabot_count,
+                code_scanning_not_applicable=code_scanning_not_applicable,
             )
         )
     )
@@ -233,6 +236,21 @@ class TestCheckRecommendations(unittest.TestCase):
             make_security_alerts_repository(0, 0)
         )
         self.assertEqual(check.recommendations, [])
+
+    def test_enabled_codeql_without_supported_languages_is_not_applicable(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(None, 0, code_scanning_not_applicable=True)
+        )
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.recommendations, [])
+
+    def test_not_applicable_codeql_does_not_bypass_dependabot_alerts(self):
+        check = get_no_high_critical_security_alerts_check(
+            make_security_alerts_repository(None, None, code_scanning_not_applicable=True)
+        )
+        self.assertEqual(check.status, FAIL)
+        self.assertEqual(len(check.recommendations), 1)
+        self.assertIn("Dependabot data is unavailable", check.recommendations[0])
 
     def test_mixed_alert_data_has_distinct_recommendations(self):
         check = get_no_high_critical_security_alerts_check(

@@ -204,6 +204,11 @@ def get_no_high_critical_security_alerts_check(
     alerts = repository.data.security_alerts
     code_scanning_count = alerts.open_high_critical_code_scanning_count
     dependabot_count = alerts.open_high_critical_dependabot_count
+    code_scanning_not_applicable = (
+        getattr(alerts, "code_scanning_not_applicable", None) is True
+    )
+    if code_scanning_not_applicable:
+        code_scanning_count = 0
 
     status = (
         PASS
@@ -215,6 +220,8 @@ def get_no_high_critical_security_alerts_check(
         ("Code Scanning", code_scanning_count, "Code Scanning is enabled"),
         ("Dependabot", dependabot_count, "Dependabot alerts are enabled"),
     ):
+        if source == "Code Scanning" and code_scanning_not_applicable:
+            continue
         if count is None:
             recommendations.append(
                 f"{source} data is unavailable. Check that {setting}."
@@ -227,7 +234,7 @@ def get_no_high_critical_security_alerts_check(
         "Must have no outstanding high or critical security alerts",
         "5-must-have-no-outstanding-high-or-critical-security-alerts",
         status,
-        "No open High or Critical Code Scanning or Dependabot alerts; unavailable alert data does not pass.",
+        "No open High or Critical Code Scanning or Dependabot alerts; configured CodeQL with no supported languages is not applicable, while unavailable alert data does not pass.",
         recommendations,
     )
 
