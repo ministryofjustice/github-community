@@ -147,16 +147,19 @@ class GithubService:
     def get_repositories(
         self,
         repo_name: str | None = None,
-        limit: int = 1500,
+        limit: int | None = 1500,
         teams_to_ignore: List[str] = [
             "organisation-security-auditor",
             "organisation-security-auditor-external",
             "organisation-security-auditor-architects",
         ],
         workers: int = 1,
+        visibility: str = "public",
     ) -> List[RepositoryInfo]:
         if not 1 <= workers <= 8:
             raise ValueError("GitHub collection workers must be between 1 and 8")
+        if visibility not in {"public", "all"}:
+            raise ValueError("Repository visibility must be 'public' or 'all'")
         started = perf_counter()
         response = []
         team_parent_cache = {}
@@ -166,7 +169,7 @@ class GithubService:
             repositories = list(
                 self.github_client_core_api.get_organization(
                     self.organisation_name
-                ).get_repos(type="public")
+                ).get_repos(type=visibility)
             )
         else:
             repositories = [
@@ -180,7 +183,7 @@ class GithubService:
             if not (repository.archived or repository.fork)
         ]
         logger.info(f"Total Repositories: [ {len(repositories_to_check)} ]")
-        if len(repositories_to_check) > limit:
+        if limit is not None and len(repositories_to_check) > limit:
             logger.info("Limit reached: collecting only %s repositories", limit)
             repositories_to_check = repositories_to_check[:limit]
         logger.info(
@@ -195,9 +198,6 @@ class GithubService:
             return response
         counter = 1
         for repo in repositories_to_check:
-            if counter > limit:
-                logger.info("Limit Reached, exiting early")
-                break
             logger.info(
                 f"Processing Repository: [ {repo.name} ] {counter}/{len(repositories_to_check)}"
             )

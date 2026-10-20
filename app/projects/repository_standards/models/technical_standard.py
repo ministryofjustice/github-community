@@ -22,6 +22,7 @@ class TechnicalStandardReportView:
     authoritative_team_owners: List[str] = field(default_factory=list)
     description: Optional[str] = None
     last_updated: datetime | None = None
+    visibility: str | None = None
 
     @property
     def checks_passed(self) -> int:

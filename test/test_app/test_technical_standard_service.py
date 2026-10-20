@@ -55,6 +55,18 @@ class TestTechnicalStandardService(unittest.TestCase):
         self.assertAlmostEqual(report.compliance_percentage, 100 / 3)
         self.assertIsNone(report.last_updated)
 
+    @patch(f"{MODULE}.get_all_technical_standard_checks", return_value=[])
+    def test_report_exposes_repository_visibility(self, mock_checks):
+        repository = _repository()
+        repository.data.basic.visibility = "internal"
+        self.service = TechnicalStandardService(
+            SimpleNamespace(
+                get_repository_by_name=lambda name: repository,
+                is_owner_authoritative_for_repository=lambda repo, owner: True,
+            )
+        )
+        self.assertEqual(self.service.get_repository_by_name("repo").visibility, "internal")
+
     @patch(f"{MODULE}.get_all_technical_standard_checks")
     def test_progress_handles_empty_failed_and_complete_reports(self, mock_checks):
         for statuses, passed, percentage in (

@@ -16,6 +16,19 @@
   <h1 class="govuk-heading-xl">Repositories</h1>
   {{ latest_snapshot(repositories) }}
 
+  <form method="get" action="{{ url_for('technical_standard.repositories') }}">
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="visibility">Repository visibility</label>
+      <select class="govuk-select" id="visibility" name="visibility">
+        <option value="all" {% if visibility_filter == "all" %}selected{% endif %}>All visibilities</option>
+        <option value="public" {% if visibility_filter == "public" %}selected{% endif %}>Public</option>
+        <option value="private" {% if visibility_filter == "private" %}selected{% endif %}>Private</option>
+        <option value="internal" {% if visibility_filter == "internal" %}selected{% endif %}>Internal</option>
+      </select>
+      <button class="govuk-button govuk-!-margin-left-2" data-module="govuk-button">Filter</button>
+    </div>
+  </form>
+
   {% set total_count = repositories | length %}
   {% set compliant_count = compliant_repositories | length %}
   {% set non_compliant_count = total_count - compliant_count %}
@@ -44,6 +57,9 @@
     </div>
   </section>
 
+  {% if not repositories %}
+    <p class="govuk-body">No repositories found for this visibility.</p>
+  {% else %}
   <h2 class="govuk-heading-l">Repositories</h2>
   <div class="moj-scrollable-pane" style="position: relative" role="region" aria-label="Repositories" tabindex="0">
   <table class="govuk-table" data-module="moj-sortable-table">
@@ -52,6 +68,7 @@
         <th scope="col" class="govuk-table__header" aria-sort="ascending">Repository</th>
         <th scope="col" class="govuk-table__header" aria-sort="none">Compliance</th>
         <th scope="col" class="govuk-table__header" aria-sort="none">Checks passed</th>
+        <th scope="col" class="govuk-table__header" aria-sort="none">Visibility</th>
         <th scope="col" class="govuk-table__header" aria-sort="none">Owner</th>
         <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Report</span></th>
       </tr>
@@ -64,6 +81,7 @@
           {{ technical_standard_badge(repo) }}
         </td>
         <td class="govuk-table__cell" data-sort-value="{{ repo.compliance_percentage }}">{{ check_progress(repo) }}</td>
+        <td class="govuk-table__cell">{{ repo.visibility | title if repo.visibility else "Not available" }}</td>
         <td class="govuk-table__cell">
           {{ repo.authoritative_business_unit_owners | join(", ") or repo.authoritative_team_owners | join(", ") or "Not identified" }}
         </td>
@@ -75,4 +93,5 @@
     </tbody>
   </table>
   </div>
+  {% endif %}
 {% endblock %}

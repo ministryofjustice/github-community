@@ -95,8 +95,31 @@ class TestGithubService(unittest.TestCase):
         ]
         service.github_client_core_api.get_organization.return_value.get_repos.return_value = repositories
         with patch.object(service, "_collect_concurrently", return_value=["result"]) as collect:
-            self.assertEqual(service.get_repositories(limit=1, workers=3), ["result"])
+            self.assertEqual(
+                service.get_repositories(limit=1, workers=3, visibility="all"), ["result"]
+            )
         collect.assert_called_once_with([repositories[2]], unittest.mock.ANY, 3)
+        service.github_client_core_api.get_organization.return_value.get_repos.assert_called_once_with(
+            type="all"
+        )
+
+    def test_default_scope_is_public_and_excludes_archived_and_forked(self):
+        service = GithubService.__new__(GithubService)
+        service.organisation_name = "ministryofjustice"
+        service.github_client_core_api = Mock()
+        service._request_coordinator = Mock(request_count=0, request_seconds=0)
+        repositories = [
+            SimpleNamespace(name="public", archived=False, fork=False),
+            SimpleNamespace(name="archived", archived=True, fork=False),
+            SimpleNamespace(name="fork", archived=False, fork=True),
+        ]
+        service.github_client_core_api.get_organization.return_value.get_repos.return_value = repositories
+        with patch.object(service, "_collect_repository", side_effect=lambda repo, *args: repo.name):
+            result = service.get_repositories(workers=1)
+        self.assertEqual(result, ["public"])
+        service.github_client_core_api.get_organization.return_value.get_repos.assert_called_once_with(
+            type="public"
+        )
 
     def test_invalid_worker_counts_are_rejected_before_collection(self):
         service = GithubService.__new__(GithubService)

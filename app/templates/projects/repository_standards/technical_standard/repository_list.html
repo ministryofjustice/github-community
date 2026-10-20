@@ -33,6 +33,18 @@
 
   <h1 class="govuk-heading-xl">{{ title }}</h1>
   {{ latest_snapshot(repositories) }}
+  <form method="get">
+    <div class="govuk-form-group">
+      <label class="govuk-label" for="visibility">Repository visibility</label>
+      <select class="govuk-select" id="visibility" name="visibility">
+        <option value="all" {% if visibility_filter == "all" %}selected{% endif %}>All visibilities</option>
+        <option value="public" {% if visibility_filter == "public" %}selected{% endif %}>Public</option>
+        <option value="private" {% if visibility_filter == "private" %}selected{% endif %}>Private</option>
+        <option value="internal" {% if visibility_filter == "internal" %}selected{% endif %}>Internal</option>
+      </select>
+      <button class="govuk-button govuk-!-margin-left-2" data-module="govuk-button">Filter</button>
+    </div>
+  </form>
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
     <h2 class="govuk-heading-l">Summary statistics</h2>
     <div class="govuk-summary-list__row">
@@ -60,6 +72,7 @@
           <th scope="col" class="govuk-table__header" aria-sort="none">Owner</th>
           <th scope="col" class="govuk-table__header" aria-sort="none">Compliance</th>
           <th scope="col" class="govuk-table__header" aria-sort="none">Checks passed</th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">Visibility</th>
           <th scope="col" class="govuk-table__header"><span class="govuk-visually-hidden">Report</span></th>
         </tr>
       </thead>
@@ -70,6 +83,7 @@
             <td class="govuk-table__cell">{{ repository.authoritative_business_unit_owners | join(", ") or repository.authoritative_team_owners | join(", ") or "Not identified" }}</td>
             <td class="govuk-table__cell">{{ technical_standard_badge(repository) }}</td>
             <td class="govuk-table__cell" data-sort-value="{{ repository.compliance_percentage }}">{{ check_progress(repository) }}</td>
+            <td class="govuk-table__cell">{{ repository.visibility | title if repository.visibility else "Not available" }}</td>
             <td class="govuk-table__cell"><a class="govuk-link" href="/repository-standards/technical-standard/repositories/{{ repository.name }}">View report</a></td>
           </tr>
         {% endfor %}

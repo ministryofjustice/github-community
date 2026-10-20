@@ -17,13 +17,14 @@ from app.projects.repository_standards.routes.technical_standard import (
 from app.shared.config.jinja_config import configure_jinja
 
 
-def make_report(name, compliant, business_units=None, teams=None):
+def make_report(name, compliant, business_units=None, teams=None, visibility=None):
     return TechnicalStandardReportView(
         name=name,
         compliant=compliant,
         checks=[],
         description=None,
         last_updated=None,
+        visibility=visibility,
         authoritative_business_unit_owners=business_units or [],
         authoritative_team_owners=teams or [],
     )
@@ -58,8 +59,9 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
                 True,
                 business_units=["HMPPS"],
                 teams=["Platform Team"],
+                visibility="public",
             ),
-            make_report("repo-two", False),
+            make_report("repo-two", False, visibility="private"),
         ]
         self.service = SimpleNamespace(
             get_all_repositories=lambda: self.repositories,
@@ -294,6 +296,34 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
                     "/repository-standards/technical-standard/badges/", body
                 )
 
+    def test_business_unit_and_team_repository_lists_filter_visibility(self):
+        self.service.get_repositories_for_owner = lambda owner: self.repositories
+        for path in (
+            "/repository-standards/technical-standard/business-units/1?visibility=private",
+            "/repository-standards/technical-standard/teams/2?visibility=private",
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                body = response.get_data(as_text=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("repo-two", body)
+                self.assertNotIn("repo-one", body)
+                self.assertIn('<option value="private" selected>', body)
+                self.assertIn("Visibility", body)
+                self.assertIn("Private", body)
+
+    def test_unowned_repository_list_filters_visibility(self):
+        self.service.get_unowned_repositories = lambda: self.repositories
+        response = self.client.get(
+            "/repository-standards/technical-standard/unowned-repositories?visibility=public"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("repo-one", body)
+        self.assertNotIn("repo-two", body)
+        self.assertIn('<option value="public" selected>', body)
+        self.assertIn("Public", body)
+
     def test_all_repositories_route_renders_local_badges(self):
         response = self.client.get(
             "/repository-standards/technical-standard/repositories"
@@ -306,6 +336,42 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         )
         self.assertEqual(body.count("(50%)"), 2)
 
+    def test_all_repositories_can_filter_visibility(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories?visibility=private"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("repo-two", body)
+        self.assertNotIn("repo-one", body)
+        self.assertIn('id="visibility" name="visibility"', body)
+        self.assertIn('<option value="private" selected>', body)
+        self.assertIn("Private", body)
+
+    def test_all_repositories_rejects_unknown_visibility_filter(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories?visibility=secret"
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_all_repositories_can_filter_internal_visibility(self):
+        self.repositories[0].visibility = "internal"
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories?visibility=internal"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("repo-one", body)
+        self.assertNotIn("repo-two", body)
+        self.assertIn("Internal", body)
+
+    def test_empty_visibility_filter_has_clear_empty_state(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories?visibility=internal"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("No repositories found for this visibility.", response.get_data(as_text=True))
+
     def test_repository_detail_shows_legacy_style_summary_and_new_badge_snippet(self):
         response = self.client.get(
             "/repository-standards/technical-standard/repositories/repo-one"
@@ -317,6 +383,8 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn("HMPPS", body)
         self.assertIn("Platform Team", body)
         self.assertIn("Description", body)
+        self.assertIn("Visibility", body)
+        self.assertIn("Public", body)
         self.assertIn("MOJ Repository Compliance Badge", body)
         self.assertIn("/repository-standards/api/repo-one/badge", body)
         self.assertIn(

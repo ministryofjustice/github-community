@@ -45,7 +45,9 @@ class TestMain(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "Collection failed"),
         ):
             main()
-        mock_github_service.return_value.get_repositories.assert_called_once_with(workers=3)
+        mock_github_service.return_value.get_repositories.assert_called_once_with(
+            workers=3, visibility="public", limit=1500
+        )
         mock_asset_service.return_value.update_asset_by_name.assert_not_called()
         mock_asset_service.return_value.remove_stale_assets.assert_not_called()
         mock_asset_service.return_value.remove_stale_relationships.assert_not_called()
@@ -103,7 +105,41 @@ class TestMain(unittest.TestCase):
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
         )
         mock_github_service.return_value.get_repositories.assert_called_once_with(
-            workers=1
+            workers=1, visibility="public", limit=1500
+        )
+
+    def test_collection_scope_is_forwarded_to_github_service(
+        self,
+        mock_owner_service: MagicMock,
+        mock_asset_service: MagicMock,
+        mock_github_service: MagicMock,
+    ):
+        owner = OwnerView(
+            id=1,
+            name="Test Owners",
+            type="1",
+            config=OwnerConfig(name="Test Owners", teams=[], prefix=None),
+        )
+        mock_owner_service.return_value.find_all.return_value = [owner]
+        mock_owner_service.return_value.find_by_name.return_value = [owner]
+        with (
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.collection_workers",
+                3,
+            ),
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_visibility",
+                "all",
+            ),
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_limit",
+                5000,
+            ),
+            self.app.app_context(),
+        ):
+            main()
+        mock_github_service.return_value.get_repositories.assert_called_once_with(
+            workers=3, visibility="all", limit=5000
         )
 
     def test_when_parent_team_has_admin_access_then_admin_relationship_created(

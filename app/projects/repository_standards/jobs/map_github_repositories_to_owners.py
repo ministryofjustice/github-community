@@ -51,7 +51,9 @@ def main():
 
     collection_started = perf_counter()
     repositories: List[RepositoryInfo] = github_service.get_repositories(
-        workers=app_config.github.collection_workers
+        workers=app_config.github.collection_workers,
+        visibility=app_config.github.repository_visibility,
+        limit=app_config.github.repository_limit,
     )
     logger.info(
         "Collection phase complete: repositories=%s workers=%s elapsed=%.2fs",

@@ -34,6 +34,11 @@
     {% endif %}
 
     <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Visibility</dt>
+      <dd class="govuk-summary-list__value">{{ repository.visibility | title if repository.visibility else "Not available" }}</dd>
+    </div>
+
+    <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Description</dt>
       <dd class="govuk-summary-list__value">{{ repository.description or "Not provided" }}</dd>
     </div>

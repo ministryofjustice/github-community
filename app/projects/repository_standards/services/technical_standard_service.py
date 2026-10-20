@@ -53,6 +53,7 @@ class TechnicalStandardService:
             authoritative_team_owners=team_owners,
             description=repository.data.basic.description,
             last_updated=getattr(repository, "last_updated", None),
+            visibility=getattr(repository.data.basic, "visibility", None),
         )
 
     def get_all_repositories(self) -> List[TechnicalStandardReportView]:
