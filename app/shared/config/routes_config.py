@@ -1,6 +1,7 @@
 from flask import Flask
 
 from app.projects.acronyms.routes.main import acronyms_main
+from app.projects.flow_metrics.routes.main import flow_metrics_main
 from app.projects.repository_standards.routes.api import repository_standards_api
 from app.projects.repository_standards.routes.deprecated import (
     repository_standards_deprecated,
@@ -28,3 +29,4 @@ def configure_routes(app: Flask) -> None:
     app.register_blueprint(repository_stats_main, url_prefix="/repository-stats/")
 
     app.register_blueprint(acronyms_main, url_prefix="/acronyms/")
+    app.register_blueprint(flow_metrics_main, url_prefix="/flow-metrics/")

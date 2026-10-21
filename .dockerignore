@@ -2,7 +2,36 @@ Dockerfile
 .git/
 .github/
 
-*.py[cod]
+**/*.py[cod]
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+**/.copilot/
+**/.env
+**/.env.*
+**/*.log*
+**/*.sqlite*
+**/*.db
+**/*.dump
+**/*.backup
+**/*.sql.gz
+**/*.sql
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/archives/
+**/snapshots/
+**/private-runtime/
+**/FlowMetrics/
+**/acceptance*/
+**/*snapshot*.json
+**/*capture*.json
+**/project-*-*.json
+**/health.json
+**/config.local.json
 
 # C extensions
 *.so

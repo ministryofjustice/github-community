@@ -1,0 +1,142 @@
+import time
+from unittest.mock import patch
+
+import pytest
+from flask import Flask
+
+from app.projects.flow_metrics.config import workspace_config
+from app.projects.flow_metrics.routes.main import flow_metrics_main
+from app.shared.config.jinja_config import configure_jinja
+from app.shared.routes.main import main
+
+
+@pytest.fixture
+def client():
+    app = Flask("app")
+    app.config.update(TESTING=True, SECRET_KEY="test-only")
+    app.register_blueprint(main)
+    app.register_blueprint(flow_metrics_main, url_prefix="/flow-metrics/")
+    configure_jinja(app)
+    return app.test_client()
+
+
+def test_flow_metrics_requires_hub_auth(client):
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        response = client.get("/flow-metrics/")
+    assert response.status_code == 302
+    assert response.location == "/auth/login"
+
+
+def test_flow_metrics_uses_existing_signed_in_session(client):
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() + 3600}
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        response = client.get("/flow-metrics/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Sample data" not in html[html.index('<div class="flow-heading">'):html.index('id="flow-message"')]
+    assert "Team boards" in html
+    assert "Add team board" in html
+    assert "Collector health" not in html
+    assert "Example team B" not in html
+    assert "Example team C" not in html
+    assert "Example team D" not in html
+    assert "Current workspace" in html
+    assert "No onboarding requests." in html
+    assert 'id="admin-save-request"' in html
+    assert "Onboarding requests" in html
+    assert 'id="admin-setup-form"' in html
+    assert 'id="admin-request"' in html
+    assert '<dialog id="admin-dialog"' in html
+    assert 'aria-labelledby="admin-dialog-title"' in html
+    assert 'id="dataset"' not in html
+    assert 'id="export-png"' not in html
+    assert 'id="export-csv"' in html
+    assert "flow-metrics.js" in html
+    assert "chart.umd.js" in html
+    assert 'id="x-axis"' in html
+    assert 'id="y-axis"' in html
+    assert 'id="group-by"' in html
+    assert 'id="chart-scope"' in html
+    assert 'id="filters"' not in html
+    assert 'id="toggle-charts"' in html
+    assert 'aria-controls="chart-sidebar"' in html
+    assert 'id="filter-type"' not in html
+    assert 'id="filter-planned"' not in html
+    assert 'id="team-hint"' not in html
+    assert 'id="builder-hint"' not in html
+    assert "<option>DevX</option>" not in html
+    assert "All teams" not in html
+    assert 'role="combobox"' in html
+    assert 'id="filter-suggestions"' in html
+    assert 'id="search-save"' in html
+    configuration = html[html.index('<form id="configuration"'):html.index("</form>")]
+    for control in ("team", "sprint", "from", "to"):
+        assert f'id="{control}"' not in configuration
+
+
+def test_expired_session_is_not_accepted(client):
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() - 1}
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        assert client.get("/flow-metrics/").status_code == 302
+
+
+def test_home_links_to_flow_metrics_without_a_demo_only_claim(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'href="/flow-metrics/"' in html
+    assert "Explore project board data through shared team charts." in html
+    assert "using demonstration data only" not in html
+
+
+def test_sample_mode_ignores_browser_dataset_switch(client, monkeypatch):
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() + 3600}
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
+    response = client.get("/flow-metrics/?data=real")
+    assert 'data-live="false"' in response.get_data(as_text=True)
+
+
+def test_workspace_heading_title_and_source_are_configured(client, monkeypatch):
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() + 3600}
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    monkeypatch.setenv("FLOW_METRICS_WORKSPACE_NAME", "Cloud Platform")
+    monkeypatch.setenv(
+        "FLOW_METRICS_SOURCE_URL", "https://github.com/orgs/example/projects/42"
+    )
+    html = client.get("/flow-metrics/").get_data(as_text=True)
+    assert '<h1 class="govuk-heading-xl">Cloud Platform</h1>' in html
+    assert "Cloud Platform - Flow Metrics" in html
+    assert 'href="https://github.com/orgs/example/projects/42"' in html
+    assert "Cloud Platform board</a>" in html
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("FLOW_METRICS_DATA_MODE", "other"),
+        ("FLOW_METRICS_WORKSPACE_NAME", " "),
+        ("FLOW_METRICS_SOURCE_URL", "javascript:alert(1)"),
+    ],
+)
+def test_invalid_workspace_configuration_fails_explicitly(client, monkeypatch, key, value):
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() + 3600}
+    monkeypatch.setenv(key, value)
+    with pytest.raises(ValueError):
+        client.get("/flow-metrics/")
+
+
+def test_real_mode_requires_enablement_and_matching_source(monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "real")
+    monkeypatch.delenv("FLOW_METRICS_ENABLED", raising=False)
+    with pytest.raises(ValueError, match="requires FLOW_METRICS_ENABLED"):
+        workspace_config()
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
+    monkeypatch.setenv("FLOW_METRICS_SOURCE_URL", "https://github.com/orgs/example/projects/42")
+    with pytest.raises(ValueError, match="only project 152"):
+        workspace_config()

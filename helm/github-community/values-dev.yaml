@@ -18,6 +18,8 @@ app:
       GITHUB_STATS_ACCESS_TEAM: "ministryofjustice/repository-stats-viewers"
 
   jobs:
+    flow_metrics_init_sample:
+      enabled: true
     map_github_repositories_to_owners:
       schedule: "0 3 * * *"
     # Repository Stats visibility snapshot (UTC)

@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import requests
 from flask import Flask
 
+from app.projects.flow_metrics.routes.main import flow_metrics_main
 from app.projects.repository_stats.config.visibility_config import (
     VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
@@ -193,6 +194,7 @@ def create_test_app():
     configure_jinja(app)
     app.register_blueprint(main)
     app.register_blueprint(repository_stats_main, url_prefix="/repository-stats/")
+    app.register_blueprint(flow_metrics_main, url_prefix="/flow-metrics/")
     return app
 
 
@@ -932,7 +934,7 @@ class TestLandingPages(RepositoryStatsTestCase):
         self.assertNotIn("govuk-tabs", body)
         self.assertIn("govuk-breadcrumbs", body)
 
-    def test_community_home_has_three_project_cards(self):
+    def test_community_home_has_four_project_cards(self):
         response, body = self.get("/")
         self.assertEqual(response.status_code, 200)
         cards = re.findall(
@@ -948,6 +950,7 @@ class TestLandingPages(RepositoryStatsTestCase):
                     "Shared GitHub Actions",
                 ),
                 ("/repository-stats/", "GitHub Repository Stats"),
+                ("/flow-metrics/", "Flow Metrics"),
             ],
         )
         self.assertIn(

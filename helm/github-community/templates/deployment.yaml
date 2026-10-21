@@ -82,6 +82,22 @@ spec:
             - name: GITHUB_STATS_OAUTH_CLIENT_SECRET
               value: {{ . | quote }}
             {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_ENABLED }}
+            - name: FLOW_METRICS_ENABLED
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_DATA_MODE }}
+            - name: FLOW_METRICS_DATA_MODE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_WORKSPACE_NAME }}
+            - name: FLOW_METRICS_WORKSPACE_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_SOURCE_URL }}
+            - name: FLOW_METRICS_SOURCE_URL
+              value: {{ . | quote }}
+            {{- end }}
 
           ports:
             - name: http

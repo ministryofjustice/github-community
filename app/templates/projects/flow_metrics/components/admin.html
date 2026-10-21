@@ -1,0 +1,71 @@
+<div class="flow-chart-heading">
+  <h2 class="govuk-heading-l">Team boards</h2>
+  <button id="add-team-board" class="govuk-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Add team board</button>
+</div>
+<div class="flow-table-scroll" role="region" aria-label="Team boards" tabindex="0">
+  <table class="govuk-table flow-admin-table">
+    <thead><tr>
+      <th class="govuk-table__header" scope="col">Team</th>
+      <th class="govuk-table__header" scope="col">GitHub project</th>
+      <th class="govuk-table__header" scope="col">Status</th>
+      <th class="govuk-table__header" scope="col">Action</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <th class="govuk-table__header" scope="row">Developer Experience</th>
+        <td class="govuk-table__cell" data-label="GitHub project"><a class="govuk-link" href="{{ source_url }}">Project #152</a></td>
+        <td class="govuk-table__cell" data-label="Status"><strong class="govuk-tag govuk-tag--blue">Current workspace</strong></td>
+        <td class="govuk-table__cell" data-label="Action"><button id="manage-current-board" class="flow-link-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Manage<span class="govuk-visually-hidden"> Developer Experience</span></button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<h2 class="govuk-heading-m govuk-!-margin-top-6">Onboarding requests</h2>
+<p id="admin-requests-empty" class="govuk-body">No onboarding requests.</p>
+<p id="admin-request-feedback" class="govuk-body-s" role="status" aria-live="polite"></p>
+<p id="admin-storage-error" class="govuk-error-message" role="alert" hidden></p>
+<div id="admin-requests" class="flow-table-scroll" role="region" aria-label="Onboarding requests" tabindex="0"></div>
+<dialog id="admin-dialog" class="flow-dialog flow-admin-dialog" aria-labelledby="admin-dialog-title">
+  <header class="flow-dialog-header">
+    <h2 id="admin-dialog-title" class="govuk-heading-m" tabindex="-1"></h2>
+    <button id="close-admin-dialog" class="flow-icon-button" type="button" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+  </header>
+  <div class="flow-guide-content">
+<section id="admin-manage" hidden>
+  <dl class="govuk-summary-list">
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">GitHub project</dt><dd class="govuk-summary-list__value"><a class="govuk-link" href="{{ source_url }}">Project #152</a></dd></div>
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Workspace</dt><dd class="govuk-summary-list__value">Developer Experience</dd></div>
+  </dl>
+  <button id="admin-open-workspace" class="govuk-button govuk-button--secondary" type="button">Open workspace</button>
+</section>
+<section id="admin-setup" hidden>
+  <form id="admin-setup-form">
+    <div class="govuk-form-group"><label class="govuk-label" for="admin-team-name">Team name</label><input id="admin-team-name" class="govuk-input govuk-input--width-20" maxlength="80" required></div>
+    <div class="govuk-form-group"><label class="govuk-label" for="admin-project-url">GitHub project link</label><div id="admin-project-hint" class="govuk-hint">https://github.com/orgs/organisation/projects/123</div><input id="admin-project-url" class="govuk-input" type="url" maxlength="300" aria-describedby="admin-project-hint admin-setup-error" required></div>
+    <p id="admin-setup-error" class="govuk-error-message" role="alert" hidden></p>
+    <div class="flow-admin-actions"><button class="govuk-button govuk-button--secondary" type="submit">Review details</button><button class="flow-link-button" type="button" data-close-admin="admin-setup">Cancel</button></div>
+  </form>
+  <section id="admin-draft-review" aria-labelledby="admin-draft-title" hidden>
+    <h4 id="admin-draft-title" class="govuk-heading-s" tabindex="-1">Board details</h4>
+    <dl class="govuk-summary-list">
+      <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Team</dt><dd id="admin-draft-team" class="govuk-summary-list__value"></dd></div>
+      <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">GitHub project</dt><dd id="admin-draft-project" class="govuk-summary-list__value"></dd></div>
+      <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Status</dt><dd class="govuk-summary-list__value">Not connected</dd></div>
+    </dl>
+    <p id="admin-save-error" class="govuk-error-message" role="alert" hidden></p>
+    <div class="flow-admin-actions">
+      <button id="admin-save-request" class="govuk-button" type="button">Save</button>
+      <button id="admin-edit-draft" class="flow-link-button" type="button">Change details</button>
+      <button class="flow-link-button" type="button" data-close-admin="admin-setup">Cancel</button>
+    </div>
+  </section>
+</section>
+<section id="admin-request" hidden>
+  <dl class="govuk-summary-list">
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Team</dt><dd id="admin-request-team" class="govuk-summary-list__value"></dd></div>
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">GitHub project</dt><dd class="govuk-summary-list__value"><a id="admin-request-project" class="govuk-link"></a></dd></div>
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Status</dt><dd class="govuk-summary-list__value">Awaiting review</dd></div>
+  </dl>
+</section>
+  </div>
+</dialog>
