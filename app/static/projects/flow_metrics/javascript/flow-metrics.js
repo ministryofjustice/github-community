@@ -2,7 +2,8 @@ import {
   SEEDS, METRICS, LAYOUTS, FIELDS, GROUP_FIELDS, MEASURES, CUSTOM_DEFAULTS,
   TICKETS, buildResult, stateAt, validChart, upgradeChart, validateFilters, scopeLabels, resultCSV,
   SEARCH_FIELDS, HISTORY, configureLiveData, configureSampleData, captureLabel,
-  ticketReference, ticketText, pointTicket,
+  ticketReference, ticketChartLabel, ticketText, pointTicket,
+  chartHasDateAxis, datePresetRange, withDateRange, resolveFilters,
 } from "./flow-metrics-model.mjs";
 import { CALCULATIONS, CALCULATION_DEFAULTS, calculationSettings, builderError, editableRecipe } from "./flow-metrics-builder.mjs";
 import { REQUEST_VERSION, REQUEST_LIMIT, requestDetails, requestKey, parseRequests } from "./flow-metrics-admin.mjs";
@@ -429,6 +430,7 @@ function renderList() {
 }
 
 function syncControls() {
+  closeDateRange();
   invalidConfiguration = false;
   $("config-error").hidden = true;
   $("chart-workspace").hidden = !draft;
@@ -501,7 +503,7 @@ function chartConfig() {
   const numericPrecision = draft.metric === "custom" && (draft.y.startsWith("average") || draft.calculation?.aggregation === "average") ? 2 : 0;
   const labels = result.series[0]?.points.map((p) => {
     const ticket = pointTicket(p, result.tickets);
-    return ticket ? ticketReference(ticket) : p.label;
+    return ticket ? ticketChartLabel(ticket) : p.label;
   }) || [];
   return {
     type: scatter ? "scatter" : line ? "line" : "bar",
@@ -722,6 +724,7 @@ async function renderPreview() {
   $("search-discard").disabled = !dirty();
   $("copy-chart").disabled = false;
   renderScope();
+  renderDateRanges();
   $("result-summary").textContent = result.unavailable || (result.sampleSize
     ? ""
     : "No matching items. Change the filters.");
@@ -739,6 +742,75 @@ async function renderPreview() {
     $("table-view").hidden = true;
   } else updateView();
 }
+
+function closeDateRange() {
+  $("custom-date-fields").hidden = true;
+  $("custom-date-range").setAttribute("aria-expanded", "false");
+}
+
+function renderDateRanges() {
+  $("chart-date-ranges").hidden = !chartHasDateAxis(draft);
+  const { resolved } = resolveFilters(draft.filters);
+  const selected = !resolved.from && !resolved.to ? "max"
+    : ["2weeks", "1month", "3months"].find((key) => {
+      const range = datePresetRange(key);
+      return resolved.from === range.from && resolved.to === range.to;
+    });
+  document.querySelectorAll("[data-date-range]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.dateRange === selected));
+  });
+  for (const id of ["range-from", "range-to"]) {
+    $(id).min = HISTORY.from;
+    $(id).max = HISTORY.to;
+  }
+}
+
+function applyDateRange(from, to) {
+  try {
+    const filters = withDateRange({ ...draft.filters, query: $("filter-query").value }, from, to);
+    $("search-error").hidden = true;
+    $("filter-query").removeAttribute("aria-invalid");
+    $("filter-query").value = filters.query;
+    draft = { ...draft, filters };
+    closeDateRange();
+    previewConfiguration();
+    return true;
+  } catch (error) {
+    $("date-range-error").textContent = error.message;
+    $("date-range-error").hidden = false;
+    return false;
+  }
+}
+
+document.querySelectorAll("[data-date-range]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!draft || saving) return;
+    const range = datePresetRange(button.dataset.dateRange);
+    if (!applyDateRange(range.from, range.to)) {
+      $("custom-date-fields").hidden = false;
+      $("custom-date-range").setAttribute("aria-expanded", "true");
+    }
+  });
+});
+$("custom-date-range").addEventListener("click", () => {
+  if (!$("custom-date-fields").hidden) { closeDateRange(); return; }
+  const { resolved } = resolveFilters(draft.filters);
+  $("range-from").value = resolved.from || HISTORY.from;
+  $("range-to").value = resolved.to || HISTORY.to;
+  $("date-range-error").hidden = true;
+  $("custom-date-fields").hidden = false;
+  $("custom-date-range").setAttribute("aria-expanded", "true");
+  $("range-from").focus();
+});
+$("custom-date-fields").addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (saving) return;
+  if (applyDateRange($("range-from").value, $("range-to").value)) $("custom-date-range").focus();
+});
+$("cancel-date-range").addEventListener("click", () => { closeDateRange(); $("custom-date-range").focus(); });
+$("custom-date-fields").addEventListener("keydown", (event) => {
+  if (event.key === "Escape") { event.preventDefault(); closeDateRange(); $("custom-date-range").focus(); }
+});
 
 function renderScope() {
   const labels = scopeLabels(draft.filters);

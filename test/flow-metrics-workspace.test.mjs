@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
-import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
-import { editableRecipe } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
+import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
+import { editableRecipe, builderError } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
 
 const real = (id, status = "TODO", extra = {}) => ({
   id: `real:${id}`, sourceId: id, datasetId: "ministryofjustice/152", provenance: "real",
@@ -30,6 +30,125 @@ const chart = (metric = "status", query = "", layout = "column") => ({
 });
 const total = result => result.rows.reduce((sum, row) => sum + row.value, 0);
 const ids = result => [...new Set(result.rows.flatMap(row => row.ids))].sort();
+
+test("date shortcuts use available history and preserve one canonical filter system", () => {
+  configureSampleData(dataset());
+  assert.deepEqual(datePresetRange("2weeks", { from: "2026-01-01", to: "2026-03-31" }), { from: "2026-03-18", to: "2026-03-31" });
+  assert.deepEqual(datePresetRange("1month", { from: "2026-01-01", to: "2026-03-31" }), { from: "2026-03-01", to: "2026-03-31" });
+  assert.deepEqual(datePresetRange("3months", { from: "2025-01-01", to: "2026-03-31" }), { from: "2026-01-01", to: "2026-03-31" });
+  assert.deepEqual(datePresetRange("2weeks", { from: "2026-03-30", to: "2026-03-31" }), { from: "2026-03-30", to: "2026-03-31" });
+  const original = { ...CUSTOM_DEFAULTS.filters, from: "2026-10-16", query: 'title:"Fictional test" #2 from:2026-10-17 to:2026-10-18' };
+  const changed = withDateRange(original, "2026-10-18", "2026-10-19");
+  const { resolved, clauses } = resolveFilters(changed);
+  assert.equal(resolved.from, "2026-10-18");
+  assert.equal(resolved.to, "2026-10-19");
+  assert.equal(clauses.filter(c => c.field === "from").length, 1);
+  assert.deepEqual(clauses.filter(c => !["from", "to"].includes(c.field)), [{field:"title",value:"Fictional test"},{field:"keyword",value:"#2"}]);
+  const max = resolveFilters(withDateRange(changed, "", "")).resolved;
+  assert.equal(max.from, ""); assert.equal(max.to, "");
+  assert.throws(() => withDateRange(original, "2026-10-19", "2026-10-18"));
+  assert.throws(() => withDateRange(original, "1900-01-01", "2026-10-19"));
+  assert.equal(chartHasDateAxis(chart("status")), false);
+  assert.equal(chartHasDateAxis(chart("age")), false);
+  assert.equal(chartHasDateAxis(chart("throughput")), true);
+  assert.equal(chartHasDateAxis({...chart("custom"),x:"reporting"}), true);
+});
+
+test("chart ticket labels are short without losing repository identity elsewhere", () => {
+  const ticket = real("511");
+  assert.equal(ticketChartLabel(ticket), "Ticket #511");
+  assert.equal(ticketReference(ticket), "synthetic/repository#511");
+  assert.match(ticketText(ticket), /synthetic\/repository#511/);
+  assert.equal(ticketChartLabel(real("511", "TODO", { reference: "another/repository#511" })), "Ticket #511");
+  assert.equal(ticketChartLabel({ id: "SAMPLE-1-05" }), "SAMPLE-1-05");
+  assert.equal(ticketChartLabel({ provenance: "real", id: "real:draft" }), "Draft item");
+});
+
+for (const recovery of ["preset", "custom"]) {
+  test(`date ${recovery} handler clears invalid search state only after successful validation`, () => {
+    configureSampleData(dataset());
+    const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+    const section = (start, end) => {
+      const first = source.indexOf(start);
+      const last = source.indexOf(end, first);
+      assert.ok(first >= 0 && last > first);
+      return source.slice(first, last);
+    };
+    const elements = new Map();
+    const element = id => {
+      if (!elements.has(id)) elements.set(id, {
+        value: "", hidden: true, disabled: false, textContent: "", attributes: {}, handlers: {},
+        setAttribute(name, value) { this.attributes[name] = value; },
+        removeAttribute(name) { delete this.attributes[name]; },
+        addEventListener(name, handler) { this.handlers[name] = handler; },
+        focus() { this.focused = true; },
+      });
+      return elements.get(id);
+    };
+    const saved = { ...chart("throughput", 'team:DevX title:"Fictional test"'), id: "date-recovery" };
+    assert.equal(validChart(saved), true);
+    const original = structuredClone(saved);
+    for (const [id, key] of Object.entries({
+      "chart-name": "name", metric: "metric", layout: "layout", "x-axis": "x", "y-axis": "y", "group-by": "group",
+    })) element(id).value = saved[key];
+    element("filter-query").value = `${saved.filters.query} from:2026-10-19 to:2026-10-12`;
+    const button = element("preset");
+    button.dataset = { dateRange: "2weeks" };
+    const context = {
+      $: element, document: { querySelectorAll: () => [button] },
+      draft: structuredClone(saved), saving: false, invalidConfiguration: false,
+      previewSequence: 0, pendingPreview: false, syncPickers: [],
+      HISTORY, validateFilters, validChart, builderError, withDateRange, datePresetRange,
+      renderList() {}, syncFieldVisibility() {},
+      renderPreview() {
+        context.preview = buildResult(context.draft);
+        context.scope = scopeLabels(context.draft.filters);
+      },
+    };
+    runInNewContext([
+      section("function closeDateRange()", "\nfunction renderScope()"),
+      section("function previewConfiguration(", '\n$("configuration").addEventListener'),
+      section("function applySearch()", '\n$("filter-query").addEventListener'),
+    ].join("\n"), context);
+    context.applySearch();
+    assert.equal(element("search-error").hidden, false);
+    assert.equal(element("filter-query").attributes["aria-invalid"], "true");
+    assert.equal(context.invalidConfiguration, true);
+    assert.equal(element("search-save").disabled, true);
+    assert.equal(context.preview, undefined);
+    assert.deepEqual(context.draft, original);
+
+    element("range-from").value = "2026-10-19";
+    element("range-to").value = "2026-10-12";
+    element("custom-date-fields").handlers.submit({ preventDefault() {} });
+    assert.equal(element("date-range-error").hidden, false);
+    assert.equal(element("search-error").hidden, false);
+    assert.equal(element("filter-query").attributes["aria-invalid"], "true");
+    assert.deepEqual(context.draft, original);
+
+    const range = recovery === "preset" ? datePresetRange("2weeks") : { from: "2026-10-16", to: "2026-10-19" };
+    if (recovery === "preset") button.handlers.click();
+    else {
+      element("range-from").value = range.from;
+      element("range-to").value = range.to;
+      element("custom-date-fields").handlers.submit({ preventDefault() {} });
+      assert.equal(element("custom-date-range").focused, true);
+    }
+    assert.equal(element("search-error").hidden, true);
+    assert.equal(element("filter-query").attributes["aria-invalid"], undefined);
+    assert.equal(context.invalidConfiguration, false, element("config-error").textContent);
+    assert.equal(element("custom-date-fields").hidden, true);
+    assert.equal(element("custom-date-range").attributes["aria-expanded"], "false");
+    const { resolved, clauses } = resolveFilters(context.draft.filters);
+    assert.equal(resolved.from, range.from);
+    assert.equal(resolved.to, range.to);
+    assert.deepEqual(clauses.filter(c => !["from", "to"].includes(c.field)), resolveFilters(saved.filters).clauses);
+    assert.deepEqual(context.scope, scopeLabels(context.draft.filters));
+    assert.deepEqual(context.preview.rows, buildResult(context.draft).rows);
+    assert.deepEqual(saved, original, "The saved chart remains unchanged for Save/Discard");
+    assert.notEqual(JSON.stringify(context.draft), JSON.stringify(saved), "Corrected range remains an unsaved change");
+  });
+}
 
 test("Team freshness retains capture/failure/errors while routine staleness belongs in Admin", async () => {
   const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");

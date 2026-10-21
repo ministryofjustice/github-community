@@ -121,6 +121,38 @@ export function resolveFilters(filters = {}) {
   }
   return { resolved, clauses };
 }
+
+export function chartHasDateAxis(chart) {
+  return ["throughput", "flow", "progress"].includes(chart.metric)
+    || (chart.metric === "cycle" && chart.layout === "scatter")
+    || (chart.metric === "custom" && ["reporting", "completionDate", "created", "completed"].includes(chart.x));
+}
+
+export function datePresetRange(preset, history = HISTORY) {
+  if (preset === "max") return { from: "", to: "" };
+  if (!["2weeks", "1month", "3months"].includes(preset)) throw new Error("Choose an available date range.");
+  const end = new Date(`${history.to}T00:00:00Z`);
+  const start = new Date(end);
+  if (preset === "2weeks") start.setUTCDate(start.getUTCDate() - 13);
+  else {
+    const day = start.getUTCDate();
+    start.setUTCDate(1);
+    start.setUTCMonth(start.getUTCMonth() - (preset === "1month" ? 1 : 3));
+    const last = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0)).getUTCDate();
+    start.setUTCDate(Math.min(day, last));
+    start.setUTCDate(start.getUTCDate() + 1);
+  }
+  return { from: [history.from, start.toISOString().slice(0, 10)].sort().at(-1), to: history.to };
+}
+
+export function withDateRange(filters, from, to) {
+  const { clauses } = resolveFilters(filters);
+  const query = clauses.filter(({ field }) => !["from", "to"].includes(field))
+    .map(({ field, value }) => `${field === "keyword" ? "" : `${field}:`}${JSON.stringify(value)}`).join(" ");
+  const next = { ...filters, from: "", to: "", query: [query, from ? `from:${from}` : "", to ? `to:${to}` : ""].filter(Boolean).join(" ") };
+  validateFilters(next);
+  return next;
+}
 export const CUSTOM_DEFAULTS = { metric: "custom", layout: "column", threshold: 7, x: "status", y: "count", group: "", filters: DEFAULT_FILTERS };
 export const LAYOUTS = {
   bar: "Bar", column: "Column", line: "Line", area: "Stacked area",
@@ -261,6 +293,11 @@ export function validateFilters(filters) {
 const point = (label, value, tickets) => ({ label, value, ids: tickets.map((ticket) => ticket.id) });
 export const ticketReference = (ticket) => ticket.provenance === "real"
   ? ticket.reference || "Draft item" : ticket.reference || ticket.id;
+export const ticketChartLabel = (ticket) => {
+  const reference = ticketReference(ticket);
+  const number = reference.match(/#([1-9]\d*)$/)?.[1];
+  return number ? `Ticket #${number}` : reference;
+};
 export const ticketText = (ticket) => `${ticket.title} (${ticketReference(ticket)})`;
 export const pointTicket = (row, tickets) => row.ticketId
   ? tickets.find((ticket) => ticket.id === row.ticketId) : null;

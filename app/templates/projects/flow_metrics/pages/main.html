@@ -65,6 +65,22 @@
           <button id="search-save" class="govuk-button" type="button" disabled>Save</button>
         </div>
         <p id="search-error" class="govuk-error-message" role="alert" hidden></p>
+        <div id="chart-date-ranges" class="flow-date-ranges" hidden>
+          <div class="flow-view-buttons" role="group" aria-label="Chart date range">
+            <button class="flow-view-button" type="button" data-date-range="2weeks" aria-pressed="false">2 weeks</button>
+            <button class="flow-view-button" type="button" data-date-range="1month" aria-pressed="false">1 month</button>
+            <button class="flow-view-button" type="button" data-date-range="3months" aria-pressed="false">3 months</button>
+            <button class="flow-view-button" type="button" data-date-range="max" aria-pressed="true">Max</button>
+          </div>
+          <button id="custom-date-range" class="flow-link-button" type="button" aria-expanded="false" aria-controls="custom-date-fields">Custom range</button>
+          <form id="custom-date-fields" class="flow-actions" hidden>
+            <div><label class="govuk-label" for="range-from">From date</label><input id="range-from" class="govuk-input" type="date" required></div>
+            <div><label class="govuk-label" for="range-to">To date</label><input id="range-to" class="govuk-input" type="date" required></div>
+            <button class="govuk-button" type="submit">Apply range</button>
+            <button id="cancel-date-range" class="flow-link-button" type="button">Cancel</button>
+            <p id="date-range-error" class="govuk-error-message" role="alert" hidden></p>
+          </form>
+        </div>
         <p id="flow-message" class="govuk-body-s flow-message" role="status" aria-live="polite" aria-atomic="true"></p>
         <form id="configuration" class="flow-config" hidden>
           <div class="flow-chart-heading">
