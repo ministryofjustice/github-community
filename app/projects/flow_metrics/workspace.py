@@ -223,3 +223,10 @@ def exploratory_dataset():
             ordered[-1]["capturedAt"][:10],
         )
     return dataset
+
+
+def validate_observation(document, source, observed, checksum, mapping):
+    payload = evidence_payload(document, source, mapping)
+    return observation_contract(
+        payload, observed, source, checksum, payload.get("mapping", {})
+    )

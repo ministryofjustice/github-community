@@ -2,13 +2,14 @@
 
 import hashlib
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import click
 from flask.cli import with_appcontext
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.projects.flow_metrics.db_models import FlowBoard, FlowDataset, FlowEvidence
 from app.projects.flow_metrics.service import validate_chart
@@ -16,6 +17,10 @@ from app.shared.database import db
 
 REAL_ID = "ministryofjustice/152"
 SAMPLE_ID = "sample-three-sprints"
+
+
+class ObservationConflict(ValueError):
+    """Safe error for contradictory evidence at the same source and instant."""
 
 
 def digest(document):
@@ -198,6 +203,32 @@ def validate_evidence(document):
     return digest(document), source, observed
 
 
+def stored_evidence_identities():
+    dataset = db.session.get(FlowDataset, REAL_ID)
+    if dataset is not None and dataset.provenance != "real":
+        raise ValueError("Real dataset provenance mismatch.")
+    identities, checksums = {}, set()
+    for row in db.session.scalars(
+        select(FlowEvidence).where(FlowEvidence.dataset_id == REAL_ID)
+    ):
+        checksum, source, observed = validate_evidence(row.document)
+        stored_at = row.observed_at
+        if stored_at.tzinfo is None:
+            stored_at = stored_at.replace(tzinfo=UTC)
+        if checksum != row.id or source != row.source or stored_at != observed:
+            raise ValueError("Stored evidence integrity failure.")
+        check_observation_identity(identities, checksum, source, observed)
+        identities[(source, observed.astimezone(UTC))] = checksum
+        checksums.add(checksum)
+    return identities, checksums
+
+
+def check_observation_identity(identities, checksum, source, observed):
+    identity = (source, observed.astimezone(UTC))
+    if identity in identities and identities[identity] != checksum:
+        raise ObservationConflict("Capture conflicts with stored observation; nothing imported.")
+
+
 def retain_evidence(document):
     checksum, source, observed = validate_evidence(document)
     if db.session.get(FlowDataset, REAL_ID) is None:
@@ -251,18 +282,33 @@ def import_capture_command(filename):
             "Real source imports must be outside the repository."
         )
     try:
+        from app.projects.flow_metrics.locking import lock_collection
+        from app.projects.flow_metrics.workspace import validate_observation
+
         encoded = path.read_bytes()
         if path.name.startswith("project-152-") and not path.stem.endswith(
             hashlib.sha256(encoded).hexdigest()
         ):
             raise ValueError("Archive filename checksum does not match.")
-        checksum = retain_evidence(json.loads(encoded))
+        document = json.loads(encoded)
+        checksum, source, observed = validate_evidence(document)
+        lock_collection()
+        board = db.session.get(FlowBoard, REAL_ID, populate_existing=True)
+        identities, _ = stored_evidence_identities()
+        check_observation_identity(identities, checksum, source, observed)
+        validate_observation(
+            document, source, observed, checksum, board.field_mapping if board else {},
+        )
+        checksum = retain_evidence(document)
         db.session.commit()
-    except (ValueError, KeyError, TypeError) as error:
+    except ObservationConflict as error:
+        db.session.rollback()
+        raise click.ClickException(str(error)) from None
+    except (ValueError, KeyError, TypeError, AttributeError, OverflowError, OSError, SQLAlchemyError):
         db.session.rollback()
         raise click.ClickException(
             "Invalid/incomplete source document; nothing imported."
-        ) from error
+        ) from None
     click.echo(f"Verified source evidence: {checksum}")
 
 

@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -68,6 +69,35 @@ def send(client, document=None, *, identity=None, event="projects_v2_item", body
         "X-Hub-Signature-256": "sha256=" + hmac.new(SECRET.encode(), raw, hashlib.sha256).hexdigest(),
         **(headers or {}),
     })
+
+
+def test_pending_deliveries_precede_failed_backlog_with_deterministic_ties(app):
+    with app.app_context():
+        old = datetime(2026, 10, 16, tzinfo=UTC)
+        for index in range(105):
+            db.session.add(FlowDelivery(
+                id=f"generated-failed-{index:03}", event="projects_v2_item", action="edited",
+                body_sha256=f"{index:064x}", body=b'{"changes":["generated-invalid"]}', received_at=old,
+                status="failed", attempts=3,
+            ))
+        for identity in ["generated-pending-b", "generated-pending-a"]:
+            encoded = json.dumps(payload()).encode()
+            db.session.add(FlowDelivery(
+                id=identity, event="projects_v2_item", action="edited",
+                body_sha256=hashlib.sha256(encoded).hexdigest(), body=encoded,
+                received_at=old + timedelta(days=1), status="pending", attempts=0,
+            ))
+        db.session.commit()
+        assert process_deliveries(limit=1) == {"processed": 1, "failed": 0}
+        assert db.session.get(FlowDelivery, "generated-pending-a").status == "processed"
+        assert db.session.get(FlowDelivery, "generated-pending-b").status == "pending"
+        assert process_deliveries(limit=1) == {"processed": 1, "failed": 0}
+        assert db.session.get(FlowDelivery, "generated-pending-b").status == "processed"
+        assert process_deliveries(limit=1) == {"processed": 0, "failed": 1}
+        assert db.session.get(FlowDelivery, "generated-failed-000").attempts == 4
+        assert db.session.get(FlowDelivery, "generated-failed-001").attempts == 3
+        assert process_deliveries(limit=1, replay="generated-failed-104") == {"processed": 0, "failed": 1}
+        assert db.session.get(FlowDelivery, "generated-failed-104").attempts == 4
 
 
 def test_signature_disabled_misconfigured_content_size_and_login_boundary(app, monkeypatch):

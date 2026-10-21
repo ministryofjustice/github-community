@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
 import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 import { editableRecipe } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
@@ -29,6 +31,41 @@ const chart = (metric = "status", query = "", layout = "column") => ({
 const total = result => result.rows.reduce((sum, row) => sum + row.value, 0);
 const ids = result => [...new Set(result.rows.flatMap(row => row.ids))].sort();
 
+test("Team freshness retains capture/failure/errors while routine staleness belongs in Admin", async () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const start = source.indexOf("async function refreshCollectionHealth()");
+  const end = source.indexOf("\nrefreshCollectionHealth();", start);
+  assert.ok(start >= 0 && end > start);
+  const elements = { "live-freshness": { textContent: "" }, "collection-status": { textContent: "" } };
+  let health = { capturedAt: "generated-capture", stale: true, status: "not_configured", configured: false };
+  let failure;
+  const refresh = runInNewContext(`${source.slice(start, end)}\nrefreshCollectionHealth`, {
+    $: id => elements[id],
+    apiRequest: async () => { if (failure) throw failure; return health; },
+    captureLabel: stamp => `Last updated: ${stamp}`,
+  });
+  await refresh();
+  assert.equal(elements["live-freshness"].textContent, "Last updated: generated-capture");
+  assert.equal(elements["collection-status"].textContent, "Data may be out of date.");
+  health = { ...health, capturedAt: null };
+  await refresh();
+  assert.equal(elements["collection-status"].textContent, "");
+  health = { ...health, capturedAt: "generated-capture", status: "failed" };
+  await refresh();
+  assert.match(elements["collection-status"].textContent, /Latest collection failed/);
+  health = { ...health, status: "complete", configured: true, scheduledStatus: "failed" };
+  await refresh();
+  assert.match(elements["live-freshness"].textContent, /Latest collection failed/);
+  assert.match(elements["collection-status"].textContent, /Scheduled collection: failed.*Data may be out of date/);
+  health = { capturedAt: null, stale: true, status: "failed" };
+  await refresh();
+  assert.equal(elements["live-freshness"].textContent, "No complete capture yet. Latest collection failed.");
+  failure = new Error("Generated API error");
+  await refresh();
+  assert.equal(elements["live-freshness"].textContent, "Last updated unavailable. Generated API error");
+  assert.equal(elements["collection-status"].textContent, "Collection status unavailable. Generated API error");
+});
+
 test("keywords find readable genuine references without changing explicit title filters", () => {
   configureSampleData(dataset());
   for (const keyword of ["synthetic/repository#2", "#2", "Fictional"]) {
@@ -36,9 +73,33 @@ test("keywords find readable genuine references without changing explicit title 
     assert.ok(ids(result).includes("real:2"), keyword);
   }
   assert.equal(buildResult(chart("status", 'source:Genuine title:"synthetic/repository#2"')).sampleSize, 0);
-  assert.deepEqual(ids(buildResult(chart("status", 'source:Genuine title:"real:2"'))), ["real:2"]);
+  assert.equal(buildResult(chart("status", 'source:Genuine title:"real:2"')).sampleSize, 0);
+  assert.deepEqual(ids(buildResult(chart("status", 'source:Genuine title:"FICTIONAL TEST" "#2"'))), ["real:2"]);
+  assert.equal(buildResult(chart("status", 'source:Genuine title:"unmatched" "#2"')).sampleSize, 0);
+  assert.deepEqual(ids(buildResult(chart("status", 'source:Genuine "real:2"'))), ["real:2"]);
   assert.deepEqual(ids(buildResult(chart("status", 'source:Genuine synthetic/repository#2 team:DevX'))), ["real:2"]);
   assert.equal(buildResult(chart("status", 'source:Genuine #2 status:Done')).sampleSize, 0);
+});
+
+test("genuine draft identity stays independent of editable Type for builtin and editable age", () => {
+  const data = dataset();
+  data.realObservations.at(-1).items = [
+    real("1", "TODO", { type: "Task", state: "DRAFT" }),
+    real("2", "TODO", { type: "Issue", state: "DRAFT" }),
+    real("3", "TODO", { type: "DraftIssue" }),
+    real("4", "TODO", { type: "Not set", createdDate: "2026-10-19" }),
+    real("5", "TODO", { archived: true }),
+    real("6", "TODO", { createdDate: "2026-10-20" }),
+  ];
+  configureSampleData(data);
+  for (const layout of ["bar", "column", "line", "area", "stacked-bar", "stacked-column"]) {
+    const builtin = chart("age", "source:Genuine", layout);
+    const original = buildResult(builtin);
+    assert.deepEqual(ids(original), ["real:3", "real:4"]);
+    assert.equal(original.rows.find(row => row.ids.includes("real:4")).value, 0);
+    assert.deepEqual(buildResult(editableRecipe(builtin)).rows, original.rows);
+    assert.equal(original.coverage.excluded, 2);
+  }
 });
 
 test("custom recipes retain all built-in mixed-source coverage, cutoff and missing-history gates", () => {

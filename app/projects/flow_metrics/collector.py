@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from copy import deepcopy
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -17,6 +18,7 @@ from app.projects.flow_metrics.db_models import (
     FlowCollectionRun,
     FlowSnapshot,
 )
+from app.projects.flow_metrics.locking import lock_collection
 from app.shared.config.app_config import app_config
 from app.shared.database import db
 from app.shared.services.github_app_auth_service import get_github_app_auth_headers
@@ -333,13 +335,20 @@ def collect(client=None):
     db.session.add(run)
     db.session.commit()
     try:
-        # Hold the database row lock across fetching and publication on every host.
+        lock_collection()
+        board = db.session.execute(
+            select(FlowBoard).where(FlowBoard.id == BOARD_ID)
+            .execution_options(populate_existing=True)
+        ).scalar_one()
+        mapping = deepcopy(board.field_mapping)
+        payload = collect_payload(client or ProjectClient(), mapping)
+        captured_at = datetime.now(UTC)
         board = db.session.execute(
             select(FlowBoard).where(FlowBoard.id == BOARD_ID)
             .with_for_update().execution_options(populate_existing=True)
         ).scalar_one()
-        payload = collect_payload(client or ProjectClient(), board.field_mapping)
-        captured_at = datetime.now(UTC)
+        if board.field_mapping != mapping:
+            raise CollectionError("field_mapping_changed_during_collection")
         return publish(run, payload, captured_at)
     except (KeyError, TypeError, ValueError, CollectionError, SQLAlchemyError) as error:
         db.session.rollback()

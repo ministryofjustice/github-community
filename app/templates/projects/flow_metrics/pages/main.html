@@ -12,19 +12,17 @@
      workspace, blue/orange series, persistent chart navigation and an inline
      configuration preview. Dataset provenance remains in API/export metadata. -->
 {{ govukBreadcrumbs({"items": [{"text": "Home", "href": "/"}, {"text": "Flow Metrics"}]}) }}
-<div class="flow-heading">
-  <h1 class="govuk-heading-xl">{{ workspace_name }}</h1>
-</div>
-<div class="flow-freshness-row">
-  <p id="live-freshness" class="govuk-body-s flow-status-message" role="status">Checking real board collection...</p>
+<noscript><p class="govuk-body">Flow Metrics needs JavaScript to display charts and tables.</p></noscript>
+<div class="flow-navigation">
+  <div class="flow-tabs" role="tablist" aria-label="Flow Metrics views">
+    <button id="team-tab" class="flow-tab" role="tab" aria-selected="true" aria-controls="team-panel" tabindex="0">Team</button>
+    <button id="admin-tab" class="flow-tab" role="tab" aria-selected="false" aria-controls="admin-panel" tabindex="-1">Admin</button>
+  </div>
   <button id="open-guide" class="flow-link-button" type="button" aria-haspopup="dialog">How-to guide</button>
 </div>
-<noscript><p class="govuk-body">Flow Metrics needs JavaScript to display charts and tables.</p></noscript>
-<div class="flow-tabs" role="tablist" aria-label="Flow Metrics views">
-  <button id="team-tab" class="flow-tab" role="tab" aria-selected="true" aria-controls="team-panel" tabindex="0">Team</button>
-  <button id="admin-tab" class="flow-tab" role="tab" aria-selected="false" aria-controls="admin-panel" tabindex="-1">Admin</button>
-</div>
 <section id="team-panel" role="tabpanel" aria-labelledby="team-tab" data-live="{{ 'true' if live else 'false' }}">
+  <h1 class="govuk-heading-l"><a id="data-source" class="govuk-link" href="{{ source_url }}">{{ workspace_name }} board</a></h1>
+  <p id="live-freshness" class="govuk-body-s flow-status-message" role="status">Last updated unavailable.</p>
   <div class="flow-workspace">
     <div class="flow-sidebar-toolbar flow-sidebar-heading">
       <h2 class="govuk-heading-m">Charts</h2>
@@ -107,7 +105,6 @@
             <button id="delete-chart" class="flow-link-button" type="button">Delete chart</button>
           </div>
         </form>
-        <p id="data-source" class="govuk-body-s">Source: <a class="govuk-link" href="{{ source_url }}">{{ workspace_name }} board</a></p>
         <div class="flow-chart-toolbar">
           <div class="flow-view-buttons" role="group" aria-label="Result view">
             <button id="show-chart" class="flow-view-button" type="button" aria-pressed="true">Chart</button>

@@ -409,7 +409,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
         return Array.isArray(ticket[field]) ? ticket[field].includes(value) : ticket[field] === value;
       }
       if (field === "repository" || field === "objective") return ticket[field] === value;
-      if (field === "title") return `${ticket.id} ${ticket.title}`.toLowerCase().includes(value.toLowerCase());
+      if (field === "title") return ticket.title.toLowerCase().includes(value.toLowerCase());
       if (field === "keyword") return `${ticket.id} ${ticket.title} ${ticketReference(ticket)}`.toLowerCase().includes(value.toLowerCase());
       if (field === "is") return (stateAt(ticket, to)?.status === "Done"
         || (ticket.provenance === "real" && ["CLOSED", "MERGED"].includes(ticket.state))) === (value === "closed");

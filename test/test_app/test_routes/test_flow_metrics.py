@@ -34,7 +34,13 @@ def test_flow_metrics_uses_existing_signed_in_session(client):
         response = client.get("/flow-metrics/")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Sample data" not in html[html.index('<div class="flow-heading">'):html.index('id="flow-message"')]
+    assert "Sample data" not in html[:html.index('id="flow-message"')]
+    assert html.index('role="tablist"') < html.index('id="data-source"')
+    assert 'id="data-source" class="govuk-link"' in html
+    assert '<h1 class="govuk-heading-l">Team boards</h1>' in html
+    assert html.count('id="data-source"') == 1
+    assert html.index('id="collection-status"') > html.index('id="admin-panel"')
+    assert html.index('id="live-freshness"') > html.index('id="team-panel"')
     assert "Team boards" in html
     assert "Add team board" in html
     assert "Collector health" not in html
@@ -109,7 +115,7 @@ def test_workspace_heading_title_and_source_are_configured(client, monkeypatch):
         "FLOW_METRICS_SOURCE_URL", "https://github.com/orgs/example/projects/42"
     )
     html = client.get("/flow-metrics/").get_data(as_text=True)
-    assert '<h1 class="govuk-heading-xl">Cloud Platform</h1>' in html
+    assert '<h1 class="govuk-heading-l"><a id="data-source" class="govuk-link" href="https://github.com/orgs/example/projects/42">Cloud Platform board</a></h1>' in html
     assert "Cloud Platform - Flow Metrics" in html
     assert 'href="https://github.com/orgs/example/projects/42"' in html
     assert "Cloud Platform board</a>" in html

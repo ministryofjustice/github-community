@@ -1,16 +1,15 @@
 .flow-heading, .flow-chart-heading, .flow-sidebar-heading, .flow-chart-toolbar,
 .flow-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .flow-heading h1 { margin-bottom: 12px; }
-.flow-freshness-row { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; }
-.flow-freshness-row #live-freshness { margin-bottom: 0; }
-.flow-freshness-row #open-guide { margin-left: auto; flex-shrink: 0; }
+.flow-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 2px solid #1d70b8; margin: 0 0 24px; }
+.flow-navigation #open-guide { margin-left: auto; font-size: 16px; text-align: right; }
 .flow-heading .govuk-tag { margin-bottom: 12px; }
 .flow-notice { padding: 16px 20px; background: #e8f1f8; border: 1px solid #b1b4b6; line-height: 1.5; }
 .flow-message { margin: -8px 0 16px; color: #505a5f; text-align: left; }
 .flow-message:empty { margin: 0; }
 .flow-status-message:empty { display: none; }
 .flow-message[data-error="true"] { padding: 12px; border: 2px solid #0b0c0c; color: #0b0c0c; }
-.flow-tabs { display: flex; border-bottom: 2px solid #1d70b8; margin: 28px 0 24px; gap: 6px; }
+.flow-tabs { display: flex; gap: 6px; flex-shrink: 0; }
 .flow-tab { font: bold 19px "GDS Transport", arial, sans-serif; background: #f3f2f1; color: #0b0c0c; border: 0; padding: 14px 20px; cursor: pointer; }
 .flow-tab[aria-selected="true"] { background: #1d70b8; color: #fff; }
 .flow-tab span { font-size: 14px; font-weight: normal; display: block; margin-top: 4px; }

@@ -299,7 +299,9 @@ def event_fragment(delivery):
 
 def process_deliveries(limit=100, replay=None):
     """Transactional per-delivery worker, safe to run concurrently or after crashes."""
-    query = select(FlowDelivery.id).order_by(FlowDelivery.received_at, FlowDelivery.id)
+    query = select(FlowDelivery.id).order_by(
+        (FlowDelivery.status != "pending"), FlowDelivery.received_at, FlowDelivery.id,
+    )
     if replay:
         query = query.where(FlowDelivery.id == replay)
     else:

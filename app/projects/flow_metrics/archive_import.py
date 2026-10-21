@@ -12,9 +12,16 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.projects.flow_metrics.collector import BOARD_ID, MAX_ITEMS
-from app.projects.flow_metrics.datasets import retain_evidence, validate_evidence
-from app.projects.flow_metrics.db_models import FlowBoard, FlowDataset, FlowEvidence
-from app.projects.flow_metrics.workspace import evidence_payload, observation_contract
+from app.projects.flow_metrics.datasets import (
+    ObservationConflict,
+    check_observation_identity,
+    retain_evidence,
+    stored_evidence_identities,
+    validate_evidence,
+)
+from app.projects.flow_metrics.db_models import FlowBoard
+from app.projects.flow_metrics.locking import lock_collection
+from app.projects.flow_metrics.workspace import validate_observation
 from app.shared.database import db
 
 logger = logging.getLogger(__name__)
@@ -123,54 +130,23 @@ def read_bundle(directory, since):
 
 
 def import_archives(directory, since, dry_run=False):
-    """No daily replacement or event synthesis; collectors share the board lock."""
+    """Append atomically; collectors/importers share a separate writer mutex."""
     try:
         documents, ignored = read_bundle(directory, since)
         query = select(FlowBoard).where(FlowBoard.id == BOARD_ID)
         if not dry_run:
-            query = query.with_for_update().execution_options(populate_existing=True)
+            lock_collection()
+            query = query.execution_options(populate_existing=True)
         board = db.session.execute(query).scalar_one_or_none()
         if board is None and not dry_run:
             raise ArchiveImportError(
                 "Run flow-metrics init before importing private captures."
             )
         mapping = board.field_mapping if board else {}
-        dataset = db.session.get(FlowDataset, BOARD_ID)
-        if dataset is not None and dataset.provenance != "real":
-            raise ValueError("Real dataset provenance mismatch.")
-        existing_rows = db.session.scalars(
-            select(FlowEvidence).where(FlowEvidence.dataset_id == BOARD_ID)
-        ).all()
-        identities = {}
-        for row in existing_rows:
-            checksum, source, observed = validate_evidence(row.document)
-            if (
-                checksum != row.id
-                or source != row.source
-                or (
-                    row.observed_at.replace(tzinfo=UTC)
-                    if row.observed_at.tzinfo is None
-                    else row.observed_at
-                )
-                != observed
-            ):
-                raise ValueError("Stored evidence integrity failure.")
-            if (source, observed.astimezone(UTC)) in identities and identities[
-                (source, observed.astimezone(UTC))
-            ] != checksum:
-                raise ValueError("Conflicting stored observations.")
-            identities[(source, observed.astimezone(UTC))] = checksum
-        existing = {row.id for row in existing_rows}
+        identities, existing = stored_evidence_identities()
         for checksum, source, observed, document in documents:
-            identity = (source, observed.astimezone(UTC))
-            if identity in identities and identities[identity] != checksum:
-                raise ArchiveImportError(
-                    "Capture conflicts with stored observation; nothing imported."
-                )
-            payload = evidence_payload(document, source, mapping)
-            observation_contract(
-                payload, observed, source, checksum, payload.get("mapping", {})
-            )
+            check_observation_identity(identities, checksum, source, observed)
+            validate_observation(document, source, observed, checksum, mapping)
         added = sum(checksum not in existing for checksum, *_ in documents)
         if not dry_run:
             for _, _, _, document in documents:
@@ -178,6 +154,9 @@ def import_archives(directory, since, dry_run=False):
             db.session.commit()
         else:
             db.session.rollback()
+    except ObservationConflict as error:
+        db.session.rollback()
+        raise ArchiveImportError(str(error)) from None
     except ArchiveImportError:
         db.session.rollback()
         raise

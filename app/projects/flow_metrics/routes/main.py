@@ -25,6 +25,7 @@ from app.projects.flow_metrics.db_models import (
     FlowCollectionRun,
     FlowDelivery,
     FlowEvent,
+    FlowEvidence,
 )
 from app.projects.flow_metrics.reconciliation import reconcile_command
 from app.projects.flow_metrics.service import (
@@ -57,38 +58,56 @@ def index():
 @requires_auth
 def collection_health():
     """Expose aggregate collection health, never real items, in either UI mode."""
-    if os.getenv("FLOW_METRICS_ENABLED") != "true":
-        response = jsonify(capturedAt=None, status="not_configured", stale=True)
-    else:
-        try:
-            latest = observation_at()
-            run = db.session.execute(
-                select(FlowCollectionRun)
-                .where(FlowCollectionRun.board_id == BOARD_ID)
-                .order_by(FlowCollectionRun.started_at.desc()).limit(1)
-            ).scalar_one_or_none()
-            scheduled_status = None
-            health_path = os.getenv("FLOW_METRICS_COLLECTION_HEALTH_FILE")
-            if health_path:
-                try:
-                    health = json.loads(Path(health_path).read_text())
-                    scheduled_status = health["status"]
-                except FileNotFoundError:
-                    scheduled_status = "not_run"
-                except (OSError, ValueError, KeyError):
-                    current_app.logger.error("Flow Metrics scheduler health could not be read.")
-                    scheduled_status = "unavailable"
-            response = jsonify(
-                capturedAt=latest.captured_at.isoformat() if latest else None,
-                status=run.status if run else "not_run",
-                scheduledStatus=scheduled_status,
-                stale=not latest or latest.captured_date < datetime.now(UTC).date(),
+    try:
+        latest = observation_at()
+        evidence_at = db.session.scalar(
+            select(func.max(FlowEvidence.observed_at)).where(
+                FlowEvidence.dataset_id == BOARD_ID
             )
-        except SQLAlchemyError:
-            db.session.rollback()
-            current_app.logger.error("Flow Metrics collection health database unavailable.")
-            response = jsonify(error="Real board collection status is unavailable.")
-            response.status_code = 503
+        )
+        captured_at = max(
+            (
+                stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp
+                for stamp in (latest.captured_at if latest else None, evidence_at)
+                if stamp
+            ),
+            default=None,
+        )
+        run = db.session.execute(
+            select(FlowCollectionRun)
+            .where(FlowCollectionRun.board_id == BOARD_ID)
+            .order_by(FlowCollectionRun.started_at.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        scheduled_status = None
+        health_path = os.getenv("FLOW_METRICS_COLLECTION_HEALTH_FILE")
+        if health_path:
+            try:
+                health = json.loads(Path(health_path).read_text())
+                scheduled_status = health["status"]
+            except FileNotFoundError:
+                scheduled_status = "not_run"
+            except (OSError, ValueError, KeyError):
+                current_app.logger.error(
+                    "Flow Metrics scheduler health could not be read."
+                )
+                scheduled_status = "unavailable"
+        response = jsonify(
+            capturedAt=captured_at.isoformat() if captured_at else None,
+            status=run.status
+            if run
+            else "not_run"
+            if os.getenv("FLOW_METRICS_ENABLED") == "true"
+            else "not_configured",
+            scheduledStatus=scheduled_status,
+            stale=not captured_at or captured_at.date() < datetime.now(UTC).date(),
+            configured=os.getenv("FLOW_METRICS_ENABLED") == "true",
+        )
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.error("Flow Metrics collection health database unavailable.")
+        response = jsonify(error="Real board collection status is unavailable.")
+        response.status_code = 503
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -154,15 +173,23 @@ def workspace():
     if not board:
         return jsonify(error="Initialise the Flow Metrics database before use."), 503
     session.setdefault("flow_csrf", secrets.token_urlsafe(32))
-    response = jsonify(
+    payload = dict(
         charts=board.charts,
         revision=board.chart_revision,
         csrf=session["flow_csrf"],
-        **({**metadata(), "datasetId": BOARD_ID, "provenance": "real"} if live else {
-            "dataset": exploratory_dataset(),
-            "datasetId": SAMPLE_ID,
-            "provenance": "mixed",
-        }),
+        **(
+            {**metadata(), "datasetId": BOARD_ID, "provenance": "real"}
+            if live
+            else {
+                "dataset": exploratory_dataset(),
+                "datasetId": SAMPLE_ID,
+                "provenance": "mixed",
+            }
+        ),
+    )
+    response = current_app.response_class(
+        current_app.json.dumps(payload, separators=(",", ":")) + "\n",
+        mimetype="application/json",
     )
     response.headers["Cache-Control"] = "no-store"
     return response

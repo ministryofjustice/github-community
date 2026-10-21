@@ -5,28 +5,34 @@ import multiprocessing
 import os
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 from flask import Flask
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.projects.flow_metrics.archive import export_snapshot
-from app.projects.flow_metrics.archive_import import import_archives
+from app.projects.flow_metrics.archive_import import ArchiveImportError, import_archives
 from app.projects.flow_metrics.collector import (
     BOARD_ID,
     CollectionError,
     collect,
     publish,
 )
+from app.projects.flow_metrics.datasets import retain_evidence
 from app.projects.flow_metrics.db_models import (
     FlowBoard,
     FlowCollectionRun,
+    FlowDataset,
+    FlowDelivery,
+    FlowEvent,
     FlowEvidence,
     FlowSnapshot,
 )
+from app.projects.flow_metrics.webhooks import process_deliveries
 from app.shared.database import db
 
 
@@ -51,7 +57,9 @@ def generated_payload(name):
         "fields": [{"id": "generated-status", "name": "Status"}],
         "items": [{
             "id": f"generated-{name}",
-            "content": {"__typename": "Issue", "title": "Generated concurrency test"},
+            "archived": False,
+            "content": {"__typename": "Issue", "title": "Generated concurrency test",
+                        "createdAt": "1999-01-01T00:00:00Z", "state": "OPEN"},
             "fields": [],
         }],
     }
@@ -84,11 +92,54 @@ def worker(uri, schema, name, entered, release, output, fail):
         output.put((name, str(error)))
 
 
-def import_worker(uri, schema, name, directory, output):
+def import_worker(uri, schema, name, directory, output, single=False, entered=None, release=None, fail=False):
+    def retain(document):
+        if entered is not None:
+            entered.set()
+            if not release.wait(15):
+                raise SQLAlchemyError("generated_test_timeout")
+        if fail:
+            raise SQLAlchemyError("generated_import_failure")
+        return retain_evidence(document)
+
     app = application(uri, schema, name)
-    with app.app_context():
-        summary = import_archives(directory, datetime(2000, 1, 1, tzinfo=UTC).date())
-        output.put((name, summary["new"]))
+    with app.app_context(), patch(
+        "app.projects.flow_metrics.archive_import.retain_evidence", side_effect=retain,
+    ), patch(
+        "app.projects.flow_metrics.datasets.retain_evidence", side_effect=retain,
+    ):
+        if single:
+            from app.projects.flow_metrics.datasets import import_capture_command
+            result = app.test_cli_runner().invoke(
+                import_capture_command, ["--file", str(next(Path(directory).glob("*.json")))],
+            )
+            assert result.exit_code == (1 if fail else 0), result.output
+            output.put((name, "generated_import_failure" if fail else 1))
+        else:
+            try:
+                summary = import_archives(directory, datetime(2000, 1, 1, tzinfo=UTC).date())
+                output.put((name, summary["new"]))
+            except ArchiveImportError:
+                if not fail:
+                    raise
+                output.put((name, "generated_import_failure"))
+
+
+def delivery_worker(uri, schema, name, entered, release, output):
+    from app.projects.flow_metrics.webhooks import event_fragment
+
+    def fragment(delivery):
+        if entered is not None:
+            entered.set()
+            if not release.wait(15):
+                raise ValueError("generated_test_timeout")
+        return event_fragment(delivery)
+
+    app = application(uri, schema, name)
+    with app.app_context(), patch(
+        "app.projects.flow_metrics.webhooks.event_fragment", side_effect=fragment,
+    ):
+        output.put((name, process_deliveries()))
 
 
 @pytest.fixture
@@ -198,7 +249,8 @@ def test_processes_serialize_collection_and_recover_after_failure(isolated_postg
         output.close()
 
 
-def test_private_import_waits_for_collector_lock_and_preserves_newer_capture(isolated_postgres, tmp_path):
+@pytest.mark.parametrize("single", [False, True])
+def test_private_import_waits_for_collector_lock_and_preserves_newer_capture(isolated_postgres, tmp_path, single):
     uri, schema, engine, app = isolated_postgres
     with app.app_context():
         snapshot = FlowSnapshot(
@@ -227,7 +279,7 @@ def test_private_import_waits_for_collector_lock_and_preserves_newer_capture(iso
             uri, schema, collector_name, entered, release, output, "",
         )),
         context.Process(target=import_worker, args=(
-            uri, schema, importer_name, str(tmp_path), output,
+            uri, schema, importer_name, str(tmp_path), output, single,
         )),
     ]
     try:
@@ -245,7 +297,7 @@ def test_private_import_waits_for_collector_lock_and_preserves_newer_capture(iso
             if blocked:
                 break
             time.sleep(0.02)
-        assert blocked, "Importer must wait for collector's board row lock."
+        assert blocked, "Importer must wait for the collector's advisory mutex."
         with app.app_context():
             assert db.session.scalar(select(FlowEvidence.id).limit(1)) is None
         release.set()
@@ -265,6 +317,199 @@ def test_private_import_waits_for_collector_lock_and_preserves_newer_capture(iso
     finally:
         release.set()
         for process in processes:
+            if process.pid is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join(10)
+        output.close()
+
+
+@pytest.mark.parametrize("change_mapping", [False, True])
+def test_chart_save_during_fetch_finishes_and_mapping_race_fails_explicitly(isolated_postgres, change_mapping):
+    uri, schema, _engine, app = isolated_postgres
+    context = multiprocessing.get_context("spawn")
+    entered, release = context.Event(), context.Event()
+    output = context.Queue()
+    name = f"{schema}_slow"
+    process = context.Process(target=worker, args=(uri, schema, name, entered, release, output, ""))
+    try:
+        process.start()
+        assert entered.wait(10)
+        # Independent DB connection with an actual server-side timeout: a chart-row
+        # lock across fetching would fail here instead of hanging the test.
+        with app.app_context():
+            db.session.execute(text("SET LOCAL lock_timeout = '1500ms'"))
+            changes = {"charts": [{"id": "generated-concurrent-chart"}], "chart_revision": 1}
+            if change_mapping:
+                changes["field_mapping"] = {"status": "generated-changed-mapping"}
+            updated = db.session.execute(
+                update(FlowBoard).where(FlowBoard.id == BOARD_ID, FlowBoard.chart_revision == 0)
+                .values(**changes)
+            )
+            assert updated.rowcount == 1
+            db.session.commit()
+        release.set()
+        assert output.get(timeout=15) == (
+            name, "field_mapping_changed_during_collection" if change_mapping else 1,
+        )
+        process.join(10)
+        assert process.exitcode == 0
+        with app.app_context():
+            board = db.session.get(FlowBoard, BOARD_ID)
+            assert board.chart_revision == 1 and board.charts == [{"id": "generated-concurrent-chart"}]
+            if change_mapping:
+                assert board.field_mapping == {"status": "generated-changed-mapping"}
+                assert len(db.session.scalars(select(FlowSnapshot)).all()) == 1
+                with patch("app.projects.flow_metrics.collector.collect_payload",
+                           return_value=generated_payload("mapping-retry")) as fetch:
+                    assert collect(object()) == 1
+                assert fetch.call_args.args[1] == {"status": "generated-changed-mapping"}
+                latest = db.session.scalar(select(FlowSnapshot).order_by(FlowSnapshot.captured_at.desc()))
+                assert latest.payload["mapping"]["status"] == "generated-changed-mapping"
+            else:
+                assert len(db.session.scalars(select(FlowSnapshot)).all()) == 2
+    finally:
+        release.set()
+        if process.pid is not None:
+            if process.is_alive():
+                process.terminate()
+            process.join(10)
+        output.close()
+
+
+def test_disconnected_collector_releases_mutex(isolated_postgres):
+    uri, schema, _engine, _app = isolated_postgres
+    context = multiprocessing.get_context("spawn")
+    entered, release = context.Event(), context.Event()
+    output = context.Queue()
+    first = context.Process(target=worker, args=(uri, schema, "generated-crash", entered, release, output, ""))
+    release_next = context.Event()
+    entered_next = context.Event()
+    release_next.set()
+    second = context.Process(target=worker, args=(
+        uri, schema, "generated-after-crash", entered_next, release_next, output, "",
+    ))
+    try:
+        first.start()
+        assert entered.wait(10)
+        first.terminate()
+        first.join(10)
+        second.start()
+        assert output.get(timeout=15) == ("generated-after-crash", 1)
+        second.join(10)
+        assert second.exitcode == 0
+    finally:
+        for process in (first, second):
+            if process.pid is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join(10)
+        output.close()
+
+
+@pytest.mark.parametrize("single", [False, True])
+@pytest.mark.parametrize("fail", [False, True])
+def test_collector_waits_for_import_and_import_rollback_releases_mutex(isolated_postgres, tmp_path, single, fail):
+    uri, schema, engine, app = isolated_postgres
+    with app.app_context():
+        prior = db.session.get(FlowSnapshot, "generated-prior")
+        prior.payload = {
+            "fields": [], "items": [{
+                "id": "generated-valid-import", "archived": False, "fields": [],
+                "content": {"__typename": "Issue", "title": "Generated",
+                            "createdAt": "1999-01-01T00:00:00Z", "state": "OPEN"},
+            }],
+        }
+        db.session.commit()
+        export_snapshot(prior, tmp_path)
+    context = multiprocessing.get_context("spawn")
+    entered, release, fetched, fetch_release = [context.Event() for _ in range(4)]
+    fetch_release.set()
+    output = context.Queue()
+    importer = context.Process(target=import_worker, args=(
+        uri, schema, "generated-held-import", str(tmp_path), output, single, entered, release, fail,
+    ))
+    collector = context.Process(target=worker, args=(
+        uri, schema, f"{schema}_waiting", fetched, fetch_release, output, "",
+    ))
+    try:
+        importer.start()
+        assert entered.wait(10)
+        with app.app_context():
+            db.session.execute(text("SET LOCAL lock_timeout = '1500ms'"))
+            db.session.execute(update(FlowBoard).where(FlowBoard.id == BOARD_ID).values(chart_revision=1))
+            db.session.commit()
+        collector.start()
+        deadline = time.monotonic() + 10
+        blocked = False
+        while time.monotonic() < deadline:
+            with engine.connect() as connection:
+                blocked = connection.scalar(text(
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                    "WHERE application_name = :name AND wait_event_type = 'Lock')"
+                ), {"name": f"{schema}_waiting"})
+            if blocked:
+                break
+            time.sleep(0.02)
+        assert blocked and not fetched.is_set()
+        release.set()
+        assert dict(output.get(timeout=15) for _ in range(2)) == {
+            "generated-held-import": "generated_import_failure" if fail else 1,
+            f"{schema}_waiting": 1,
+        }
+        for process in (importer, collector):
+            process.join(10)
+            assert process.exitcode == 0
+        with app.app_context():
+            assert len(db.session.scalars(select(FlowEvidence)).all()) == (1 if fail else 2)
+            assert db.session.get(FlowBoard, BOARD_ID).chart_revision == 1
+    finally:
+        release.set()
+        for process in (importer, collector):
+            if process.pid is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join(10)
+        output.close()
+
+
+def test_delivery_workers_skip_locked_and_publish_each_delivery_once(isolated_postgres):
+    uri, schema, _engine, app = isolated_postgres
+    with app.app_context():
+        db.session.add(FlowDataset(id=BOARD_ID, provenance="real", content_sha256="", payload={}))
+        db.session.commit()
+        db.session.add_all([
+            FlowDelivery(
+                id=f"generated-delivery-{index}", event="projects_v2_item",
+                action="edited", body_sha256=f"{index:064x}", body=b"{}",
+                received_at=datetime(2026, 10, 16, tzinfo=UTC),
+                status="pending", attempts=0,
+            )
+            for index in range(2)
+        ])
+        db.session.commit()
+    context = multiprocessing.get_context("spawn")
+    entered, release = context.Event(), context.Event()
+    output = context.Queue()
+    first = context.Process(target=delivery_worker, args=(uri, schema, "generated-worker-a", entered, release, output))
+    second = context.Process(target=delivery_worker, args=(uri, schema, "generated-worker-b", None, None, output))
+    try:
+        first.start()
+        assert entered.wait(10)
+        second.start()
+        assert output.get(timeout=15) == ("generated-worker-b", {"processed": 1, "failed": 0})
+        release.set()
+        assert output.get(timeout=15) == ("generated-worker-a", {"processed": 1, "failed": 0})
+        for process in (first, second):
+            process.join(10)
+            assert process.exitcode == 0
+        with app.app_context():
+            assert len(db.session.scalars(select(FlowEvent)).all()) == 2
+            assert all(delivery.attempts == 1 and delivery.status == "processed"
+                       for delivery in db.session.scalars(select(FlowDelivery)))
+    finally:
+        release.set()
+        for process in (first, second):
             if process.pid is not None:
                 if process.is_alive():
                     process.terminate()

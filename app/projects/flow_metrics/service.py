@@ -478,7 +478,13 @@ def result(chart):
             **empty,
             "unavailable": "No complete board observation has been collected. Run the collector first.",
         }
-    if chart["metric"] == "custom" and (chart["y"] in CALCULATED_MEASURES or chart["x"] in {"reporting", "completionDate", "statusBand", "durationBand", "ticket"}):
+    individual_age = (
+        chart["metric"] == "custom" and chart["y"] == "itemAge"
+        and chart["x"] == "ticket" and not chart["group"]
+        and chart.get("calculation", {}).get("aggregation", "individual") == "individual"
+        and not chart.get("calculation", {}).get("additional")
+    )
+    if chart["metric"] == "custom" and not individual_age and (chart["y"] in CALCULATED_MEASURES or chart["x"] in {"reporting", "completionDate", "statusBand", "durationBand", "ticket"}):
         return {**empty, "unavailable": "This calculated recipe requires the combined event workspace; genuine verified historical coverage is not established."}
     if chart["layout"] in {"scatter", "histogram"} and chart["metric"] != "cycle":
         return {
@@ -525,9 +531,12 @@ def result(chart):
             )
             or (field in METADATA_FIELDS and value not in item[field])
             or (
-                field in {"title", "keyword"}
-                and value.casefold()
-                not in f"{item['reference']} {item['title']}".casefold()
+                field == "title"
+                and value.casefold() not in item["title"].casefold()
+            )
+            or (
+                field == "keyword"
+                and value.casefold() not in f"{item['id']} {item['reference']} {item['title']}".casefold()
             )
             or (
                 field == "is"
@@ -539,7 +548,7 @@ def result(chart):
         item["created"] = (date.fromisoformat(item["createdDate"]) - start).days
         item["observedStatus"] = item["status"]
         items.append(item)
-    if chart["metric"] == "age" or (
+    if chart["metric"] == "age" or individual_age or (
         chart["metric"] == "custom" and chart["y"] == "averageAge"
     ):
         items = [
@@ -547,7 +556,7 @@ def result(chart):
             for item in items
             if item["state"] not in {"CLOSED", "MERGED"} and item["status"] != "Done"
         ]
-        if any(item["type"] == "DraftIssue" for item in items):
+        if any(item["state"] == "DRAFT" for item in items):
             return {
                 **empty,
                 "unavailable": "Age includes draft items whose conversion history is not established. Filter to repository issues or pull requests.",
@@ -584,7 +593,7 @@ def result(chart):
         }
 
     groups = defaultdict(list)
-    if chart["metric"] == "age":
+    if chart["metric"] == "age" or individual_age:
         series = [
             {
                 "name": "Work item age",

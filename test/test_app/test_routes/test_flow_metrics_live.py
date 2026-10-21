@@ -368,6 +368,195 @@ def test_archive_bundle_external_completeness_checks(app, tmp_path, failure):
         assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 0
 
 
+@pytest.mark.parametrize("failure", ["empty_content", "missing_creation", "external_archived", "database"])
+def test_single_capture_import_validates_readmodel_and_rolls_back(app, tmp_path, failure, monkeypatch):
+    document = import_document(20)
+    if failure == "empty_content":
+        document["payload"]["items"][0]["content"] = {}
+    elif failure == "missing_creation":
+        del document["payload"]["items"][0]["content"]["createdAt"]
+    elif failure == "external_archived":
+        document = external_import_document()
+        del document["items"][0]["isArchived"]
+    path = tmp_path / "generated-external.json" if failure == "external_archived" else write_import_archive(tmp_path, document)
+    if failure == "external_archived":
+        path.write_text(json.dumps(document))
+    with app.app_context():
+        initialise_sample(sample_seed())
+        from app.projects.flow_metrics.workspace import exploratory_dataset
+        before = exploratory_dataset()
+    if failure == "database":
+        def fail_after_flush(document):
+            retain_evidence(document)
+            db.session.flush()
+            raise SQLAlchemyError("private generated diagnostic")
+
+        monkeypatch.setattr("app.projects.flow_metrics.datasets.retain_evidence", fail_after_flush)
+    result = app.test_cli_runner().invoke(args=["flow-metrics", "import-capture", "--file", str(path)])
+    assert result.exit_code != 0 and "nothing imported" in result.output
+    assert "private generated diagnostic" not in result.output
+    with app.app_context():
+        assert db.session.get(FlowDataset, BOARD_ID) is None
+        assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 0
+        assert exploratory_dataset() == before
+        assert db.session.get(FlowBoard, BOARD_ID).charts == seeds()
+
+
+def test_single_capture_valid_import_and_rerun_preserve_sources(app, tmp_path):
+    path = write_import_archive(tmp_path, import_document(20))
+    runner = app.test_cli_runner()
+    for _ in range(2):
+        result = runner.invoke(args=["flow-metrics", "import-capture", "--file", str(path)])
+        assert result.exit_code == 0, result.output
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 1
+        assert db.session.get(FlowSnapshot, "snapshot-test").payload == payload()
+
+
+@pytest.mark.parametrize("offset", [False, True])
+def test_single_capture_conflict_rejection_preserves_entire_workspace(app, tmp_path, offset):
+    from app.projects.flow_metrics.workspace import exploratory_dataset
+
+    original = import_document(20)
+    runner = app.test_cli_runner()
+    with app.app_context():
+        initialise_sample(sample_seed())
+    first_path = write_import_archive(tmp_path, original)
+    assert runner.invoke(args=["flow-metrics", "import-capture", "--file", str(first_path)]).exit_code == 0
+    with app.app_context():
+        before = exploratory_dataset()
+        before_metadata = metadata()
+        before_charts = [(b.id, copy.deepcopy(b.charts), b.chart_revision, copy.deepcopy(b.field_mapping))
+                         for b in db.session.scalars(select(FlowBoard))]
+        before_evidence = [(e.id, copy.deepcopy(e.document)) for e in db.session.scalars(select(FlowEvidence))]
+    changed = copy.deepcopy(original)
+    changed["payload"]["items"][0]["content"]["title"] = "Generated contradictory observation"
+    if offset:
+        changed["captured_at"] = "2026-10-20T13:00:00+01:00"
+    conflicting = write_import_archive(tmp_path, changed)
+    rejected = runner.invoke(args=["flow-metrics", "import-capture", "--file", str(conflicting)])
+    assert rejected.exit_code == 1
+    assert "conflicts with stored observation; nothing imported" in rejected.output
+    # Key order and whitespace do not change the canonical evidence checksum.
+    reordered = tmp_path / "generated-reordered.json"
+    reordered.write_text(json.dumps(dict(reversed(list(original.items()))), indent=3))
+    assert runner.invoke(args=["flow-metrics", "import-capture", "--file", str(reordered)]).exit_code == 0
+    with app.app_context():
+        assert exploratory_dataset() == before
+        assert metadata() == before_metadata
+        assert [(b.id, b.charts, b.chart_revision, b.field_mapping)
+                for b in db.session.scalars(select(FlowBoard))] == before_charts
+        assert [(e.id, e.document) for e in db.session.scalars(select(FlowEvidence))] == before_evidence
+
+
+def test_single_capture_distinct_source_or_time_remains_valid(app, tmp_path):
+    runner = app.test_cli_runner()
+    published = import_document(18)
+    external = external_import_document()
+    external["collection_finished_at"] = published["captured_at"]
+    documents = [published, external, import_document(18, 13)]
+    for index, document in enumerate(documents):
+        path = tmp_path / f"generated-{index}.json"
+        path.write_text(json.dumps(document))
+        imported = runner.invoke(args=["flow-metrics", "import-capture", "--file", str(path)])
+        assert imported.exit_code == 0, imported.output
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 3
+
+
+def test_invalid_single_capture_preserves_preexisting_combined_workspace(app, tmp_path):
+    from app.projects.flow_metrics.workspace import exploratory_dataset
+
+    with app.app_context():
+        initialise_sample(sample_seed())
+        retain_evidence(import_document(18))
+        db.session.commit()
+        before = exploratory_dataset()
+        charts = copy.deepcopy(db.session.get(FlowBoard, BOARD_ID).charts)
+    broken = import_document(20)
+    broken["payload"]["items"][-1]["content"] = {}
+    path = write_import_archive(tmp_path, broken)
+    imported = app.test_cli_runner().invoke(args=["flow-metrics", "import-capture", "--file", str(path)])
+    assert imported.exit_code == 1
+    with app.app_context():
+        assert exploratory_dataset() == before
+        assert db.session.get(FlowBoard, BOARD_ID).charts == charts
+        assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 1
+
+
+@pytest.mark.parametrize("layout", ["bar", "column", "line", "stacked-bar", "stacked-column", "area"])
+def test_real_editable_age_recipe_matches_builtin(app, layout):
+    with app.app_context():
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        data = payload()
+        data["items"][0]["content"]["createdAt"] = "2026-10-16T00:00:00Z"
+        snapshot.payload = data
+        db.session.add(FlowSnapshot(
+            id="generated-earlier-age", board_id=BOARD_ID,
+            captured_date=date(2026, 10, 14), captured_at=datetime(2026, 10, 14, tzinfo=UTC),
+            payload=payload(),
+        ))
+        db.session.commit()
+        builtin = copy.deepcopy(next(chart for chart in seeds() if chart["metric"] == "age"))
+        builtin["layout"] = layout
+        custom = {**builtin, "metric": "custom", "x": "ticket", "y": "itemAge", "group": "",
+                  "calculation": {"version": 1, "aggregation": "individual"}}
+        expected = result(builtin)
+        actual = result(custom)
+        assert not actual["unavailable"]
+        assert actual == expected
+        assert actual["rows"][0]["value"] == 0
+        custom["filters"]["query"] = 'title:"synthetic test item item-2"'
+        assert result(custom)["sampleSize"] == 1
+        custom["filters"]["query"] = 'title:"does not exist"'
+        assert result(custom)["sampleSize"] == 0
+        custom["filters"]["query"] = "to:2026-10-14"
+        assert result(custom) == result({**builtin, "filters": custom["filters"]})
+        assert [row["value"] for row in result(custom)["rows"]] == [0, 0]
+        custom["filters"]["query"] = "to:2026-10-13"
+        for definition in (custom, {**builtin, "filters": custom["filters"]}):
+            with pytest.raises(ValueError, match="within the captured observation history"):
+                result(definition)
+        custom["y"] = "statusDays"
+        custom["filters"]["query"] = ""
+        assert result(custom)["unavailable"]
+
+
+@pytest.mark.parametrize("custom_type", ["Task", "Issue", "Draft", "DraftIssue", None])
+@pytest.mark.parametrize("kind", ["DraftIssue", "Issue"])
+def test_age_draft_identity_not_project_type(app, custom_type, kind):
+    with app.app_context():
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        data = payload(items=[item("item-1")])
+        data["mapping"]["type"] = "type-id"
+        data["items"][0]["content"]["__typename"] = kind
+        if kind == "DraftIssue":
+            del data["items"][0]["content"]["state"]
+        if custom_type is not None:
+            data["items"][0]["fields"].append({"field": field("type-id", "Type"), "name": custom_type})
+        snapshot.payload = data
+        db.session.commit()
+        age = copy.deepcopy(next(c for c in seeds() if c["metric"] == "age"))
+        average = {**age, "metric": "custom", "x": "status", "y": "averageAge"}
+        custom = {**age, "metric": "custom", "x": "ticket", "y": "itemAge", "group": ""}
+        for chart in (age, average, custom):
+            assert bool(result(chart)["unavailable"]) is (kind == "DraftIssue")
+
+
+@pytest.mark.parametrize("query,expected", [
+    ('title:"synthetic/repository#2"', 0), ('"SYNTHETIC/repository#2"', 1),
+    ('#2', 1), ('title:"ITEM-2"', 1), ('title:"item-3"', 0),
+    ('title:"item-1" #2', 0), ('title:"does not exist"', 0),
+])
+def test_real_title_only_and_keyword_reference_search(app, query, expected):
+    with app.app_context():
+        chart = copy.deepcopy(next(c for c in seeds() if c["metric"] == "status"))
+        chart["filters"]["query"] = query
+        data = result(chart)
+        assert data["sampleSize"] == expected
+        assert len(data["tickets"]) == expected
+
+
 @pytest.fixture
 def app(monkeypatch):
     monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
@@ -839,6 +1028,74 @@ def test_collection_health_in_sample_mode_is_real_capture_and_retains_failure(ap
     later = client.get("/flow-metrics/api/collection-health").json
     assert later["status"] == "failed"
     assert later["capturedAt"] == response.json["capturedAt"]
+
+
+@pytest.mark.parametrize("enabled", ["true", "false"])
+@pytest.mark.parametrize("mode", ["sample", "real"])
+def test_health_latest_real_evidence_not_import_time_or_configuration(app, client, monkeypatch, enabled, mode):
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", enabled)
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", mode)
+    with app.app_context():
+        retain_evidence(import_document(20, 16))
+        retain_evidence(import_document(17))
+        db.session.commit()
+    health = client.get("/flow-metrics/api/collection-health")
+    assert health.status_code == 200
+    assert health.json["capturedAt"].startswith("2026-10-20T16:00:00")
+    assert health.json["configured"] is (enabled == "true")
+    with app.app_context():
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        snapshot.captured_at = datetime(2026, 10, 21, 12, tzinfo=UTC)
+        snapshot.captured_date = date(2026, 10, 21)
+        db.session.add(FlowCollectionRun(id="failed-latest", board_id=BOARD_ID, started_at=datetime.now(UTC), status="failed"))
+        db.session.commit()
+    later = client.get("/flow-metrics/api/collection-health").json
+    assert later["capturedAt"].startswith("2026-10-21T12:00:00")
+    assert later["status"] == "failed"
+
+
+def test_health_imported_only_and_empty_never_use_fiction_timestamp(app, client, monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", "false")
+    with app.app_context():
+        initialise_sample(sample_seed())
+        db.session.delete(db.session.get(FlowSnapshot, "snapshot-test"))
+        db.session.commit()
+    empty = client.get("/flow-metrics/api/collection-health").json
+    assert empty["capturedAt"] is None and empty["status"] == "not_configured" and empty["stale"]
+    with app.app_context():
+        retain_evidence(import_document(20))
+        db.session.commit()
+    imported = client.get("/flow-metrics/api/collection-health").json
+    assert imported["capturedAt"].startswith("2026-10-20T12:00:00")
+    assert imported["status"] == "not_configured"
+
+
+@pytest.mark.parametrize("mode", ["sample", "real"])
+def test_workspace_compact_only_exact_parsed_payload_and_csrf(app, client, monkeypatch, mode):
+    from app.projects.flow_metrics.workspace import exploratory_dataset
+
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", mode)
+    app.debug = True
+    with app.app_context():
+        initialise_sample(sample_seed())
+        retain_evidence(import_document(20))
+        db.session.commit()
+        board = db.session.get(FlowBoard, SAMPLE_ID if mode == "sample" else BOARD_ID)
+        expected = dict(charts=board.charts, revision=board.chart_revision,
+                        **({"dataset": exploratory_dataset(), "datasetId": SAMPLE_ID, "provenance": "mixed"}
+                           if mode == "sample" else {**metadata(), "datasetId": BOARD_ID, "provenance": "real"}))
+    response = client.get("/flow-metrics/api/workspace")
+    assert response.status_code == 200 and response.mimetype == "application/json"
+    with client.session_transaction() as session:
+        expected["csrf"] = session["flow_csrf"]
+    assert response.json == expected
+    assert response.data == (app.json.dumps(expected, separators=(",", ":")) + "\n").encode()
+    assert len(response.data) < len(app.json.dumps(expected, indent=2).encode())
+    assert app.debug is True and app.json.compact is None
+    assert "no-store" in response.headers["Cache-Control"]
+    assert client.post("/flow-metrics/api/charts", json={"charts": [], "revision": 0}).status_code == 403
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        assert app.test_client().get("/flow-metrics/api/workspace").status_code == 302
 
 
 def test_known_answer_custom_points_and_calendar_age(app):

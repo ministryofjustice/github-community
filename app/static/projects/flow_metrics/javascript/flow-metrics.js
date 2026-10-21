@@ -151,10 +151,23 @@ const syncPickers = [];
 async function refreshCollectionHealth() {
   try {
     const health = await apiRequest("collection-health");
-    $("live-freshness").textContent = health.capturedAt ? captureLabel(health.capturedAt)
-      : health.status === "not_configured" ? "Collection is not configured." : "No complete capture yet.";
+    const failed = health.status === "failed" || health.scheduledStatus === "failed";
+    const freshness = health.capturedAt
+      ? `${captureLabel(health.capturedAt)}${failed ? " Latest collection failed." : ""}`
+      : failed ? "No complete capture yet. Latest collection failed." : "No complete capture yet.";
+    const automation = [
+      health.status === "failed" ? "Latest collection failed."
+        : health.configured === false || health.status === "not_configured" ? ""
+          : health.status === "running" ? "Collection is running."
+            : health.status === "complete" ? "Latest collection completed." : "Automatic collection has not run.",
+      health.scheduledStatus ? `Scheduled collection: ${health.scheduledStatus}.` : "",
+      health.stale && health.capturedAt ? "Data may be out of date." : "",
+    ].filter(Boolean).join(" ");
+    if ($("live-freshness").textContent !== freshness) $("live-freshness").textContent = freshness;
+    if ($("collection-status").textContent !== automation) $("collection-status").textContent = automation;
   } catch (error) {
-    $("live-freshness").textContent = `Collection status unavailable. ${error.message}`;
+    $("live-freshness").textContent = `Last updated unavailable. ${error.message}`;
+    $("collection-status").textContent = `Collection status unavailable. ${error.message}`;
   }
 }
 refreshCollectionHealth();
