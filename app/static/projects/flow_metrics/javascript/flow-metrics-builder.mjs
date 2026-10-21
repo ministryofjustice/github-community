@@ -6,7 +6,7 @@ export const CALCULATIONS = {
   cycleTime: { name: "Cycle time", metric: "cycle", duration: true },
   itemAge: { name: "Unfinished work item age", metric: "age", duration: true },
   statusDays: { name: "Days in current status", metric: "stuck", duration: true },
-  completions: { name: "Completed tickets", metric: "throughput" },
+  completions: { name: "Completed items", metric: "throughput" },
   historicalCount: { name: "Historical point-in-time count", metric: "flow" },
   committedScope: { name: "Sprint-start commitment", metric: "velocity", series: "Committed" },
   addedScope: { name: "Added sprint scope", metric: "churn", series: "Added" },
@@ -40,7 +40,7 @@ export function builderError(chart) {
     if (BUILDER_AXES.includes(chart.x) && !(chart.x === "completionDate" && chart.y === "count")
         && !(chart.x === "statusBand" && chart.y === "count")) return "Choose a compatible calculated measure for this category.";
     if (BUILDER_AXES.includes(chart.group)) return "Group by a board field, not a calculated axis.";
-    if (chart.x === "statusBand" && chart.group) return "Use Days in current status with Count tickets to group duration bands.";
+    if (chart.x === "statusBand" && chart.group) return "Use Days in current status with Count items to group duration bands.";
     if (["scatter", "histogram", "flow", "burnup"].includes(chart.layout)) return "This layout needs a matching calculated measure.";
     if (chart.calculation && chart.y.startsWith("average") && ["area", "stacked-bar", "stacked-column"].includes(chart.layout)) return "Averages cannot be stacked. Choose line, bar or column.";
     return null;
@@ -53,18 +53,18 @@ export function builderError(chart) {
     if (chart.layout === "histogram") return chart.y === "cycleTime" && chart.x === "durationBand" && !chart.group
       ? null : "Histogram requires Cycle-time band, Cycle time and no grouping.";
     if (["flow", "burnup"].includes(chart.layout)) return "Use bar, column or line for duration calculations.";
-    if (chart.x === "ticket") return chart.group ? "Individual ticket views cannot be grouped."
-      : settings.aggregation !== "individual" ? "Ticket requires Individual tickets; choose a board-field category for an aggregate." : null;
+    if (chart.x === "ticket") return chart.group ? "Individual item views cannot be grouped."
+      : settings.aggregation !== "individual" ? "Item requires Individual items; choose a board-field category for an aggregate." : null;
     if (chart.x === "statusBand") return chart.y === "statusDays" && settings.aggregation === "count"
-      ? null : "Days-in-status band requires Days in current status and Count tickets.";
-    if (!CATEGORY_FIELDS.includes(chart.x) || settings.aggregation === "individual") return "For a board-field category choose Count tickets, Sum or Average; use Ticket for individual values.";
+      ? null : "Days-in-status band requires Days in current status and Count items.";
+    if (!CATEGORY_FIELDS.includes(chart.x) || settings.aggregation === "individual") return "For a board-field category choose Count items, Sum or Average; use Item for individual values.";
     if (settings.aggregation === "average" && ["area", "stacked-bar", "stacked-column"].includes(chart.layout)) return "Averages cannot be stacked. Choose line, bar or column.";
   } else {
     const axes = chart.y === "completions" ? ["completionDate", "reporting"]
       : ["addedScope", "removedScope", "committedScope", "scopeChanges"].includes(chart.y) ? ["sprint"]
         : ["completedScope"].includes(chart.y) ? ["sprint", "reporting"] : ["reporting"];
     if (!axes.includes(chart.x)) return `Choose ${axes.map(x => x === "reporting" ? "Reporting date" : x === "completionDate" ? "Completion date" : "Sprint").join(" or ")} for this measure.`;
-    if (["scatter", "histogram"].includes(chart.layout)) return "Scatter and histogram require ticket-level Cycle time.";
+    if (["scatter", "histogram"].includes(chart.layout)) return "Scatter and histogram require item-level Cycle time.";
     if (chart.layout === "flow" && chart.y !== "historicalCount") return "Cumulative flow requires Historical point-in-time count.";
     if (chart.layout === "burnup" && !["sprintScope", "completedScope"].includes(chart.y)) return "Burn up requires Sprint scope or Completed in sprint.";
     if (settings.value === "points" && (chart.x !== "sprint" || chart.group)) return "Historical Points require Sprint with no additional grouping.";
@@ -123,7 +123,7 @@ export function projectRecipe(chart, result, { fieldValue, point }) {
           (ticket, row) => chart.x === "statusBand" ? `${Math.floor(row.value / settings.bandWidth) * settings.bandWidth}–${(Math.floor(row.value / settings.bandWidth) + 1) * settings.bandWidth - 1} days` : byField(ticket, chart.x),
           settings.aggregation),
       }));
-      result.unit = settings.aggregation === "count" ? "Tickets" : "Calendar days";
+      result.unit = settings.aggregation === "count" ? "Items" : "Calendar days";
       const labels = [...new Set(series.flatMap(s => s.points.map(p => p.label)))].sort((a, b) => String(a).localeCompare(String(b), "en-GB", { numeric: true }));
       series.forEach(s => {
         s.points = labels.map(label => s.points.find(p => p.label === label)
@@ -131,8 +131,8 @@ export function projectRecipe(chart, result, { fieldValue, point }) {
       });
     }
   } else if (chart.x === "statusBand") {
-    series = [{ name: "Tickets", points: groupRows(result.rows, (ticket, row) => `${Math.floor(row.value / settings.bandWidth) * settings.bandWidth}–${(Math.floor(row.value / settings.bandWidth) + 1) * settings.bandWidth - 1} days`, "count") }];
-    result.unit = "Tickets";
+    series = [{ name: "Items", points: groupRows(result.rows, (ticket, row) => `${Math.floor(row.value / settings.bandWidth) * settings.bandWidth}–${(Math.floor(row.value / settings.bandWidth) + 1) * settings.bandWidth - 1} days`, "count") }];
+    result.unit = "Items";
   } else if (spec && !spec.duration) {
     const wanted = [spec.series, CALCULATIONS[settings.additional]?.series].filter(Boolean);
     if (wanted.length) series = series.filter(s => wanted.includes(s.name));
@@ -171,7 +171,7 @@ export function projectRecipe(chart, result, { fieldValue, point }) {
   }
   const rows = series.flatMap(s => s.points.map(p => ({ ...p, series: s.name })));
   return { ...result, series, rows, axis: chart.x, sampleSize: new Set(rows.flatMap(row => row.ids)).size,
-    note: `${result.note} Calculation settings v1: ${settings.interval}; ${settings.counting === "events" ? "scope change occurrences" : "distinct tickets per bucket"}; ${settings.value}; ${settings.aggregation}; minimum status days ${settings.minDays}; bands ${settings.bandWidth} days.` };
+    note: `${result.note} Calculation settings v1: ${settings.interval}; ${settings.counting === "events" ? "scope change occurrences" : "distinct items per bucket"}; ${settings.value}; ${settings.aggregation}; minimum status days ${settings.minDays}; bands ${settings.bandWidth} days.` };
 }
 
 export function editableRecipe(chart) {

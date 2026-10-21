@@ -229,7 +229,7 @@ def validate_calculation(chart):
         if "calculation" in chart and y.startswith("average") and layout in {"area", "stacked-bar", "stacked-column"}:
             raise ValueError("Averages cannot be stacked.")
         if x == "statusBand" and group:
-            raise ValueError("Use Days in current status with Count tickets for grouped bands.")
+            raise ValueError("Use Days in current status with Count items for grouped bands.")
         return
     if settings["value"] == "points" and (y not in {"committedScope", "completedScope"} or x != "sprint" or group):
         raise ValueError("Historical Points require sprint commitment/completion by Sprint without grouping.")
@@ -246,12 +246,12 @@ def validate_calculation(chart):
             raise ValueError("Choose bar, column or line for duration calculations.")
         elif x == "ticket":
             if group or settings["aggregation"] != "individual":
-                raise ValueError("Ticket requires Individual tickets and no grouping.")
+                raise ValueError("Item requires Individual items and no grouping.")
         elif x == "statusBand":
             if y != "statusDays" or settings["aggregation"] != "count":
-                raise ValueError("Days-in-status band requires Days in current status and Count tickets.")
+                raise ValueError("Days-in-status band requires Days in current status and Count items.")
         elif x not in CATEGORY_FIELDS or settings["aggregation"] == "individual":
-            raise ValueError("Choose a board field and aggregate, or individual Ticket.")
+            raise ValueError("Choose a board field and aggregate, or individual Item.")
         if settings["aggregation"] == "average" and layout in {"area", "stacked-bar", "stacked-column"}:
             raise ValueError("Averages cannot be stacked.")
         return
@@ -582,7 +582,7 @@ def result(chart):
             if type(item["estimate"]) in {int, float} and math.isfinite(item["estimate"])
         ]
         if not items:
-            return {**empty, "unavailable": "No matching tickets have a captured numeric Estimation value from the verified field."}
+            return {**empty, "unavailable": "No matching items have a captured numeric Estimation value from the verified field."}
 
     def point(label, value, matches, ticket_id=None):
         return {
@@ -693,7 +693,7 @@ def result(chart):
         "sampleSize": len({key for row in rows for key in row["ids"]}),
         "note": note,
         "coverageText": (
-            f"{len(items)} of {available_count} matching tickets have numeric Estimation; {available_count - len(items)} excluded."
+            f"{len(items)} of {available_count} matching items have numeric Estimation; {available_count - len(items)} excluded."
             if len(items) != available_count else ""
         ),
     }

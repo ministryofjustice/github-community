@@ -1210,6 +1210,40 @@ def test_idempotent_collection_retains_removed_item_history(app):
         assert evidence[0].observed_at != evidence[1].observed_at
 
 
+def test_five_unchanged_intraday_captures_retain_evidence_but_one_daily_snapshot(app):
+    class CaptureClock:
+        current = datetime(2026, 10, 21, 9, 30, tzinfo=UTC)
+
+        @classmethod
+        def now(cls, timezone):
+            return cls.current.astimezone(timezone)
+
+    with (
+        app.app_context(),
+        patch("app.projects.flow_metrics.collector.collect_payload", side_effect=lambda *_: payload()),
+        patch("app.projects.flow_metrics.collector.datetime", CaptureClock),
+    ):
+        charts = copy.deepcopy(db.session.get(FlowBoard, BOARD_ID).charts)
+        for hour in (9, 11, 13, 15, 17):
+            CaptureClock.current = datetime(2026, 10, 21, hour, 30, tzinfo=UTC)
+            assert collect(object()) == 3
+        snapshots = db.session.scalars(select(FlowSnapshot).where(
+            FlowSnapshot.captured_date == date(2026, 10, 21)
+        )).all()
+        assert len(snapshots) == 1
+        assert snapshots[0].captured_at.replace(tzinfo=UTC) == CaptureClock.current
+        evidence = db.session.scalars(select(FlowEvidence)).all()
+        assert len(evidence) == 5
+        assert len({row.observed_at for row in evidence}) == 5
+        assert all(row.document["payload"] == evidence[0].document["payload"] for row in evidence)
+        assert db.session.scalar(select(func.count()).select_from(FlowCollectionRun)) == 5
+        assert db.session.get(FlowBoard, BOARD_ID).charts == charts
+        before = {row.id for row in evidence}
+        retain_evidence(evidence[-1].document)
+        db.session.commit()
+        assert set(db.session.scalars(select(FlowEvidence.id))) == before
+
+
 def test_new_optional_fields_bind_without_changing_existing_ids(app):
     observation = payload([item("item-1"), item("item-2")])
     observation["fields"][0]["name"] = "Renamed status"
@@ -1639,12 +1673,12 @@ def test_numeric_estimation_api_filter_identity_zero_missing_and_binding(app, cl
         assert "2 of 3" in measured["coverageText"]
         assert result({**definition, "y": "averageEstimation"})["rows"][0]["value"] == 4
         assert result({**definition, "filters": {**definition["filters"], "query": "status:TODO"}})["rows"][0]["value"] == 0
-        assert "No matching tickets" in result({**definition, "filters": {**definition["filters"], "query": 'status:"In Review"'}})["unavailable"]
+        assert "No matching items" in result({**definition, "filters": {**definition["filters"], "query": 'status:"In Review"'}})["unavailable"]
         data = copy.deepcopy(snapshot.payload)
         data["fields"][-1]["dataType"] = "TEXT"
         snapshot.payload = data
         db.session.commit()
-        assert "No matching tickets" in result(definition)["unavailable"]
+        assert "No matching items" in result(definition)["unavailable"]
     headers = csrf(client)
     chart = {**seeds()[3], "metric": "custom", "y": "averageEstimation"}
     charts = [chart]

@@ -2,7 +2,7 @@ import {
   SEEDS, METRICS, LAYOUTS, FIELDS, GROUP_FIELDS, MEASURES, CUSTOM_DEFAULTS,
   TICKETS, buildResult, stateAt, validChart, upgradeChart, validateFilters, scopeLabels, resultCSV,
   SEARCH_FIELDS, HISTORY, configureLiveData, configureSampleData, captureLabel,
-  ticketReference, ticketChartLabel, ticketText, pointTicket,
+  ticketReference, ticketChartLabel, ticketText, pointTicket, itemCount,
   chartHasDateAxis, datePresetRange, withDateRange, resolveFilters,
 } from "./flow-metrics-model.mjs";
 import { CALCULATIONS, CALCULATION_DEFAULTS, calculationSettings, builderError, editableRecipe } from "./flow-metrics-builder.mjs";
@@ -16,7 +16,7 @@ let csrf;
 let previewSequence = 0;
 let saving = false;
 let pendingPreview = false;
-const ticketLabel = "tickets";
+const ticketLabel = "items";
 const colours = ["#1d70b8", "#b85900", "#4c2c92", "#505a5f", "#007c91", "#0b0c0c"];
 const clone = (value) => structuredClone(value);
 let charts = [];
@@ -28,6 +28,7 @@ let tableVisible = false;
 let invalidConfiguration = false;
 let pendingDrillTrigger;
 let activeSuggestion = -1;
+let dateRangeMenu = false;
 const PAGE_SIZE = 10;
 let dataPage = 1;
 let ticketPage = 1;
@@ -501,9 +502,11 @@ function chartConfig() {
   const scatter = draft.layout === "scatter";
   const line = ["line", "area", "flow", "burnup"].includes(draft.layout);
   const numericPrecision = draft.metric === "custom" && (draft.y.startsWith("average") || draft.calculation?.aggregation === "average") ? 2 : 0;
+  const plottedIds = new Set(result.series.flatMap((series) => series.points.map((point) => point.ticketId)).filter(Boolean));
+  const plottedItems = result.tickets.filter((ticket) => plottedIds.has(ticket.id));
   const labels = result.series[0]?.points.map((p) => {
     const ticket = pointTicket(p, result.tickets);
-    return ticket ? ticketChartLabel(ticket) : p.label;
+    return ticket ? ticketChartLabel(ticket, plottedItems) : p.label;
   }) || [];
   return {
     type: scatter ? "scatter" : line ? "line" : "bar",
@@ -556,7 +559,7 @@ function chartConfig() {
           footer: (items) => {
             const point = result.series[items[0].datasetIndex].points[items[0].dataIndex];
             const count = scatter ? result.rows.filter((other) => other.x === point.x && other.value === point.value).length : 0;
-            return count > 1 ? `${count} overlapping tickets; select to inspect all` : `Select to inspect ${ticketLabel}`;
+            return count > 1 ? `${count} overlapping items; select to inspect all` : `Select to inspect ${ticketLabel}`;
           },
         } },
       },
@@ -625,8 +628,8 @@ function renderTable() {
       const button = document.createElement("button");
       button.className = "flow-link-button";
       button.type = "button";
-      button.textContent = `${row.ids.length} ${ticketLabel}`;
-      button.setAttribute("aria-label", `${row.ids.length} ${ticketLabel} for ${row.series}, ${row.label}`);
+      button.textContent = itemCount(row.ids.length);
+      button.setAttribute("aria-label", `${itemCount(row.ids.length)} for ${row.series}, ${row.label}`);
       button.addEventListener("click", () => showDrill(row, button));
       const ticket = pointTicket(row, result.tickets);
       return [row.series, ticket ? ticketCell(ticket) : row.label, ...(draft.layout === "scatter" ? [row.completedDate.split("-").reverse().join("/")] : []), row.value, button];
@@ -744,25 +747,21 @@ async function renderPreview() {
 }
 
 function closeDateRange() {
-  $("custom-date-fields").hidden = true;
-  $("custom-date-range").setAttribute("aria-expanded", "false");
+  $("date-range-panel").hidden = true;
+  dateRangeMenu = false;
 }
 
 function renderDateRanges() {
-  $("chart-date-ranges").hidden = !chartHasDateAxis(draft);
+  if (!chartHasDateAxis(draft)) closeSuggestions();
+}
+
+function selectedDateRange() {
   const { resolved } = resolveFilters(draft.filters);
-  const selected = !resolved.from && !resolved.to ? "max"
+  return !resolved.from && !resolved.to ? "max"
     : ["2weeks", "1month", "3months"].find((key) => {
       const range = datePresetRange(key);
       return resolved.from === range.from && resolved.to === range.to;
     });
-  document.querySelectorAll("[data-date-range]").forEach((button) => {
-    button.setAttribute("aria-pressed", String(button.dataset.dateRange === selected));
-  });
-  for (const id of ["range-from", "range-to"]) {
-    $(id).min = HISTORY.from;
-    $(id).max = HISTORY.to;
-  }
 }
 
 function applyDateRange(from, to) {
@@ -772,7 +771,7 @@ function applyDateRange(from, to) {
     $("filter-query").removeAttribute("aria-invalid");
     $("filter-query").value = filters.query;
     draft = { ...draft, filters };
-    closeDateRange();
+    closeSuggestions();
     previewConfiguration();
     return true;
   } catch (error) {
@@ -782,34 +781,34 @@ function applyDateRange(from, to) {
   }
 }
 
-document.querySelectorAll("[data-date-range]").forEach((button) => {
-  button.addEventListener("click", () => {
-    if (!draft || saving) return;
-    const range = datePresetRange(button.dataset.dateRange);
-    if (!applyDateRange(range.from, range.to)) {
-      $("custom-date-fields").hidden = false;
-      $("custom-date-range").setAttribute("aria-expanded", "true");
-    }
-  });
-});
-$("custom-date-range").addEventListener("click", () => {
-  if (!$("custom-date-fields").hidden) { closeDateRange(); return; }
+function openCustomDateRange() {
+  closeSuggestions();
   const { resolved } = resolveFilters(draft.filters);
   $("range-from").value = resolved.from || HISTORY.from;
   $("range-to").value = resolved.to || HISTORY.to;
+  for (const id of ["range-from", "range-to"]) {
+    $(id).min = HISTORY.from;
+    $(id).max = HISTORY.to;
+  }
   $("date-range-error").hidden = true;
-  $("custom-date-fields").hidden = false;
-  $("custom-date-range").setAttribute("aria-expanded", "true");
+  $("date-range-panel").hidden = false;
   $("range-from").focus();
-});
+}
+function returnToFilter() {
+  $("filter-query").focus();
+  closeSuggestions();
+}
 $("custom-date-fields").addEventListener("submit", (event) => {
   event.preventDefault();
   if (saving) return;
-  if (applyDateRange($("range-from").value, $("range-to").value)) $("custom-date-range").focus();
+  if (applyDateRange($("range-from").value, $("range-to").value)) returnToFilter();
 });
-$("cancel-date-range").addEventListener("click", () => { closeDateRange(); $("custom-date-range").focus(); });
+$("cancel-date-range").addEventListener("click", returnToFilter);
 $("custom-date-fields").addEventListener("keydown", (event) => {
-  if (event.key === "Escape") { event.preventDefault(); closeDateRange(); $("custom-date-range").focus(); }
+  if (event.key === "Escape") { event.preventDefault(); returnToFilter(); }
+});
+$("date-range-panel").addEventListener("focusout", (event) => {
+  if (!$("date-range-panel").contains(event.relatedTarget)) closeSuggestions();
 });
 
 function renderScope() {
@@ -852,7 +851,7 @@ function showDrill(point, trigger) {
 
 function renderTickets() {
   const tickets = result.tickets.filter((ticket) => drillPoint.ids.includes(ticket.id));
-  $("drill-title").textContent = `${drillPoint.label}: ${tickets.length} ${ticketLabel}`;
+  $("drill-title").textContent = `${drillPoint.label}: ${itemCount(tickets.length)}`;
   $("ticket-table").replaceChildren(table(
     ["Reference", "Title", "Repository", "Team", "Sprint", "Status at reporting end", "Observed at"],
     tickets.slice((ticketPage - 1) * PAGE_SIZE, ticketPage * PAGE_SIZE).map((t) => {
@@ -868,13 +867,13 @@ function renderTickets() {
         t.actualSprint || t.sprint, stateAt(t, result.to)?.status || "Not created",
         t.observedAt ? captureLabel(t.observedAt).replace("Last updated: ", "") : "Explicit fictional events"];
     }),
-    "Ticket drill-down",
+    "Item drill-down",
   ));
   $("ticket-table").append(pagination(tickets.length, ticketPage, (page) => {
     ticketPage = page;
     renderTickets();
     $("ticket-table").focus();
-  }, "Tickets"));
+  }, "Items"));
 }
 
 function download(blob, name) {
@@ -1150,6 +1149,7 @@ $("search-discard").addEventListener("click", discardChanges);
 function closeSuggestions() {
   $("filter-suggestions").hidden = true;
   $("filter-date-panel").hidden = true;
+  closeDateRange();
   $("filter-query").setAttribute("aria-expanded", "false");
   $("filter-query").removeAttribute("aria-activedescendant");
   activeSuggestion = -1;
@@ -1197,13 +1197,30 @@ document.addEventListener("pointerdown", (event) => {
 });
 
 function showSuggestions() {
+  if (!draft || saving) return;
   $("filter-date-panel").hidden = true;
   const input = $("filter-query");
   const text = input.value;
   const valueMatch = text.match(/(?:^|\s)([a-z-]+):("[^"]*|[^\s"]*)$/);
   const definition = valueMatch && SEARCH_FIELDS.find(([key]) => key === valueMatch[1]);
   let options;
-  if (definition?.[2]?.length) {
+  if (dateRangeMenu && chartHasDateAxis(draft)) {
+    const selected = selectedDateRange();
+    options = [["2weeks", "2 weeks"], ["1month", "1 month"], ["3months", "3 months"], ["max", "Max"]].map(([key, label]) => ({
+      label, field: "from", selected: key === selected,
+      choose: () => {
+        const range = datePresetRange(key);
+        if (applyDateRange(range.from, range.to)) returnToFilter();
+        else {
+          const error = $("date-range-error").textContent;
+          openCustomDateRange();
+          $("date-range-error").textContent = error;
+          $("date-range-error").hidden = false;
+        }
+      },
+    }));
+    options.push({ label: "Custom range", field: "from", choose: openCustomDateRange });
+  } else if (definition?.[2]?.length) {
     const typed = valueMatch[2].replaceAll('"', "").toLowerCase();
     options = definition[2].filter((value) => value.toLowerCase().includes(typed)).map((value) => ({
       label: value, choose: () => {
@@ -1214,8 +1231,7 @@ function showSuggestions() {
       },
     }));
   } else if (definition?.[2]) {
-    closeSuggestions();
-    return;
+    options = [];
   } else {
     const fragment = text.match(/(?:^|\s)([a-z-]*)$/)?.[1] || "";
     options = SEARCH_FIELDS.filter(([, label, values]) => (!live || values) && label.toLowerCase().includes(fragment.toLowerCase())).map(([key, label, values]) => ({
@@ -1231,6 +1247,10 @@ function showSuggestions() {
       },
     }));
   }
+  if (!dateRangeMenu && chartHasDateAxis(draft)) options.unshift({
+    label: "Date range", field: "from",
+    choose: () => { dateRangeMenu = true; showSuggestions(); },
+  });
   const list = $("filter-suggestions");
   list.replaceChildren();
   options.forEach((option, index) => {
@@ -1245,6 +1265,12 @@ function showSuggestions() {
     label.className = "flow-option-label";
     label.textContent = option.label;
     row.append(symbol, label);
+    if (option.selected) {
+      const note = document.createElement("small");
+      note.textContent = "Selected";
+      row.append(note);
+      row.dataset.current = "true";
+    }
     if (option.disabled) {
       const note = document.createElement("small");
       note.textContent = "Unavailable";
@@ -1303,7 +1329,8 @@ $("filter-query").addEventListener("keydown", (event) => {
   } else if (event.key === "Tab") closeSuggestions();
 });
 $("filter-query").addEventListener("blur", (event) => {
-  if (!$("filter-date-panel").contains(event.relatedTarget)) closeSuggestions();
+  if (!$("filter-date-panel").contains(event.relatedTarget)
+      && !$("date-range-panel").contains(event.relatedTarget)) closeSuggestions();
 });
 $("show-chart").addEventListener("click", () => { tableVisible = false; updateView(); });
 $("show-table").addEventListener("click", () => { tableVisible = true; updateView(); });

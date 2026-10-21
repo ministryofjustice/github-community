@@ -1,9 +1,8 @@
 # Flow Metrics
 
-Flow Metrics helps teams explore GitHub organisation project boards through charts.
+Explore project board data through shared charts, filters, tables and item drill-down.
 
-The Team workspace lets users create and customise shared charts, filter results, view tables, explore the tickets behind a result, use the How-to guide and export CSV files.
+DEV captures the board five times each weekday in London time. Webhooks are
+Phase 2 and remain disabled.
 
-The Admin area is intended to support board and workspace management.
-
-GitHub webhooks are planned to capture board changes as they happen.
+See [Running captures](OPERATIONS.md) for deployment, checks and private imports.

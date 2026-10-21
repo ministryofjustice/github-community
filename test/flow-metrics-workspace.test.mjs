@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
-import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
+import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, pointTicket, itemCount, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 import { editableRecipe, builderError } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
 
 const real = (id, status = "TODO", extra = {}) => ({
@@ -56,12 +56,68 @@ test("date shortcuts use available history and preserve one canonical filter sys
 
 test("chart ticket labels are short without losing repository identity elsewhere", () => {
   const ticket = real("511");
-  assert.equal(ticketChartLabel(ticket), "Ticket #511");
+  assert.equal(ticketChartLabel(ticket), "#511");
   assert.equal(ticketReference(ticket), "synthetic/repository#511");
   assert.match(ticketText(ticket), /synthetic\/repository#511/);
-  assert.equal(ticketChartLabel(real("511", "TODO", { reference: "another/repository#511" })), "Ticket #511");
+  assert.equal(ticketChartLabel(real("511", "TODO", { reference: "another/repository#511" })), "#511");
   assert.equal(ticketChartLabel({ id: "SAMPLE-1-05" }), "SAMPLE-1-05");
   assert.equal(ticketChartLabel({ provenance: "real", id: "real:draft" }), "Draft item");
+});
+
+test("actual chart configuration prefixes only plotted number clashes and preserves full tooltips", () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const config = runInNewContext(`${source.slice(source.indexOf("function chartConfig()"), source.indexOf("\nfunction table("))}\nchartConfig`, {
+    draft: chart("age", "", "bar"), ticketChartLabel, pointTicket, ticketText,
+    ticketLabel: "items", colours: ["#1d70b8"],
+    result: {
+      unit: "Calendar days", axis: "Item",
+      tickets: [
+        real("115", "TODO", { id: "real:a", reference: "synthetic/developer-experience#115" }),
+        real("115", "TODO", { id: "real:b", reference: "synthetic/platform#115" }),
+        real("511", "TODO", { id: "real:c" }),
+        real("511", "TODO", { id: "real:not-plotted", reference: "synthetic/elsewhere#511" }),
+      ],
+      series: [{ name: "Age", points: [
+        { ticketId: "real:a", ids: ["real:a"], value: 1 },
+        { ticketId: "real:b", ids: ["real:b"], value: 2 },
+        { ticketId: "real:c", ids: ["real:c"], value: 3 },
+      ] }],
+    },
+  })();
+  assert.deepEqual(Array.from(config.data.labels), ["developer-experience#115", "platform#115", "#511"]);
+  assert.match(config.options.plugins.tooltip.callbacks.title([{ datasetIndex: 0, dataIndex: 0 }]), /synthetic\/developer-experience#115/);
+  assert.match(config.options.plugins.tooltip.callbacks.title([{ datasetIndex: 0, dataIndex: 2 }]), /synthetic\/repository#511/);
+  assert.equal(ticketChartLabel(real("115"), [real("115")]), "#115", "Repeated same item is not a clash");
+});
+
+test("actual drill-down uses item wording and singular/plural without shortening references", () => {
+  assert.equal(itemCount(0), "0 items");
+  assert.equal(itemCount(1), "1 item");
+  assert.equal(itemCount(2), "2 items");
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const elements = {
+    "drill-title": {},
+    "ticket-table": { replaceChildren(value) { this.table = value; }, append(value) { this.pagination = value; } },
+  };
+  const tickets = [real("511"), real("512")];
+  const context = {
+    $: id => elements[id], result: { tickets, to: 0 },
+    drillPoint: { label: ticketText(tickets[0]), ids: [tickets[0].id] },
+    ticketPage: 1, PAGE_SIZE: 10, live: false, ticketReference, itemCount,
+    document: { createElement: () => ({}) },
+    stateAt: () => ({ status: "TODO" }), captureLabel: () => "Last updated: generated",
+    table: (headers, rows, caption) => ({ headers, rows, caption }),
+    pagination: (count, page, callback, label) => ({ count, label }),
+  };
+  runInNewContext(source.slice(source.indexOf("function renderTickets()"), source.indexOf("\nfunction download(")), context);
+  context.renderTickets();
+  assert.equal(elements["drill-title"].textContent, `${ticketText(tickets[0])}: 1 item`);
+  assert.equal(elements["ticket-table"].table.caption, "Item drill-down");
+  assert.equal(elements["ticket-table"].table.rows[0][0].textContent, ticketReference(tickets[0]));
+  context.drillPoint = { label: "All items", ids: tickets.map(ticket => ticket.id) };
+  context.renderTickets();
+  assert.equal(elements["drill-title"].textContent, "All items: 2 items");
+  assert.equal(elements["ticket-table"].pagination.label, "Items");
 });
 
 for (const recovery of ["preset", "custom"]) {
@@ -77,11 +133,17 @@ for (const recovery of ["preset", "custom"]) {
     const elements = new Map();
     const element = id => {
       if (!elements.has(id)) elements.set(id, {
-        value: "", hidden: true, disabled: false, textContent: "", attributes: {}, handlers: {},
+        value: "", hidden: true, disabled: false, textContent: "", attributes: {}, handlers: {}, children: [], dataset: {},
         setAttribute(name, value) { this.attributes[name] = value; },
         removeAttribute(name) { delete this.attributes[name]; },
         addEventListener(name, handler) { this.handlers[name] = handler; },
         focus() { this.focused = true; },
+        append(...children) { this.children.push(...children); },
+        replaceChildren(...children) { this.children = children; },
+        querySelectorAll() { return this.children.filter(child => child.attributes["aria-disabled"] === "false"); },
+        scrollIntoView() {},
+        click() { this.handlers.click?.(); },
+        contains(target) { return this.children.includes(target); },
       });
       return elements.get(id);
     };
@@ -92,13 +154,13 @@ for (const recovery of ["preset", "custom"]) {
       "chart-name": "name", metric: "metric", layout: "layout", "x-axis": "x", "y-axis": "y", "group-by": "group",
     })) element(id).value = saved[key];
     element("filter-query").value = `${saved.filters.query} from:2026-10-19 to:2026-10-12`;
-    const button = element("preset");
-    button.dataset = { dateRange: "2weeks" };
+    let node = 0;
     const context = {
-      $: element, document: { querySelectorAll: () => [button] },
+      $: element, document: { createElement: () => element(`generated-${node++}`) },
       draft: structuredClone(saved), saving: false, invalidConfiguration: false,
-      previewSequence: 0, pendingPreview: false, syncPickers: [],
-      HISTORY, validateFilters, validChart, builderError, withDateRange, datePresetRange,
+      previewSequence: 0, pendingPreview: false, syncPickers: [], dateRangeMenu: false, activeSuggestion: -1,
+      HISTORY, validateFilters, validChart, builderError, withDateRange, datePresetRange, chartHasDateAxis,
+      resolveFilters, SEARCH_FIELDS, live: false, fieldIcon: () => element("icon"), icon: () => element("icon"),
       renderList() {}, syncFieldVisibility() {},
       renderPreview() {
         context.preview = buildResult(context.draft);
@@ -108,7 +170,10 @@ for (const recovery of ["preset", "custom"]) {
     runInNewContext([
       section("function closeDateRange()", "\nfunction renderScope()"),
       section("function previewConfiguration(", '\n$("configuration").addEventListener'),
+      section("function closeSuggestions()", "\nlet dateFilter;"),
+      section("function showSuggestions()", "\nfunction applySearch()"),
       section("function applySearch()", '\n$("filter-query").addEventListener'),
+      section('$("filter-query").addEventListener("focus"', '\n$("show-chart").addEventListener'),
     ].join("\n"), context);
     context.applySearch();
     assert.equal(element("search-error").hidden, false);
@@ -127,18 +192,26 @@ for (const recovery of ["preset", "custom"]) {
     assert.deepEqual(context.draft, original);
 
     const range = recovery === "preset" ? datePresetRange("2weeks") : { from: "2026-10-16", to: "2026-10-19" };
-    if (recovery === "preset") button.handlers.click();
+    context.showSuggestions();
+    const options = () => element("filter-suggestions").children;
+    assert.equal(options()[0].children[1].textContent, "Date range");
+    options()[0].click();
+    assert.deepEqual(options().map(option => option.children[1].textContent), ["2 weeks", "1 month", "3 months", "Max", "Custom range"]);
+    if (recovery === "preset") options()[0].click();
     else {
+      options().at(-1).click();
+      assert.equal(element("date-range-panel").hidden, false);
+      assert.equal(element("range-from").focused, true);
       element("range-from").value = range.from;
       element("range-to").value = range.to;
       element("custom-date-fields").handlers.submit({ preventDefault() {} });
-      assert.equal(element("custom-date-range").focused, true);
+      assert.equal(element("filter-query").focused, true);
     }
     assert.equal(element("search-error").hidden, true);
     assert.equal(element("filter-query").attributes["aria-invalid"], undefined);
     assert.equal(context.invalidConfiguration, false, element("config-error").textContent);
-    assert.equal(element("custom-date-fields").hidden, true);
-    assert.equal(element("custom-date-range").attributes["aria-expanded"], "false");
+    assert.equal(element("date-range-panel").hidden, true);
+    assert.equal(element("filter-query").attributes["aria-expanded"], "false");
     const { resolved, clauses } = resolveFilters(context.draft.filters);
     assert.equal(resolved.from, range.from);
     assert.equal(resolved.to, range.to);
@@ -147,6 +220,24 @@ for (const recovery of ["preset", "custom"]) {
     assert.deepEqual(context.preview.rows, buildResult(context.draft).rows);
     assert.deepEqual(saved, original, "The saved chart remains unchanged for Save/Discard");
     assert.notEqual(JSON.stringify(context.draft), JSON.stringify(saved), "Corrected range remains an unsaved change");
+
+    context.showSuggestions();
+    options()[0].click();
+    if (recovery === "preset") assert.equal(options()[0].dataset.current, "true");
+    context.closeSuggestions();
+    context.draft = { ...saved, name: "User-created time chart", metric: "custom", x: "reporting" };
+    element("filter-query").handlers.focus();
+    assert.equal(options()[0].children[1].textContent, "Date range");
+    const key = key => element("filter-query").handlers.keydown({ key, preventDefault() {} });
+    key("ArrowDown"); key("Enter");
+    assert.equal(options()[0].children[1].textContent, "2 weeks");
+    key("Escape");
+    assert.equal(element("filter-suggestions").hidden, true);
+    context.draft = { ...saved, metric: "age", x: "ticket" };
+    context.renderDateRanges();
+    context.showSuggestions();
+    assert.ok(options().every(option => option.children[1].textContent !== "Date range"));
+    assert.equal(element("date-range-panel").hidden, true);
   });
 }
 

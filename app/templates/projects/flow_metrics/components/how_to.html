@@ -11,7 +11,7 @@
         <li><a class="govuk-link" href="#guide-filter">Filter data</a></li>
         <li><a class="govuk-link" href="#guide-recipes">Custom chart recipes</a></li>
         <li><a class="govuk-link" href="#guide-save">Save and share</a></li>
-        <li><a class="govuk-link" href="#guide-table">Data table and ticket drill-down</a></li>
+        <li><a class="govuk-link" href="#guide-table">Data table and item drill-down</a></li>
         <li><a class="govuk-link" href="#guide-export">Export CSV</a></li>
       </ul>
     </nav>
@@ -25,8 +25,8 @@
     <p class="govuk-body">Other settings appear when needed. The preview updates as you make changes. Nothing is saved until you select <strong>Save</strong>.</p>
     <p class="govuk-body">To start from an existing chart, open <strong>Configure</strong> and choose <strong>Edit as Custom recipe</strong>. Your saved chart stays unchanged until you save. If choices cannot be used together, a message explains what to change.</p>
     <h3 id="guide-filter" class="govuk-heading-m" tabindex="-1">Filter data</h3>
-    <p class="govuk-body">Use <strong>Filter by keyword or field</strong> above the chart. Choose suggestions or type filters, such as <code>team:Blueprint status:"In Progress"</code>. Use quotes around values with spaces. You can also enter a keyword to search ticket titles.</p>
-    <p class="govuk-body">For dates, use <code>from:2026-09-14 to:2026-09-27</code>. Time-based charts also offer 2 weeks, 1 month, 3 months and Max shortcuts, plus Custom range for From and To dates. Shortcuts end at the latest available date and stay within available history; Max clears date restrictions. These controls update the same search filters and use the chart's Save and Discard controls. Choose dates and field values available in your workspace. Filters apply to the active chart. Remove date filters to use all available history, or clear the search box to remove all search filters.</p>
+    <p class="govuk-body">Use <strong>Filter by keyword or field</strong> above the chart. Choose suggestions or type filters, such as <code>team:Blueprint status:"In Progress"</code>. Use quotes around values with spaces. You can also enter a keyword to search item titles.</p>
+    <p class="govuk-body">For dates, use <code>from:2026-09-14 to:2026-09-27</code>. On charts with a time-based axis, click or focus <strong>Filter by keyword or field</strong> and choose <strong>Date range</strong> at the top of the dropdown. Choose 2 weeks, 1 month, 3 months or Max, or Custom range for paired From and To dates. Shortcuts end at the latest available date and stay within available history; Max clears date restrictions. These options update the same search filters and use the chart's Save and Discard controls. Choose dates and field values available in your workspace. Filters apply to the active chart. Remove date filters to use all available history, or clear the search box to remove all search filters.</p>
     <h4 class="govuk-heading-s">Understanding the results</h4>
     <p class="govuk-body"><strong>Planned and unplanned work</strong> uses the board's Planned field. It does not show what was agreed at the start of a sprint or what changed later. Those are shown by separate calculations, such as <strong>Sprint-start commitment</strong> and <strong>Sprint churn</strong>.</p>
     <p class="govuk-body"><strong>Estimation</strong> uses the numbers entered on the board, without treating them as hours, days or story points. Sums and averages include zero but leave out missing values.</p>
@@ -34,15 +34,15 @@
     <h3 id="guide-recipes" class="govuk-heading-m" tabindex="-1">Custom chart recipes</h3>
     <p class="govuk-body">Set <strong>Chart data</strong> to <strong>Custom chart</strong>. Unless a recipe says otherwise, use <strong>Layout: Column</strong>, <strong>Group by: None</strong> and no filters.</p>
     {% for heading, introduction, recipes in [
-      ('Ticket counts and board fields', '', [
-        ('Tickets by Status', 'Category / axis: Status; Measure: Count of items.'),
-        ('Tickets by Team', 'Category / axis: Team; Measure: Count of items.'),
-        ('Tickets by Sprint', 'Category / axis: Sprint; Measure: Count of items. Shows assignment at the reporting end, not sprint-start commitment.'),
-        ('Tickets by Repository', 'Category / axis: Repository; Measure: Count of items.'),
-        ('Tickets by Item type', 'Category / axis: Item type; Measure: Count of items.'),
+      ('Item counts and board fields', '', [
+        ('Items by Status', 'Category / axis: Status; Measure: Count of items.'),
+        ('Items by Team', 'Category / axis: Team; Measure: Count of items.'),
+        ('Items by Sprint', 'Category / axis: Sprint; Measure: Count of items. Shows assignment at the reporting end, not sprint-start commitment.'),
+        ('Items by Repository', 'Category / axis: Repository; Measure: Count of items.'),
+        ('Items by Item type', 'Category / axis: Item type; Measure: Count of items.'),
         ('Status by Team', 'Category / axis: Status; Measure: Count of items; Group by: Team; Layout: Stacked column.'),
         ('Planned and unplanned work by Sprint', 'Category / axis: Sprint; Measure: Sum of Estimation; Group by: Planned and unplanned work.'),
-        ('Planned and unplanned ticket counts by Team', 'Category / axis: Planned and unplanned work; Measure: Count of items; Group by: Team.')
+        ('Planned and unplanned item counts by Team', 'Category / axis: Planned and unplanned work; Measure: Count of items; Group by: Team.')
       ]),
       ('Estimation', '', [
         ('Sum of Estimation by Team', 'Category / axis: Team; Measure: Sum of Estimation.'),
@@ -50,29 +50,29 @@
         ('Sum of Estimation by Sprint', 'Category / axis: Sprint; Measure: Sum of Estimation.'),
         ('Average Estimation by Sprint', 'Category / axis: Sprint; Measure: Average Estimation.')
       ]),
-      ('Age and cycle time', 'Durations use calendar days, including zero for work started and completed on the same day. Cycle time runs from first entering In Progress to the latest completion. Tickets reopened and still unfinished are excluded.', [
+      ('Age and cycle time', 'Durations use calendar days, including zero for work started and completed on the same day. Cycle time runs from first entering In Progress to the latest completion. Items reopened and still unfinished are excluded.', [
         ('Average unfinished age by Team', 'Category / axis: Team; Measure: Unfinished work item age; Duration calculation: Average.'),
         ('Average unfinished age by Status', 'Category / axis: Status; Measure: Unfinished work item age; Duration calculation: Average.'),
-        ('Individual unfinished age', 'Category / axis: Ticket; Measure: Unfinished work item age; Duration calculation: Individual tickets; Layout: Bar.'),
+        ('Individual unfinished age', 'Category / axis: Item; Measure: Unfinished work item age; Duration calculation: Individual items; Layout: Bar.'),
         ('Average cycle time by Team', 'Category / axis: Team; Measure: Cycle time; Duration calculation: Average.'),
         ('Average cycle time by Sprint', 'Category / axis: Sprint; Measure: Cycle time; Duration calculation: Average.'),
-        ('Cycle-time scatter chart', 'Category / axis: Completion date; Measure: Cycle time; Layout: Scatter. One point per completed ticket.'),
+        ('Cycle-time scatter chart', 'Category / axis: Completion date; Measure: Cycle time; Layout: Scatter. One point per completed item.'),
         ('Cycle-time histogram', 'Category / axis: Cycle-time band; Measure: Cycle time; Layout: Histogram; Duration band width (days): 3.')
       ]),
-      ('Throughput and stuck work', 'Stuck work includes tickets in In Progress, In Review or Blocked / On Hold. A threshold of 7 includes tickets in that status for seven days or more.', [
-        ('Weekly throughput', 'Category / axis: Completion date; Measure: Completed tickets; Reporting interval: Weekly.'),
-        ('Daily throughput by Team', 'Category / axis: Completion date; Measure: Completed tickets; Reporting interval: Daily; Group by: Team.'),
-        ('Stuck items by Team', 'Category / axis: Team; Measure: Days in current status; Duration calculation: Count tickets; Days in current status at least: 7.'),
-        ('Stuck days by ticket', 'Category / axis: Ticket; Measure: Days in current status; Duration calculation: Individual tickets; Days in current status at least: 7; Layout: Bar.'),
-        ('Days-in-status bands', 'Category / axis: Days-in-status band; Measure: Days in current status; Duration calculation: Count tickets; Duration band width (days): 3; Days in current status at least: 0.')
+      ('Throughput and stuck work', 'Stuck work includes items in In Progress, In Review or Blocked / On Hold. A threshold of 7 includes items in that status for seven days or more.', [
+        ('Weekly throughput', 'Category / axis: Completion date; Measure: Completed items; Reporting interval: Weekly.'),
+        ('Daily throughput by Team', 'Category / axis: Completion date; Measure: Completed items; Reporting interval: Daily; Group by: Team.'),
+        ('Stuck items by Team', 'Category / axis: Team; Measure: Days in current status; Duration calculation: Count items; Days in current status at least: 7.'),
+        ('Stuck days by item', 'Category / axis: Item; Measure: Days in current status; Duration calculation: Individual items; Days in current status at least: 7; Layout: Bar.'),
+        ('Days-in-status bands', 'Category / axis: Days-in-status band; Measure: Days in current status; Duration calculation: Count items; Duration band width (days): 3; Days in current status at least: 0.')
       ]),
       ('Sprint scope and progress', 'These calculations need recorded sprint history. Add a Sprint filter to focus on one sprint.', [
         ('Sprint churn changes', 'Category / axis: Sprint; Measure: Added sprint scope; Additional measure: Removed sprint scope; Scope change counting: Count events; Layout: Stacked column. Counts repeat additions and removals.'),
-        ('Sprint churn tickets', 'Category / axis: Sprint; Measure: Added sprint scope; Additional measure: Removed sprint scope; Scope change counting: Distinct tickets per sprint; Layout: Stacked column. A ticket can appear in both series.'),
-        ('Sprint-start commitment', 'Category / axis: Sprint; Measure: Sprint-start commitment; Sprint measure unit: Ticket count.'),
+        ('Sprint churn items', 'Category / axis: Sprint; Measure: Added sprint scope; Additional measure: Removed sprint scope; Scope change counting: Distinct items per sprint; Layout: Stacked column. An item can appear in both series.'),
+        ('Sprint-start commitment', 'Category / axis: Sprint; Measure: Sprint-start commitment; Sprint measure unit: Item count.'),
         ('Committed, added and removed scope', 'Category / axis: Sprint; Measure: Committed, added and removed scope; Group by: Scope change (Committed / Added / Removed).'),
         ('Sprint progress', 'Category / axis: Reporting date; Measure: Sprint scope; Additional measure: Completed in sprint; Reporting interval: Daily; Layout: Burn up.'),
-        ('Completed-in-sprint counts', 'Category / axis: Sprint; Measure: Completed in sprint; Sprint measure unit: Ticket count.')
+        ('Completed-in-sprint counts', 'Category / axis: Sprint; Measure: Completed in sprint; Sprint measure unit: Item count.')
       ]),
       ('Trends over time', '', [
         ('Cumulative flow', 'Category / axis: Reporting date; Measure: Historical point-in-time count; Group by: Status; Reporting interval: Daily; Layout: Cumulative flow.'),
@@ -94,13 +94,14 @@
     {% endfor %}
     <h3 id="guide-save" class="govuk-heading-m" tabindex="-1">Save and share</h3>
     <p class="govuk-body"><strong>Save</strong> updates the chart for everyone with access to this workspace. <strong>Save as new</strong> creates a separate chart. <strong>Discard</strong> removes your unsaved changes and returns to a saved chart. Save and Discard are disabled when there are no changes.</p>
-    <p class="govuk-body"><strong>Delete chart</strong> asks for confirmation before removing the shared chart. It does not delete GitHub tickets or their underlying data.</p>
-    <h3 id="guide-table" class="govuk-heading-m" tabindex="-1">Data table and ticket drill-down</h3>
-    <p class="govuk-body">Select <strong>Data table</strong> to see exact values, then select a ticket count or chart point to see the tickets behind it.</p>
-    <p class="govuk-body">Changing pages does not change the results. GitHub ticket links open the issue or pull request. Other ticket references are text only.</p>
-    <p class="govuk-body">Sprint churn may count the same ticket more than once if it is added or removed several times.</p>
+    <p class="govuk-body"><strong>Delete chart</strong> asks for confirmation before removing the shared chart. It does not delete GitHub items or their underlying data.</p>
+    <h3 id="guide-table" class="govuk-heading-m" tabindex="-1">Data table and item drill-down</h3>
+    <p class="govuk-body">Select <strong>Data table</strong> to see exact values, then select an item count or chart point to see the items behind it.</p>
+    <p class="govuk-body">Individual item axes show numbers such as <code>#511</code>. If different plotted items share a number, only those labels include the short repository name, such as <code>developer-experience#115</code>. Tooltips, tables, details and CSV retain the full reference.</p>
+    <p class="govuk-body">Changing pages does not change the results. GitHub item links open the issue or pull request. Other item references are text only.</p>
+    <p class="govuk-body">Sprint churn may count the same item more than once if it is added or removed several times.</p>
     <h3 id="guide-export" class="govuk-heading-m" tabindex="-1">Export CSV</h3>
-    <p class="govuk-body">Select <strong>Export CSV</strong> to download every row, not just the page shown. The file includes filters, exact values, ticket references and data sources.</p>
+    <p class="govuk-body">Select <strong>Export CSV</strong> to download every row, not just the page shown. The file includes filters, exact values, item references and data sources.</p>
     <p class="govuk-body">You cannot export when there are no rows or the calculation is unavailable.</p>
   </div>
 </dialog>

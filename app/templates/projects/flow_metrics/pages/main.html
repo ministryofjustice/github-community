@@ -60,27 +60,23 @@
                 <button id="filter-date-cancel" class="flow-link-button" type="button">Cancel</button>
               </div>
             </div>
+            <div id="date-range-panel" class="flow-search-suggestions flow-date-panel" role="group" aria-labelledby="date-range-title" hidden>
+              <h3 id="date-range-title" class="govuk-heading-s">Custom date range</h3>
+              <form id="custom-date-fields">
+                <div><label class="govuk-label" for="range-from">From date</label><input id="range-from" class="govuk-input" type="date" required></div>
+                <div><label class="govuk-label" for="range-to">To date</label><input id="range-to" class="govuk-input" type="date" required></div>
+                <div class="flow-actions">
+                  <button class="govuk-button" type="submit">Apply range</button>
+                  <button id="cancel-date-range" class="flow-link-button" type="button">Cancel</button>
+                </div>
+                <p id="date-range-error" class="govuk-error-message" role="alert" hidden></p>
+              </form>
+            </div>
           </div>
           <button id="search-discard" class="govuk-button govuk-button--secondary" type="button" disabled>Discard</button>
           <button id="search-save" class="govuk-button" type="button" disabled>Save</button>
         </div>
         <p id="search-error" class="govuk-error-message" role="alert" hidden></p>
-        <div id="chart-date-ranges" class="flow-date-ranges" hidden>
-          <div class="flow-view-buttons" role="group" aria-label="Chart date range">
-            <button class="flow-view-button" type="button" data-date-range="2weeks" aria-pressed="false">2 weeks</button>
-            <button class="flow-view-button" type="button" data-date-range="1month" aria-pressed="false">1 month</button>
-            <button class="flow-view-button" type="button" data-date-range="3months" aria-pressed="false">3 months</button>
-            <button class="flow-view-button" type="button" data-date-range="max" aria-pressed="true">Max</button>
-          </div>
-          <button id="custom-date-range" class="flow-link-button" type="button" aria-expanded="false" aria-controls="custom-date-fields">Custom range</button>
-          <form id="custom-date-fields" class="flow-actions" hidden>
-            <div><label class="govuk-label" for="range-from">From date</label><input id="range-from" class="govuk-input" type="date" required></div>
-            <div><label class="govuk-label" for="range-to">To date</label><input id="range-to" class="govuk-input" type="date" required></div>
-            <button class="govuk-button" type="submit">Apply range</button>
-            <button id="cancel-date-range" class="flow-link-button" type="button">Cancel</button>
-            <p id="date-range-error" class="govuk-error-message" role="alert" hidden></p>
-          </form>
-        </div>
         <p id="flow-message" class="govuk-body-s flow-message" role="status" aria-live="polite" aria-atomic="true"></p>
         <form id="configuration" class="flow-config" hidden>
           <div class="flow-chart-heading">
@@ -102,11 +98,11 @@
             </div>
             <div id="calculation-fields" class="flow-config-grid">
               <div id="interval-field"><label class="govuk-label" for="reporting-interval">Reporting interval</label><select id="reporting-interval" class="govuk-select"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
-              <div id="aggregation-field"><label class="govuk-label" for="aggregation">Duration calculation</label><select id="aggregation" class="govuk-select"><option value="individual">Individual tickets</option><option value="count">Count tickets</option><option value="sum">Sum</option><option value="average">Average</option></select></div>
+              <div id="aggregation-field"><label class="govuk-label" for="aggregation">Duration calculation</label><select id="aggregation" class="govuk-select"><option value="individual">Individual items</option><option value="count">Count items</option><option value="sum">Sum</option><option value="average">Average</option></select></div>
               <div id="min-days-field"><label class="govuk-label" for="min-days">Days in current status at least</label><input id="min-days" class="govuk-input govuk-input--width-4" type="number" min="0" max="365" value="0"></div>
               <div id="bands-field"><label class="govuk-label" for="band-width">Duration band width (days)</label><input id="band-width" class="govuk-input govuk-input--width-4" type="number" min="1" max="365" value="3"></div>
-              <div id="counting-field"><label class="govuk-label" for="counting">Scope change counting</label><select id="counting" class="govuk-select"><option value="events">Count events</option><option value="tickets">Distinct tickets per sprint</option></select></div>
-              <div id="value-field"><label class="govuk-label" for="calculation-value">Sprint measure unit</label><select id="calculation-value" class="govuk-select"><option value="count">Ticket count</option><option value="points">Fictional Points</option></select></div>
+              <div id="counting-field"><label class="govuk-label" for="counting">Scope change counting</label><select id="counting" class="govuk-select"><option value="events">Count events</option><option value="tickets">Distinct items per sprint</option></select></div>
+              <div id="value-field"><label class="govuk-label" for="calculation-value">Sprint measure unit</label><select id="calculation-value" class="govuk-select"><option value="count">Item count</option><option value="points">Fictional Points</option></select></div>
               <div id="additional-field"><label class="govuk-label" for="additional-measure">Additional measure</label><select id="additional-measure" class="govuk-select"><option value="">None</option></select></div>
             </div>
           </fieldset>
@@ -130,13 +126,13 @@
         </div>
         <p id="result-summary" class="govuk-body-s flow-status-message" role="status"></p>
         <div id="chart-view">
-          <div class="flow-canvas"><canvas id="chart" role="img" aria-label="Chart. Use Data table for exact values and keyboard-accessible ticket drill-down."></canvas></div>
+          <div class="flow-canvas"><canvas id="chart" role="img" aria-label="Chart. Use Data table for exact values and keyboard-accessible item drill-down."></canvas></div>
         </div>
         <div id="table-view" class="flow-table-scroll" role="region" aria-label="Exact chart values" tabindex="0" hidden></div>
         <p id="chart-scope" class="govuk-body-s flow-scope" aria-live="polite" aria-atomic="true"></p>
         <section id="drill-down" class="flow-drill" aria-labelledby="drill-title" hidden>
-          <div class="flow-chart-heading"><h3 id="drill-title" class="govuk-heading-m" tabindex="-1">Sample tickets</h3><button id="close-drill" class="flow-link-button" type="button">Close tickets</button></div>
-          <div id="ticket-table" class="flow-table-scroll" role="region" aria-label="Ticket details" tabindex="0"></div>
+          <div class="flow-chart-heading"><h3 id="drill-title" class="govuk-heading-m" tabindex="-1">Sample items</h3><button id="close-drill" class="flow-link-button" type="button">Close items</button></div>
+          <div id="ticket-table" class="flow-table-scroll" role="region" aria-label="Item details" tabindex="0"></div>
         </section>
       </section>
     </div>

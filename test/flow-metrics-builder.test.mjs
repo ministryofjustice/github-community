@@ -122,7 +122,7 @@ test("scope returns count occurrences vs distinct tickets and grouping preserves
 test("commitment is a baseline not Planned; count and Points units stay distinct, missing estimates never become zero", () => {
   const counts = buildResult(recipe("committedScope", "sprint", { additional: "completedScope" }));
   const velocity = buildResult(editableRecipe(SEEDS.find(s => s.metric === "velocity")));
-  assert.equal(counts.unit, "Tickets");assert.equal(velocity.unit, "Points");
+  assert.equal(counts.unit, "Items");assert.equal(velocity.unit, "Points");
   assert.deepEqual(counts.series[0].points.map(p => p.value), [10, 11, 12]);
   const planned = buildResult({ ...CUSTOM_DEFAULTS, id: "planned", name: "Planned and unplanned work", x: "planned" });
   assert.notDeepEqual(planned.rows.map(r=>r.value), counts.series[0].points.map(p=>p.value));

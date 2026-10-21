@@ -57,7 +57,7 @@ export const FIELDS = {
   type: "Item type", planned: "Planned and unplanned work", objective: "Objective",
   created: "Created week", completed: "Completed week",
   reporting: "Reporting date", completionDate: "Completion date", statusBand: "Days-in-status band",
-  durationBand: "Cycle-time band", ticket: "Ticket",
+  durationBand: "Cycle-time band", ticket: "Item",
 };
 export const GROUP_FIELDS = { ...Object.fromEntries(Object.entries(FIELDS).filter(([key]) => CATEGORY_FIELDS.includes(key))), scopeChange: "Scope change (Committed / Added / Removed)" };
 export const MEASURES = {
@@ -68,7 +68,7 @@ export const MEASURES = {
   averageEstimation: { name: "Average Estimation", unit: "Estimation per item" },
   averageCycle: { name: "Average cycle time", unit: "Calendar days" },
   averageAge: { name: "Average work item age", unit: "Calendar days" },
-  ...Object.fromEntries(Object.entries(CALCULATIONS).map(([key, spec]) => [key, { name: spec.name, unit: spec.duration ? "Calendar days" : "Tickets" }])),
+  ...Object.fromEntries(Object.entries(CALCULATIONS).map(([key, spec]) => [key, { name: spec.name, unit: spec.duration ? "Calendar days" : "Items" }])),
 };
 export const DEFAULT_FILTERS = { team: "", sprint: "", from: "", to: "", status: "", type: "", planned: "", query: "" };
 export const SEARCH_FIELDS = [
@@ -162,7 +162,7 @@ export const LAYOUTS = {
 export const METRICS = {
   custom: { name: "Custom chart", unit: "Items", description: "Build a chart from sample board fields. Choose the category axis, measure and optional grouping; filters belong to this chart." },
   cycle: { name: "Cycle time", unit: "Calendar days", description: "Elapsed calendar days from start to latest completion, for sample items completed in the reporting window. Same-day completion is 0.", events: true },
-  churn: { name: "Sprint churn", unit: "Items", description: "Sample scope additions and removals during each sprint. A ticket can contribute to both series. These are fabricated events, not inferred board history.", events: true },
+  churn: { name: "Sprint churn", unit: "Items", description: "Sample scope additions and removals during each sprint. An item can contribute to both series. These are fabricated events, not inferred board history.", events: true },
   age: { name: "Work item age", unit: "Calendar days", description: "Elapsed calendar days since creation for unfinished sample items, as at the end of the reporting window." },
   status: { name: "Status / WIP", unit: "Items", description: "Sample status distribution at the end of the reporting window. WIP includes In Progress, In Review and Blocked / On Hold." },
   stuck: { name: "Stuck items", unit: "Calendar days", description: "Unfinished WIP items in their current sample status for at least the configured number of calendar days, as at the reporting end date.", events: true },
@@ -293,11 +293,16 @@ export function validateFilters(filters) {
 const point = (label, value, tickets) => ({ label, value, ids: tickets.map((ticket) => ticket.id) });
 export const ticketReference = (ticket) => ticket.provenance === "real"
   ? ticket.reference || "Draft item" : ticket.reference || ticket.id;
-export const ticketChartLabel = (ticket) => {
+export const ticketChartLabel = (ticket, plottedItems = []) => {
   const reference = ticketReference(ticket);
   const number = reference.match(/#([1-9]\d*)$/)?.[1];
-  return number ? `Ticket #${number}` : reference;
+  if (!number) return reference;
+  const clashes = plottedItems.some((other) => other.id !== ticket.id
+    && ticketReference(other).match(/#([1-9]\d*)$/)?.[1] === number);
+  const repository = reference.slice(0, reference.lastIndexOf("#")).split("/").at(-1);
+  return clashes ? `${repository}#${number}` : `#${number}`;
 };
+export const itemCount = (count) => `${count} ${count === 1 ? "item" : "items"}`;
 export const ticketText = (ticket) => `${ticket.title} (${ticketReference(ticket)})`;
 export const pointTicket = (row, tickets) => row.ticketId
   ? tickets.find((ticket) => ticket.id === row.ticketId) : null;
@@ -395,7 +400,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
   const to = dayNumber(filters.to || HISTORY.to);
   if (["scatter", "histogram"].includes(chart.layout) && chart.metric !== "cycle") {
     return {
-      series: [], rows: [], tickets: [], from, to, sampleSize: 0, unit: "Tickets", axis: "",
+      series: [], rows: [], tickets: [], from, to, sampleSize: 0, unit: "Items", axis: "",
       provenance: liveData ? "observed" : "synthetic", definitionVersion: 2,
       unavailable: "Scatter and histogram require Cycle time chart data. Choose Cycle time or another layout.",
     };
@@ -481,7 +486,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
   const series = [];
   const add = (name, points) => series.push({ name, points });
   let unit = METRICS[chart.metric].unit;
-  if (chart.metric === "velocity" && chart.calculation?.value === "count") unit = "Tickets";
+  if (chart.metric === "velocity" && chart.calculation?.value === "count") unit = "Items";
   let note = "";
   let axis = chart.metric === "status" ? "Status" : "Reporting point";
   if (eventData && ["velocity", "churn", "flow", "progress"].includes(chart.metric)) {
@@ -489,7 +494,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
     const context = { sprints: eventData.sprints, statuses: STATUSES, dateAt, dayNumber, point, shortDate };
     series.push(...eventSeries(scopedChart, included, from, to, context));
     if (chart.metric === "velocity") note = chart.calculation?.value === "count"
-      ? "Committed tickets use sprint-start membership. Completed tickets use sprint-end or reporting-cutoff scope and latest Done state, excluding reopened unfinished work. In-progress sprints are partial."
+      ? "Committed items use sprint-start membership. Completed items use sprint-end or reporting-cutoff scope and latest Done state, excluding reopened unfinished work. In-progress sprints are partial."
       : "Committed points use sprint-start estimates. Completed points include added work and exclude reopened unfinished work. Missing point estimates are excluded; a populated baseline with no estimates is a gap. In-progress sprints are partial.";
   } else if (chart.metric === "custom") {
     series.push(...customSeries(chart, included, from, to, tickets));
@@ -508,7 +513,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
       ...point(ticketText(t), t.done - t.start, [t]), ticketId: t.id,
       completedDate: dateAt(t.done), x: Date.parse(`${dateAt(t.done)}T00:00:00Z`),
     })));
-    axis = chart.layout === "scatter" ? "Completion date" : "Completed ticket";
+    axis = chart.layout === "scatter" ? "Completion date" : "Completed item";
   } else if (chart.metric === "age" || chart.metric === "stuck") {
     const active = included.filter((t) => {
       const state = stateAt(t, to);
@@ -567,22 +572,22 @@ function buildResultCore(chart, filters = chart.filters || {}) {
       const matches = observations.filter((p) => p.value >= i * width && p.value < (i + 1) * width);
       return { label: `${i * width}–${(i + 1) * width - 1} days`, value: matches.length, ids: matches.flatMap((p) => p.ids) };
     });
-    note = "One completed ticket per duration band, using first In Progress to latest completion; reopened unfinished tickets are excluded.";
-    series.splice(0, series.length, { name: "Completed tickets", points: bins });
-    unit = "Tickets";
+    note = "One completed item per duration band, using first In Progress to latest completion; reopened unfinished items are excluded.";
+    series.splice(0, series.length, { name: "Completed items", points: bins });
+    unit = "Items";
     axis = "Cycle time (calendar days)";
   }
   const rows = series.flatMap((s) => s.points.map((p) => ({ ...p, series: s.name })));
   const coverageText = coverage.excluded || missingFilterEvidence
-    ? `${coverage.eligible} of ${coverage.available} matching tickets have the required evidence; ${coverage.excluded} excluded.${missingFilterEvidence ? ` ${missingFilterEvidence} excluded by filters with uncollected fields.` : ""}`
+    ? `${coverage.eligible} of ${coverage.available} matching items have the required evidence; ${coverage.excluded} excluded.${missingFilterEvidence ? ` ${missingFilterEvidence} excluded by filters with uncollected fields.` : ""}`
     : "";
-  if (needsHistory && coverage.excluded) note += " Genuine tickets without verified event history are excluded; observations are not transitions.";
-  if (requiresEstimation) note += " Unitless numeric Estimation uses genuine tickets only; fictional Points are separate. Missing estimates are excluded.";
+  if (needsHistory && coverage.excluded) note += " Genuine items without verified event history are excluded; observations are not transitions.";
+  if (requiresEstimation) note += " Unitless numeric Estimation uses genuine items only; fictional Points are separate. Missing estimates are excluded.";
   if (requiresPoints && eventData?.realObservations) note += " Points uses fictional estimates only, not genuine numeric Estimation.";
   const unavailable = needsHistory && !eligible.length && coverage.genuine
-    ? "Verified event history is unavailable for these genuine tickets."
+    ? "Verified event history is unavailable for these genuine items."
     : requiresEstimation && !eligible.length
-      ? "No matching tickets have a captured numeric Estimation value from the verified field."
+      ? "No matching items have a captured numeric Estimation value from the verified field."
       : requiresPoints && !eligible.length && coverage.genuine
         ? "Points measures use fictional points. Choose Sum of Estimation or Average Estimation for genuine numeric estimates."
         : null;
@@ -606,16 +611,16 @@ export function resultCSV(chart, result, filters = chart.filters || {}) {
   const mixed = result.provenance === "mixed";
   const context = `${mixed ? "Combined exploration: fictional events and genuine observations" : liveData ? "Captured board observation; definition v1" : "Demonstration data only"}; ${chart.name}; ${scopeLabels(filters).join("; ")}; ${chart.metric === "custom" ? `${FIELDS[chart.x]}; ${MEASURES[chart.y].name}; Group: ${GROUP_FIELDS[chart.group] || "None"}` : METRICS[chart.metric].name}; ${result.note}; ${result.coverageText || ""}`;
   return [
-    ["Context", "Series", "Point", ...(chart.layout === "scatter" ? ["Completion date"] : []), result.unit, mixed ? "Ticket references" : liveData ? "Board item references" : "Sample ticket references", ...(mixed ? ["Contributor provenance", "Genuine observation at"] : [])],
+    ["Context", "Series", "Point", ...(chart.layout === "scatter" ? ["Completion date"] : []), result.unit, mixed ? "Item references" : liveData ? "Board item references" : "Sample item references", ...(mixed ? ["Contributor provenance", "Genuine observation at"] : [])],
     ...result.rows.map((row) => [context, row.series, row.label,
       ...(chart.layout === "scatter" ? [displayDate(row.completedDate)] : []),
       row.value ?? "", row.ids.map((id) => {
         const ticket = result.tickets.find((ticket) => ticket.id === id);
-        return ticket ? ticketReference(ticket) : "Unavailable ticket reference";
+        return ticket ? ticketReference(ticket) : "Unavailable item reference";
       }).join("; "),
       ...(mixed ? [row.ids.map((id) => {
         const ticket = result.tickets.find((ticket) => ticket.id === id);
-        return `${ticket ? ticketReference(ticket) : "Unavailable ticket reference"}:${ticket?.provenance || "synthetic"}`;
+        return `${ticket ? ticketReference(ticket) : "Unavailable item reference"}:${ticket?.provenance || "synthetic"}`;
       }).join("; "), result.coverage.realObservation || ""] : [])]),
   ].map((row) => row.map(csvCell).join(",")).join("\r\n");
 }

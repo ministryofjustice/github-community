@@ -1,6 +1,10 @@
 .flow-heading, .flow-chart-heading, .flow-sidebar-heading, .flow-chart-toolbar,
 .flow-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .flow-heading h1 { margin-bottom: 12px; }
+#team-panel > .govuk-heading-l { margin-bottom: 10px; }
+@media (min-width: 40.0625em) {
+  #team-panel > .govuk-heading-l { margin-bottom: 15px; }
+}
 .flow-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 2px solid #1d70b8; margin: 0 0 24px; }
 .flow-navigation #open-guide { margin-left: auto; font-size: 16px; text-align: right; }
 .flow-heading .govuk-tag { margin-bottom: 12px; }
@@ -8,8 +12,6 @@
 .flow-message { margin: -8px 0 16px; color: #505a5f; text-align: left; }
 .flow-message:empty { margin: 0; }
 .flow-status-message:empty { display: none; }
-.flow-date-ranges { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
-.flow-date-ranges #custom-date-fields { flex-basis: 100%; align-items: end; }
 .flow-message[data-error="true"] { padding: 12px; border: 2px solid #0b0c0c; color: #0b0c0c; }
 .flow-tabs { display: flex; gap: 6px; flex-shrink: 0; }
 .flow-tab { font: bold 19px "GDS Transport", arial, sans-serif; background: #f3f2f1; color: #0b0c0c; border: 0; padding: 14px 20px; cursor: pointer; }

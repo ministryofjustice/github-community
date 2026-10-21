@@ -18,6 +18,13 @@ app:
       GITHUB_STATS_ACCESS_TEAM: "ministryofjustice/repository-stats-viewers"
 
   jobs:
+    flow_metrics_process_deliveries:
+      enabled: false
+      schedule: "* * * * *"
+    flow_metrics_reconcile:
+      enabled: true
+      schedule: "30 9,11,13,15,17 * * 1-5"
+      timeZone: "Europe/London"
     flow_metrics_init_sample:
       enabled: true
     map_github_repositories_to_owners:
@@ -25,3 +32,10 @@ app:
     # Repository Stats visibility snapshot (UTC)
     record_repository_visibility:
       schedule: "0 4 * * *"
+
+  flowMetrics:
+    webhook:
+      enabled: false
+      secretName: "flow-metrics-webhook"
+      organisationId: ""
+      installationId: ""

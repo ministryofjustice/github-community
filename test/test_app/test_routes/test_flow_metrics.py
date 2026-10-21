@@ -76,6 +76,20 @@ def test_flow_metrics_uses_existing_signed_in_session(client):
     assert 'role="combobox"' in html
     assert 'id="filter-suggestions"' in html
     assert 'id="search-save"' in html
+    assert "Close items" in html
+    assert 'aria-label="Item details"' in html
+    assert "Individual items" in html
+    assert "Distinct items per sprint" in html
+    assert "keyboard-accessible item drill-down" in html
+    assert "ticket drill-down" not in html
+    assert "Ticket count" not in html
+    assert 'value="tickets"' in html  # Existing saved calculation value is unchanged.
+    assert 'id="chart-date-ranges"' not in html
+    assert 'class="flow-date-ranges"' not in html
+    assert 'id="date-range-panel"' in html
+    assert 'id="range-from"' in html and 'id="range-to"' in html
+    assert html.index('id="date-range-panel"') < html.index('id="search-discard"')
+    assert "choose <strong>Date range</strong> at the top of the dropdown" in html
     configuration = html[html.index('<form id="configuration"'):html.index("</form>")]
     for control in ("team", "sprint", "from", "to"):
         assert f'id="{control}"' not in configuration

@@ -1,0 +1,77 @@
+{{- range $definition := list
+      (dict "key" "flow_metrics_process_deliveries" "suffix" "flow-metrics-process" "collect" false "deadline" 120)
+      (dict "key" "flow_metrics_reconcile" "suffix" "flow-metrics-reconcile" "collect" true "deadline" 3600) }}
+{{- $settings := index $.Values.app.jobs $definition.key | default dict }}
+{{- if $settings.enabled }}
+{{- include "app.flowMetrics.devOnly" $ }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.fullname" $ | trunc 29 | trimSuffix "-" }}-{{ $definition.suffix }}
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ required "Flow Metrics job schedule is required" $settings.schedule | quote }}
+  timeZone: {{ $settings.timeZone | default "Etc/UTC" | quote }}
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: {{ $definition.deadline }}
+      template:
+        spec:
+          serviceAccountName: cd-serviceaccount
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: {{ $definition.suffix }}
+              image: "{{ $.Values.app.deployment.image.repository }}:{{ $.Values.app.deployment.image.tag | default $.Chart.AppVersion }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python3", "-m", "flask"]
+              {{- if $definition.collect }}
+              args: ["--app", "app.app", "flow-metrics", "collect"]
+              {{- else }}
+              args: ["--app", "app.app", "flow-metrics", "process-deliveries", "--limit", "100"]
+              {{- end }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - "ALL"
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              env:
+                {{- range $key := list "POSTGRES_USER" "POSTGRES_PASSWORD" "POSTGRES_DB" "POSTGRES_HOST" "POSTGRES_PORT" }}
+                - name: {{ $key }}
+                  value: {{ index $.Values.app.deployment.env $key | quote }}
+                {{- end }}
+                {{- if $definition.collect }}
+                {{- range $key := list "GITHUB_APP_CLIENT_ID" "GITHUB_APP_PRIVATE_KEY" "GITHUB_APP_INSTALLATION_ID" }}
+                - name: {{ $key }}
+                  value: {{ index $.Values.app.deployment.env $key | quote }}
+                {{- end }}
+                {{- end }}
+                - name: SENTRY_ENV
+                  value: {{ $.Values.app.deployment.env.SENTRY_ENV | quote }}
+                {{- with $.Values.app.deployment.env.SENTRY_DSN_KEY }}
+                - name: SENTRY_DSN_KEY
+                  value: {{ . | quote }}
+                {{- end }}
+          restartPolicy: Never
+{{- end }}
+{{- end }}
