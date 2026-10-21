@@ -10,7 +10,7 @@
         <li><a class="govuk-link" href="#guide-create">Create a chart</a></li>
         <li><a class="govuk-link" href="#guide-filter">Filter data</a></li>
         <li><a class="govuk-link" href="#guide-recipes">Custom chart recipes</a></li>
-        <li><a class="govuk-link" href="#guide-save">Save and share</a></li>
+        <li><a class="govuk-link" href="#guide-save">Save and delete</a></li>
         <li><a class="govuk-link" href="#guide-table">Data table and item drill-down</a></li>
         <li><a class="govuk-link" href="#guide-export">Export CSV</a></li>
       </ul>
@@ -26,7 +26,10 @@
     <p class="govuk-body">To start from an existing chart, open <strong>Configure</strong> and choose <strong>Edit as Custom recipe</strong>. Your saved chart stays unchanged until you save. If choices cannot be used together, a message explains what to change.</p>
     <h3 id="guide-filter" class="govuk-heading-m" tabindex="-1">Filter data</h3>
     <p class="govuk-body">Use <strong>Filter by keyword or field</strong> above the chart. Choose suggestions or type filters, such as <code>team:Blueprint status:"In Progress"</code>. Use quotes around values with spaces. You can also enter a keyword to search item titles.</p>
-    <p class="govuk-body">For dates, use <code>from:2026-09-14 to:2026-09-27</code>. On charts with a time-based axis, click or focus <strong>Filter by keyword or field</strong> and choose <strong>Date range</strong> at the top of the dropdown. Choose 2 weeks, 1 month, 3 months or Max, or Custom range for paired From and To dates. Shortcuts end at the latest available date and stay within available history; Max clears date restrictions. These options update the same search filters and use the chart's Save and Discard controls. Choose dates and field values available in your workspace. Filters apply to the active chart. Remove date filters to use all available history, or clear the search box to remove all search filters.</p>
+    <h4 class="govuk-heading-s">Date filters</h4>
+    <p class="govuk-body">On time-axis charts, open <strong>Filter by keyword or field &rarr; Date range</strong>. Choose <strong>2 weeks</strong>, <strong>1 month</strong>, <strong>3 months</strong>, <strong>Max</strong> or <strong>Custom range</strong> to enter From and To dates. You can also type <code>from:2026-09-14 to:2026-09-27</code>.</p>
+    <p class="govuk-body">Presets end at the latest available date and stay within recorded history. <strong>Max</strong> removes date restrictions.</p>
+    <p class="govuk-body">Filters apply to the active chart and use <strong>Save</strong> and <strong>Discard</strong>. Use dates and values available in your workspace. Remove date filters to show all history, or clear the search box to remove all search filters.</p>
     <h4 class="govuk-heading-s">Understanding the results</h4>
     <p class="govuk-body"><strong>Planned and unplanned work</strong> uses the board's Planned field. It does not show what was agreed at the start of a sprint or what changed later. Those are shown by separate calculations, such as <strong>Sprint-start commitment</strong> and <strong>Sprint churn</strong>.</p>
     <p class="govuk-body"><strong>Estimation</strong> uses the numbers entered on the board, without treating them as hours, days or story points. Sums and averages include zero but leave out missing values.</p>
@@ -92,13 +95,18 @@
       </table>
     </div>
     {% endfor %}
-    <h3 id="guide-save" class="govuk-heading-m" tabindex="-1">Save and share</h3>
-    <p class="govuk-body"><strong>Save</strong> updates the chart for everyone with access to this workspace. <strong>Save as new</strong> creates a separate chart. <strong>Discard</strong> removes your unsaved changes and returns to a saved chart. Save and Discard are disabled when there are no changes.</p>
+    <h3 id="guide-save" class="govuk-heading-m" tabindex="-1">Save and delete</h3>
+    <ul class="govuk-list govuk-list--bullet">
+      <li><strong>Save</strong> updates the shared chart for everyone with workspace access.</li>
+      <li><strong>Save as new</strong> creates a separate chart.</li>
+      <li><strong>Discard</strong> removes unsaved changes and restores the saved chart.</li>
+    </ul>
+    <p class="govuk-body"><strong>Save</strong> and <strong>Discard</strong> are disabled when nothing has changed.</p>
     <p class="govuk-body"><strong>Delete chart</strong> asks for confirmation before removing the shared chart. It does not delete GitHub items or their underlying data.</p>
     <h3 id="guide-table" class="govuk-heading-m" tabindex="-1">Data table and item drill-down</h3>
-    <p class="govuk-body">Select <strong>Data table</strong> to see exact values, then select an item count or chart point to see the items behind it.</p>
-    <p class="govuk-body">Individual item axes show numbers such as <code>#511</code>. If different plotted items share a number, only those labels include the short repository name, such as <code>developer-experience#115</code>. Tooltips, tables, details and CSV retain the full reference.</p>
-    <p class="govuk-body">Changing pages does not change the results. GitHub item links open the issue or pull request. Other item references are text only.</p>
+    <p class="govuk-body">Select <strong>Data table</strong> for exact values. Select an item count or chart point to see the items behind it. Changing pages does not change the results.</p>
+    <p class="govuk-body">Item axes use short references such as <code>#511</code>. When numbers clash, those labels include the repository name, such as <code>developer-experience#115</code>. Tooltips, tables, details and CSV keep the full reference.</p>
+    <p class="govuk-body">GitHub links open the issue or pull request. Other references are text only.</p>
     <p class="govuk-body">Sprint churn may count the same item more than once if it is added or removed several times.</p>
     <h3 id="guide-export" class="govuk-heading-m" tabindex="-1">Export CSV</h3>
     <p class="govuk-body">Select <strong>Export CSV</strong> to download every row, not just the page shown. The file includes filters, exact values, item references and data sources.</p>

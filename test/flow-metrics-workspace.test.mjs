@@ -192,6 +192,7 @@ for (const recovery of ["preset", "custom"]) {
     assert.deepEqual(context.draft, original);
 
     const range = recovery === "preset" ? datePresetRange("2weeks") : { from: "2026-10-16", to: "2026-10-19" };
+    element("filter-query").value += " ";
     context.showSuggestions();
     const options = () => element("filter-suggestions").children;
     assert.equal(options()[0].children[1].textContent, "Date range");
@@ -221,6 +222,7 @@ for (const recovery of ["preset", "custom"]) {
     assert.deepEqual(saved, original, "The saved chart remains unchanged for Save/Discard");
     assert.notEqual(JSON.stringify(context.draft), JSON.stringify(saved), "Corrected range remains an unsaved change");
 
+    element("filter-query").value += " ";
     context.showSuggestions();
     options()[0].click();
     if (recovery === "preset") assert.equal(options()[0].dataset.current, "true");
@@ -233,7 +235,41 @@ for (const recovery of ["preset", "custom"]) {
     assert.equal(options()[0].children[1].textContent, "2 weeks");
     key("Escape");
     assert.equal(element("filter-suggestions").hidden, true);
+    if (recovery === "preset") {
+      context.SEARCH_FIELDS = SEARCH_FIELDS.map(([field, label, values]) => [
+        field, label,
+        ({ label: ["example-label"], source: ["Sample", "Genuine"], blocking: ["example/repo#11"], "blocked-by": ["example/repo#12"] })[field] ?? values,
+      ]);
+      const labels = () => options().map(option => option.children[1].textContent);
+      for (const [field, label, values] of context.SEARCH_FIELDS) {
+        context.closeSuggestions();
+        element("filter-query").value = "";
+        element("filter-query").handlers.focus();
+        assert.equal(labels()[0], "Date range", field);
+        if (values?.length && !["from", "to"].includes(field)) {
+          options().find(option => option.children[1].textContent === label).click();
+          assert.deepEqual(labels(), values, `${field} offers only its values`);
+          assert.equal(context.dateRangeMenu, false);
+        }
+        for (const suffix of ["", "no-matching-value"]) {
+          element("filter-query").value = `${field}:${suffix}`;
+          context.dateRangeMenu = true;
+          element("filter-query").handlers.input();
+          const expected = (values || []).filter(value => value.toLowerCase().includes(suffix));
+          assert.deepEqual(labels(), expected, `${field}:${suffix} excludes date range and other fields`);
+          assert.equal(context.dateRangeMenu, false);
+          assert.equal(element("filter-suggestions").hidden, expected.length === 0);
+        }
+      }
+      context.SEARCH_FIELDS.push(["empty", "Empty", []]);
+      element("filter-query").value = "empty:";
+      element("filter-query").handlers.input();
+      assert.deepEqual(labels(), []);
+      assert.equal(element("filter-suggestions").hidden, true);
+      context.SEARCH_FIELDS = SEARCH_FIELDS;
+    }
     context.draft = { ...saved, metric: "age", x: "ticket" };
+    element("filter-query").value = "";
     context.renderDateRanges();
     context.showSuggestions();
     assert.ok(options().every(option => option.children[1].textContent !== "Date range"));

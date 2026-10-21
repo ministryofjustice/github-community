@@ -1203,6 +1203,7 @@ function showSuggestions() {
   const text = input.value;
   const valueMatch = text.match(/(?:^|\s)([a-z-]+):("[^"]*|[^\s"]*)$/);
   const definition = valueMatch && SEARCH_FIELDS.find(([key]) => key === valueMatch[1]);
+  if (valueMatch) dateRangeMenu = false;
   let options;
   if (dateRangeMenu && chartHasDateAxis(draft)) {
     const selected = selectedDateRange();
@@ -1230,7 +1231,7 @@ function showSuggestions() {
         closeSuggestions();
       },
     }));
-  } else if (definition?.[2]) {
+  } else if (definition) {
     options = [];
   } else {
     const fragment = text.match(/(?:^|\s)([a-z-]*)$/)?.[1] || "";
@@ -1247,7 +1248,7 @@ function showSuggestions() {
       },
     }));
   }
-  if (!dateRangeMenu && chartHasDateAxis(draft)) options.unshift({
+  if (!valueMatch && !dateRangeMenu && chartHasDateAxis(draft)) options.unshift({
     label: "Date range", field: "from",
     choose: () => { dateRangeMenu = true; showSuggestions(); },
   });

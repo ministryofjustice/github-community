@@ -89,7 +89,12 @@ def test_flow_metrics_uses_existing_signed_in_session(client):
     assert 'id="date-range-panel"' in html
     assert 'id="range-from"' in html and 'id="range-to"' in html
     assert html.index('id="date-range-panel"') < html.index('id="search-discard"')
-    assert "choose <strong>Date range</strong> at the top of the dropdown" in html
+    assert "<strong>Filter by keyword or field &rarr; Date range</strong>" in html
+    assert '<h4 class="govuk-heading-s">Date filters</h4>' in html
+    assert "Presets end at the latest available date and stay within recorded history." in html
+    assert '<a class="govuk-link" href="#guide-save">Save and delete</a>' in html
+    assert "updates the shared chart for everyone with workspace access." in html
+    assert "Other references are text only." in html
     configuration = html[html.index('<form id="configuration"'):html.index("</form>")]
     for control in ("team", "sprint", "from", "to"):
         assert f'id="{control}"' not in configuration
