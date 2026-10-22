@@ -116,12 +116,18 @@ class TestSharedGitHubAppClient(unittest.TestCase):
 
     def test_json_interface_preserves_status_and_error_message(self):
         response = Mock(ok=False, status_code=404, text="not found")
+        response.headers = {
+            "X-GitHub-Request-Id": "request-for-support",
+            "X-Accepted-GitHub-Permissions": "metadata=read",
+        }
         response.json.return_value = {"message": "no analysis found"}
         with patch.object(self.client, "request", return_value=response):
             with self.assertRaises(GitHubApiError) as error:
                 self.client.request_json("GET", "/repos/org/repo/code-scanning/alerts")
         self.assertEqual(error.exception.status_code, 404)
         self.assertEqual(error.exception.message, "no analysis found")
+        self.assertEqual(error.exception.request_id, "request-for-support")
+        self.assertEqual(error.exception.accepted_permissions, "metadata=read")
 
     def test_non_json_errors_keep_the_response_text(self):
         response = Mock(ok=False, status_code=502, text="Bad gateway")

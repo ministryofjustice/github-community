@@ -21,9 +21,14 @@ REQUEST_TIMEOUT = (10, 60)
 
 
 class GitHubApiError(ValueError):
-    def __init__(self, status_code: int, message: str):
+    def __init__(
+        self, status_code: int, message: str, *,
+        request_id: str | None = None, accepted_permissions: str | None = None,
+    ):
         self.status_code = status_code
         self.message = message
+        self.request_id = request_id
+        self.accepted_permissions = accepted_permissions
         super().__init__(f"GitHub API returned HTTP {status_code}: {message}")
 
 
@@ -227,7 +232,11 @@ class GitHubAppClient:
                 error_message = response.json().get("message", response.text)
             except ValueError:
                 error_message = response.text
-            raise GitHubApiError(response.status_code, str(error_message))
+            raise GitHubApiError(
+                response.status_code, str(error_message),
+                request_id=response.headers.get("X-GitHub-Request-Id"),
+                accepted_permissions=response.headers.get("X-Accepted-GitHub-Permissions"),
+            )
         return response.json()
 
     def close(self):

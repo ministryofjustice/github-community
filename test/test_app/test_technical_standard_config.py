@@ -339,6 +339,17 @@ class TestCheckRecommendations(unittest.TestCase):
 
 
 class TestAuthoritativeOwnerCheck(unittest.TestCase):
+    def test_unavailable_properties_fail_without_claiming_the_property_is_missing(self):
+        for business_unit in (None, "Previously recorded value"):
+            with self.subTest(business_unit=business_unit):
+                repository = make_repository(business_unit, ["team-alpha"], {"team-alpha": 2})
+                repository.data.basic.custom_properties_available = False
+                check = get_authoritative_owner_check(repository)
+                self.assertEqual(check.status, FAIL)
+                self.assertEqual(len(check.recommendations), 1)
+                self.assertIn("could not be verified", check.recommendations[0])
+                self.assertNotIn("Set the repository's", check.recommendations[0])
+
     def test_passes_when_property_and_admin_team_requirements_are_met(self):
         repository = make_repository(
             "Any non-empty value",

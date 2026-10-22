@@ -25,6 +25,25 @@ test_owner_id = 1
 @patch("app.projects.repository_standards.jobs.map_github_repositories_to_owners.AssetService")
 @patch("app.projects.repository_standards.jobs.map_github_repositories_to_owners.OwnerService")
 class TestMain(unittest.TestCase):
+    def test_save_failure_does_not_cleanup_or_start_the_next_organisation(
+        self, mock_owner_service, mock_asset_service, mock_github_service
+    ):
+        mock_owner_service.return_value.find_all.return_value = []
+        mock_github_service.return_value.get_repositories.return_value = [MagicMock()]
+        mock_asset_service.return_value.update_asset_by_name.side_effect = RuntimeError("database write failed")
+        with (
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_standards_orgs",
+                "ministryofjustice:123,moj-analytical-services:456",
+            ),
+            self.app.app_context(),
+            self.assertRaisesRegex(RuntimeError, "database write failed"),
+        ):
+            main()
+        mock_github_service.assert_called_once()
+        mock_asset_service.return_value.remove_stale_assets.assert_not_called()
+        mock_asset_service.return_value.remove_stale_relationships.assert_not_called()
+
     def test_two_installations_save_same_named_repos_without_cross_org_ownership(
         self, mock_owner_service, mock_asset_service, mock_github_service
     ):
@@ -73,17 +92,29 @@ class TestMain(unittest.TestCase):
             ["ministryofjustice", "moj-analytical-services"],
         )
         service.update_relationships_with_owner.assert_called_once()
-        service.remove_stale_assets.assert_called_once_with(
-            ["ministryofjustice", "moj-analytical-services"]
+        self.assertEqual(service.remove_stale_assets.call_args_list, [
+            call(["ministryofjustice"]), call(["moj-analytical-services"])
+        ])
+        second.get_repositories.assert_called_once_with(
+            workers=1, visibility="public", limit=1499
         )
 
-    def test_second_org_failure_does_not_persist_partial_collection(
+    def test_second_org_failure_preserves_first_org_saves_before_second_starts(
         self, mock_owner_service, mock_asset_service, mock_github_service
     ):
         mock_owner_service.return_value.find_all.return_value = []
-        mock_github_service.return_value.get_repositories.side_effect = [
-            [MagicMock()], RuntimeError("second org failed")
-        ]
+        first_repository = MagicMock()
+        service = mock_asset_service.return_value
+
+        def collect(**kwargs):
+            if mock_github_service.return_value.get_repositories.call_count == 1:
+                return [first_repository]
+            service.update_asset_by_name.assert_called_once()
+            service.remove_stale_assets.assert_called_once_with(["ministryofjustice"])
+            service.remove_stale_relationships.assert_called_once_with(["ministryofjustice"])
+            raise RuntimeError("second org failed")
+
+        mock_github_service.return_value.get_repositories.side_effect = collect
         with (
             patch(
                 "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_standards_orgs",
@@ -93,10 +124,12 @@ class TestMain(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "second org failed"),
         ):
             main()
-        service = mock_asset_service.return_value
-        service.update_asset_by_name.assert_not_called()
-        service.remove_stale_assets.assert_not_called()
-        service.remove_stale_relationships.assert_not_called()
+        service.update_asset_by_name.assert_called_once_with(
+            first_repository.basic.name, first_repository.to_dict(),
+            organisation=first_repository.basic.organisation,
+        )
+        service.remove_stale_assets.assert_called_once_with(["ministryofjustice"])
+        service.remove_stale_relationships.assert_called_once_with(["ministryofjustice"])
 
     def test_capped_collection_does_not_cleanup_or_contact_unscanned_org(
         self, mock_owner_service, mock_asset_service, mock_github_service
@@ -116,8 +149,8 @@ class TestMain(unittest.TestCase):
             main()
         mock_github_service.assert_called_once()
         mock_asset_service.return_value.update_asset_by_name.assert_called_once()
-        mock_asset_service.return_value.remove_stale_assets.assert_called_once_with([])
-        mock_asset_service.return_value.remove_stale_relationships.assert_called_once_with([])
+        mock_asset_service.return_value.remove_stale_assets.assert_not_called()
+        mock_asset_service.return_value.remove_stale_relationships.assert_not_called()
 
     def setUp(self):
         installation_id = patch(

@@ -177,7 +177,23 @@ class RepositoryInfoFactory:
         team_admin_maintainer_counts: Optional[dict[str, int]] = None,
         organisation: str = "ministryofjustice",
     ):
-        custom_properties = github_client.get_repository_custom_properties(repo.name)
+        custom_properties_available = True
+        try:
+            custom_properties = github_client.get_repository_custom_properties(repo.name)
+        except GitHubApiError as error:
+            if (
+                error.status_code != 403
+                or error.message != "Resource not accessible by integration"
+            ):
+                raise
+            custom_properties = {}
+            custom_properties_available = False
+            logger.warning(
+                "Custom properties unavailable: repository=%s/%s status=%s "
+                "accepted_permissions=%s request_id=%s; continuing collection",
+                organisation, repo.name, error.status_code,
+                error.accepted_permissions, error.request_id,
+            )
 
         basic_info = BasicRepositoryInfo(
             name=repo.name,
@@ -191,6 +207,7 @@ class RepositoryInfoFactory:
             else None,
             delete_branch_on_merge=repo.delete_branch_on_merge,
             business_unit=custom_properties.get("business-unit"),
+            custom_properties_available=custom_properties_available,
         )
 
         codeowners_file_present = None
@@ -448,6 +465,7 @@ class BasicRepositoryInfo:
     license_path: Optional[str] = None
     business_unit: Optional[str] = None
     organisation: str = "ministryofjustice"
+    custom_properties_available: Optional[bool] = None
 
 
 @dataclass

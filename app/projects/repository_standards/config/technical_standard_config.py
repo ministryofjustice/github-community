@@ -88,6 +88,9 @@ def _review_recommendations(protection, rulesets, settings) -> list[str]:
 def get_authoritative_owner_check(
     repository: RepositoryView,
 ) -> TechnicalStandardCheck:
+    custom_properties_available = getattr(
+        repository.data.basic, "custom_properties_available", None
+    )
     property_is_set = bool(
         (repository.data.basic.business_unit or "").strip()
     )
@@ -99,10 +102,16 @@ def get_authoritative_owner_check(
     status = (
         PASS
         if property_is_set and has_admin_team_with_two_maintainers
+        and custom_properties_available is not False
         else FAIL
     )
     recommendations = []
-    if not property_is_set:
+    if custom_properties_available is False:
+        recommendations.append(
+            "The business-unit custom property could not be verified. "
+            "Check GitHub App repository access and refresh the report."
+        )
+    elif not property_is_set:
         recommendations.append("Set the repository's business-unit custom property.")
     if not has_admin_team_with_two_maintainers:
         recommendations.append(

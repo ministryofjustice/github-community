@@ -173,21 +173,38 @@ unowned until matching owner mappings are configured.
 Workers have separate GitHub clients, HTTP sessions and team caches. They share
 a rate-limit cooldown; custom REST requests and retries wait for it, and workers
 check it before starting another repository. Requests retry rate limits and
-transient server errors up to three times. Database mapping remains serial and
-starts only after the collection phase completes without errors.
-Each repository is saved once before ownership mapping. Stale cleanup is scoped
-to fully scanned organizations; capped or skipped organizations retain their
-previous records. The cap is shared across organizations in configuration order.
+transient server errors up to three times. Each organization is collected, saved
+and ownership-mapped before the next organization starts. Database mapping remains
+serial, and each repository is saved once before ownership mapping. A failure
+collecting MOJAS therefore does not discard MOJ results already saved in that run.
+Stale cleanup only runs for that organization after its uncapped collection,
+saving and ownership mapping succeed. Capped or skipped organizations retain
+their previous unseen records. The cap is shared across organizations in
+configuration order.
+
+If the custom-properties endpoint returns HTTP 403 with "Resource not accessible
+by integration", collection continues with unavailable custom-property metadata.
+The warning logs the organization/repository, status, accepted permissions and
+GitHub request ID, without dumping response bodies or credentials. The ownership
+check fails conservatively and explains that the business-unit property could
+not be verified, rather than claiming it is missing. Other API errors are not
+silently ignored, and security-alert checks retain their existing behaviour.
 
 Compare `Collection phase complete` and `Mapping and cleanup complete` log lines
-with the previous benchmark. `Collected repository` logs give individual timings;
+with the previous benchmark. `Organization save complete` confirms one organization's
+database saving and mapping have finished before collection proceeds to the next.
+`Collected repository` logs give individual timings;
 `GitHub collection complete` includes custom REST request totals (not PyGithub
 request totals). Custom REST endpoint timings and remaining quota are logged at
 DEBUG level, and cooldowns at WARNING level.
 
 After a PR deployment updates the dev CronJob, its next scheduled run uses these
 settings unless another deployment replaces them. No manual trigger is required.
-Checkpoint/resume is not included: a Pod eviction still restarts collection.
+Checkpoint/resume is not included: a retry still starts collection from the first
+configured organization. Already saved organization results survive, but a failure
+during collection still loses the in-memory progress for that organization.
+Saves are not an atomic organization-wide transaction: a database failure can
+leave partially updated reports, but cleanup is not run after that save failure.
 
 ### Shared GitHub Collection Services
 

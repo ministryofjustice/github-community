@@ -15,7 +15,7 @@ from app.projects.repository_standards.models.repository_info import RepositoryI
 
 
 class TestRepositoryInfoFactory(unittest.TestCase):
-    def test_snapshot_records_the_requested_organization(self):
+    def _repository_and_client(self):
         repo = SimpleNamespace(
             name="shared-name", visibility="private", description=None,
             default_branch="main", license=None, delete_branch_on_merge=True,
@@ -35,11 +35,48 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         client.get_open_dependabot_alerts.return_value = []
         client.get_open_secret_scanning_alerts.return_value = []
         client.get_branch_rulesets.return_value = []
+        return repo, client
+
+    def test_snapshot_records_the_requested_organization(self):
+        repo, client = self._repository_and_client()
         info = RepositoryInfoFactory.from_github_repo(
             repo, [], [], [], [], client, organisation="moj-analytical-services"
         )
         self.assertEqual(info.basic.name, "shared-name")
         self.assertEqual(info.basic.organisation, "moj-analytical-services")
+        self.assertIs(info.basic.custom_properties_available, True)
+
+    def test_custom_property_access_denial_preserves_other_collection_and_diagnostics(self):
+        repo, client = self._repository_and_client()
+        client.get_repository_custom_properties.side_effect = GitHubApiError(
+            403, "Resource not accessible by integration",
+            request_id="example-request-id", accepted_permissions="metadata=read",
+        )
+        with self.assertLogs(
+            "app.projects.repository_standards.models.repository_info", level="WARNING"
+        ) as logs:
+            info = RepositoryInfoFactory.from_github_repo(
+                repo, [], [], [], [], client, organisation="moj-analytical-services"
+            )
+        self.assertIsNone(info.basic.business_unit)
+        self.assertIs(info.basic.custom_properties_available, False)
+        self.assertIs(
+            RepositoryInfo.from_dict(info.to_dict()).basic.custom_properties_available, False
+        )
+        client.get_open_code_scanning_alerts.assert_called_once()
+        client.get_open_dependabot_alerts.assert_called_once()
+        client.get_open_secret_scanning_alerts.assert_called_once()
+        self.assertIn("moj-analytical-services/shared-name", " ".join(logs.output))
+        self.assertIn("example-request-id", " ".join(logs.output))
+        self.assertIn("metadata=read", " ".join(logs.output))
+
+    def test_other_custom_property_errors_are_not_silently_ignored(self):
+        for status, message in ((500, "server error"), (403, "API rate limit exceeded")):
+            with self.subTest(status=status, message=message):
+                repo, client = self._repository_and_client()
+                client.get_repository_custom_properties.side_effect = GitHubApiError(status, message)
+                with self.assertRaises(GitHubApiError):
+                    RepositoryInfoFactory.from_github_repo(repo, [], [], [], [], client)
 
     def test_configured_codeql_without_repository_languages_is_saved_as_not_applicable(self):
         class NotFound(Exception):
