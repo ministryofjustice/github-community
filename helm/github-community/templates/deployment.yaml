@@ -82,6 +82,46 @@ spec:
             - name: GITHUB_STATS_OAUTH_CLIENT_SECRET
               value: {{ . | quote }}
             {{- end }}
+            {{- $reconcile := dig "flow_metrics_reconcile" "enabled" false .Values.app.jobs }}
+            {{- if $reconcile }}
+            - name: FLOW_METRICS_ENABLED
+              value: "true"
+            {{- else }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_ENABLED }}
+            - name: FLOW_METRICS_ENABLED
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_DATA_MODE }}
+            - name: FLOW_METRICS_DATA_MODE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_WORKSPACE_NAME }}
+            - name: FLOW_METRICS_WORKSPACE_NAME
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.app.deployment.env.FLOW_METRICS_SOURCE_URL }}
+            - name: FLOW_METRICS_SOURCE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if dig "flowMetrics" "webhook" "enabled" false .Values.app }}
+            {{- include "app.flowMetrics.devOnly" . }}
+            {{- $webhook := .Values.app.flowMetrics.webhook }}
+            {{- if or (not (regexMatch "^[1-9][0-9]*$" (toString $webhook.organisationId))) (not (regexMatch "^[1-9][0-9]*$" (toString $webhook.installationId))) }}
+            {{- fail "Flow Metrics webhook requires verified positive organisationId and installationId" }}
+            {{- end }}
+            - name: FLOW_METRICS_WEBHOOK_ENABLED
+              value: "true"
+            - name: FLOW_METRICS_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "Flow Metrics webhook secretName is required" $webhook.secretName | quote }}
+                  key: secret
+            - name: FLOW_METRICS_WEBHOOK_ORGANISATION_ID
+              value: {{ $webhook.organisationId | quote }}
+            - name: FLOW_METRICS_WEBHOOK_INSTALLATION_ID
+              value: {{ $webhook.installationId | quote }}
+            {{- end }}
 
           ports:
             - name: http

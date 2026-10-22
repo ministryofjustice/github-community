@@ -1,0 +1,53 @@
+{{- with .Values.app.jobs }}
+{{- with .flow_metrics_init_sample }}
+{{- if .enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "app.fullname" $ | trunc 38 | trimSuffix "-" }}-flow-metrics-init-sample
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      serviceAccountName: cd-serviceaccount
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: flow-metrics-init-sample
+          image: "{{ $.Values.app.deployment.image.repository }}:{{ $.Values.app.deployment.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "-m", "flask"]
+          args: ["--app", "app.app", "flow-metrics", "init-sample"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - "ALL"
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: POSTGRES_USER
+              value: {{ $.Values.app.deployment.env.POSTGRES_USER | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ $.Values.app.deployment.env.POSTGRES_PASSWORD | quote }}
+            - name: POSTGRES_DB
+              value: {{ $.Values.app.deployment.env.POSTGRES_DB | quote }}
+            - name: POSTGRES_HOST
+              value: {{ $.Values.app.deployment.env.POSTGRES_HOST | quote }}
+            - name: POSTGRES_PORT
+              value: {{ $.Values.app.deployment.env.POSTGRES_PORT | quote }}
+      restartPolicy: Never
+{{- end }}
+{{- end }}
+{{- end }}

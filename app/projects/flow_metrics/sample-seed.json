@@ -1,0 +1,2702 @@
+{
+  "dataset": {
+    "version": 1,
+    "id": "sample-three-sprints",
+    "label": "Sample data",
+    "provenance": "synthetic",
+    "history": {
+      "from": "2026-09-12",
+      "to": "2026-10-19"
+    },
+    "reviewWindow": {
+      "from": "2026-10-12",
+      "to": "2026-10-15"
+    },
+    "sprints": [
+      {
+        "id": "sample-a",
+        "name": "Sprint A",
+        "start": "2026-09-14",
+        "end": "2026-09-27"
+      },
+      {
+        "id": "sample-b",
+        "name": "Sprint B",
+        "start": "2026-09-28",
+        "end": "2026-10-11"
+      },
+      {
+        "id": "sample-firebreak",
+        "name": "Firebreak",
+        "start": "2026-10-12",
+        "end": "2026-10-25"
+      }
+    ],
+    "teams": [
+      "Blueprint",
+      "DevX",
+      "Engineering Platform"
+    ],
+    "tickets": [
+      {
+        "id": "SAMPLE-1-01",
+        "title": "Sample normal completion (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-1-02"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "0/2 (0%)"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-16",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-09-18",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-02",
+        "title": "Sample same-day completion (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-1-01"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-16",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-16",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-03",
+        "title": "Sample blocked then completed (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-15",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          },
+          {
+            "date": "2026-09-19",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-21",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-09-22",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-04",
+        "title": "Sample reopened then completed (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-17",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-09-20",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-23",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-09-24",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-05",
+        "title": "Sample reopened and unfinished (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-17",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-09-20",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-06",
+        "title": "Sample waiting for review (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "SAMPLE-1-07"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-15",
+            "type": "status",
+            "value": "In Review"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-07",
+        "title": "Sample long-running blocked work (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "SAMPLE-1-06"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-14",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-08",
+        "title": "Sample not started (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-1-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-09",
+        "title": "Sample icebox with re-estimate (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-1-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "Icebox"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-18",
+            "type": "points",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-10",
+        "title": "Sample removed then returned to scope (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-09-14",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-17",
+            "type": "scope",
+            "value": null
+          },
+          {
+            "date": "2026-09-20",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-11",
+        "title": "Sample added and completed (Sprint A)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-09-17",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-17",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-22",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-09-23",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-1-12",
+        "title": "Sample added and unfinished (Sprint A)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint A milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-12",
+        "events": [
+          {
+            "date": "2026-09-12",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-12",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-09-17",
+            "type": "scope",
+            "value": "sample-a"
+          },
+          {
+            "date": "2026-09-17",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-01",
+        "title": "Sample normal completion (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-2-02"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "0/2 (0%)"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-30",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-10-02",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-02",
+        "title": "Sample same-day completion (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-2-01"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-30",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-30",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-03",
+        "title": "Sample blocked then completed (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-29",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          },
+          {
+            "date": "2026-10-03",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-05",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-10-06",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-04",
+        "title": "Sample reopened then completed (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-01",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-10-04",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-07",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-10-08",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-05",
+        "title": "Sample reopened and unfinished (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-01",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-10-04",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-06",
+        "title": "Sample waiting for review (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "SAMPLE-2-07"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-29",
+            "type": "status",
+            "value": "In Review"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-07",
+        "title": "Sample long-running blocked work (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "SAMPLE-2-06"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-09-28",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-08",
+        "title": "Sample not started (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-2-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-09",
+        "title": "Sample icebox with re-estimate (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-2-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "Icebox"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-02",
+            "type": "points",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-10",
+        "title": "Sample removed then returned to scope (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-09-28",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-01",
+            "type": "scope",
+            "value": null
+          },
+          {
+            "date": "2026-10-04",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-11",
+        "title": "Sample added and completed (Sprint B)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-10-01",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-01",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-06",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-10-07",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-2-12",
+        "title": "Sample added and unfinished (Sprint B)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Sprint B milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-09-26",
+        "events": [
+          {
+            "date": "2026-09-26",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-09-26",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-10-01",
+            "type": "scope",
+            "value": "sample-b"
+          },
+          {
+            "date": "2026-10-01",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-01",
+        "title": "Sample normal completion (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-3-02"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "0/2 (0%)"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-14",
+            "type": "status",
+            "value": "In Review"
+          },
+          {
+            "date": "2026-10-16",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-02",
+        "title": "Sample same-day completion (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "SAMPLE-3-01"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-14",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-14",
+            "type": "status",
+            "value": "Done"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-03",
+        "title": "Sample blocked then completed (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-13",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          },
+          {
+            "date": "2026-10-17",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-19",
+            "type": "status",
+            "value": "In Review"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-04",
+        "title": "Sample reopened then completed (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-15",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-10-18",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-05",
+        "title": "Sample reopened and unfinished (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-15",
+            "type": "status",
+            "value": "Done"
+          },
+          {
+            "date": "2026-10-18",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-06",
+        "title": "Sample waiting for review (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample developer tooling",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "SAMPLE-3-07"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-13",
+            "type": "status",
+            "value": "In Review"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-07",
+        "title": "Sample long-running blocked work (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "No",
+        "blocked-by": [
+          "SAMPLE-3-06"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "In Progress"
+          },
+          {
+            "date": "2026-10-12",
+            "type": "status",
+            "value": "Blocked / On Hold"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-08",
+        "title": "Sample not started (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-3-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 3
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-09",
+        "title": "Sample icebox with re-estimate (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample delivery",
+        "planned": "Planned",
+        "assignee": [
+          "Not set"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-1"
+        ],
+        "priority": "Low",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "SAMPLE-3-01"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "Icebox"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 5
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-16",
+            "type": "points",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-10",
+        "title": "Sample removed then returned to scope (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "DevX",
+        "type": "Task",
+        "objective": "Sample reliability",
+        "planned": "Planned",
+        "assignee": [
+          "sample-contributor-1"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "High",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 8
+          },
+          {
+            "date": "2026-10-12",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-15",
+            "type": "scope",
+            "value": null
+          },
+          {
+            "date": "2026-10-18",
+            "type": "scope",
+            "value": "sample-firebreak"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-11",
+        "title": "Sample added and completed (Firebreak)",
+        "repository": "sample-repository-alpha",
+        "team": "Blueprint",
+        "type": "Bug",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-2"
+        ],
+        "label": [
+          "sample-improvement",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "Not set"
+        ],
+        "priority": "Medium",
+        "refined": "No",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 1
+          },
+          {
+            "date": "2026-10-15",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-15",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-3-12",
+        "title": "Sample added and unfinished (Firebreak)",
+        "repository": "sample-repository-beta",
+        "team": "Engineering Platform",
+        "type": "Feature",
+        "objective": "Sample reliability",
+        "planned": "Unplanned",
+        "assignee": [
+          "sample-contributor-3"
+        ],
+        "label": [
+          "sample-maintenance",
+          "sample-data"
+        ],
+        "milestone": [
+          "Sample Firebreak milestone"
+        ],
+        "reviewers": [
+          "sample-reviewer-2"
+        ],
+        "priority": "Low",
+        "refined": "Yes",
+        "blocked-by": [
+          "Not set"
+        ],
+        "blocking": [
+          "Not set"
+        ],
+        "relates-to": [
+          "Not set"
+        ],
+        "parent-issue": [
+          "Not set"
+        ],
+        "sub-issues-progress": [
+          "Not set"
+        ],
+        "created": "2026-10-10",
+        "events": [
+          {
+            "date": "2026-10-10",
+            "type": "status",
+            "value": "TODO"
+          },
+          {
+            "date": "2026-10-10",
+            "type": "points",
+            "value": 2
+          },
+          {
+            "date": "2026-10-15",
+            "type": "scope",
+            "value": "sample-firebreak"
+          },
+          {
+            "date": "2026-10-15",
+            "type": "status",
+            "value": "In Progress"
+          }
+        ]
+      }
+    ]
+  },
+  "charts": [
+    {
+      "metric": "cycle",
+      "layout": "scatter",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-cycle",
+      "name": "Cycle time"
+    },
+    {
+      "metric": "churn",
+      "layout": "stacked-column",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-churn",
+      "name": "Sprint churn"
+    },
+    {
+      "metric": "age",
+      "layout": "bar",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-age",
+      "name": "Work item age"
+    },
+    {
+      "metric": "status",
+      "layout": "column",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-status",
+      "name": "Status / WIP"
+    },
+    {
+      "metric": "stuck",
+      "layout": "bar",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-stuck",
+      "name": "Stuck items"
+    },
+    {
+      "metric": "throughput",
+      "layout": "column",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-throughput",
+      "name": "Throughput"
+    },
+    {
+      "metric": "flow",
+      "layout": "flow",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-flow",
+      "name": "Cumulative flow"
+    },
+    {
+      "metric": "progress",
+      "layout": "burnup",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-progress",
+      "name": "Sprint progress"
+    },
+    {
+      "metric": "velocity",
+      "layout": "column",
+      "threshold": 7,
+      "x": "status",
+      "y": "count",
+      "group": "",
+      "filters": {
+        "team": "",
+        "sprint": "",
+        "from": "",
+        "to": "",
+        "status": "",
+        "type": "",
+        "planned": "",
+        "query": ""
+      },
+      "id": "seed-velocity",
+      "name": "Velocity"
+    }
+  ]
+}
