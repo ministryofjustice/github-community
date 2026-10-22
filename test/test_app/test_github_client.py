@@ -234,6 +234,25 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
         )
 
 
+class TestRepositoryLanguages(unittest.TestCase):
+    def test_raw_language_response_is_not_augmented_with_url(self):
+        client = GitHubClient("client", "key", 123, "ministryofjustice")
+        for languages in ({}, {"Python": 1200}):
+            with self.subTest(languages=languages):
+                response = unittest.mock.Mock(ok=True)
+                response.json.return_value = languages
+                with (
+                    patch.object(client, "_GitHubClient__get_token", return_value="token"),
+                    patch.object(client.session, "request", return_value=response) as request,
+                ):
+                    result = client.get_repository_languages(".github")
+                self.assertEqual(result, languages)
+                self.assertNotIn("url", result)
+                request.assert_called_once_with(
+                    "GET", "https://api.github.com/repos/ministryofjustice/.github/languages"
+                )
+
+
 class TestCodeownersErrors(unittest.TestCase):
     def test_gets_codeowners_validation_errors(self):
         client = GitHubClient(

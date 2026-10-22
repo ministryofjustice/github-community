@@ -291,6 +291,9 @@ class GitHubClient:
             "GET", f"/repos/{self.org}/{repo}/code-scanning/default-setup"
         )
 
+    def get_repository_languages(self, repo: str) -> Dict[str, int]:
+        return self.__call("GET", f"/repos/{self.org}/{repo}/languages")
+
     def get_open_secret_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
         try:
             alerts = self.__get_paginated_repository_alerts(

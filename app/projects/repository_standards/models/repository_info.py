@@ -51,7 +51,7 @@ class RepositoryInfoFactory:
             return (
                 default_setup.get("state") == "configured"
                 and default_setup.get("languages") == []
-                and repo.get_languages() == {}
+                and github_client.get_repository_languages(repo.name) == {}
             )
         except Exception as error:
             logger.debug("Unable to confirm Code Scanning is not applicable: %s", error)

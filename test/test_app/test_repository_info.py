@@ -32,7 +32,9 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             }),
             get_contents=Mock(side_effect=NotFound()),
             get_branch=Mock(return_value=SimpleNamespace(get_protection=lambda: None)),
-            get_languages=Mock(return_value={}),
+            get_languages=Mock(return_value={
+                "url": "https://api.github.com/repos/ministryofjustice/.github/languages"
+            }),
         )
         client = Mock()
         client.get_repository_custom_properties.return_value = {}
@@ -42,6 +44,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         client.get_code_scanning_default_setup.return_value = {
             "state": "configured", "languages": [],
         }
+        client.get_repository_languages.return_value = {}
         client.get_open_dependabot_alerts.return_value = []
         client.get_open_secret_scanning_alerts.return_value = []
         client.get_branch_rulesets.return_value = []
@@ -54,6 +57,8 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             result.security_alerts.open_high_critical_code_scanning_count, 0
         )
         self.assertIs(result.security_alerts.code_scanning_not_applicable, True)
+        repo.get_languages.assert_not_called()
+        client.get_repository_languages.assert_called_once_with(".github")
         restored = RepositoryInfo.from_dict(result.to_dict())
         self.assertIs(restored.security_alerts.code_scanning_not_applicable, True)
         self.assertEqual(restored.security_alerts.code_scanning_alerts, [])
@@ -100,6 +105,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         client.get_code_scanning_default_setup.return_value = {
             "state": "configured", "languages": [],
         }
+        client.get_repository_languages.return_value = {}
         result = RepositoryInfoFactory._get_code_scanning_alert_result(repo, client)
         self.assertEqual(result, (0, True, []))
 
@@ -117,7 +123,25 @@ class TestRepositoryInfoFactory(unittest.TestCase):
                     (None, False, None),
                 )
                 client.get_code_scanning_default_setup.assert_not_called()
+                client.get_repository_languages.assert_not_called()
                 repo.get_languages.assert_not_called()
+
+    def test_unverified_language_data_does_not_grant_codeql_exception(self):
+        repo = SimpleNamespace(name=".github")
+        client = Mock()
+        client.get_code_scanning_default_setup.return_value = {
+            "state": "configured", "languages": [],
+        }
+        for languages in (None, [], {"url": "https://api.github.com/repos/org/repo/languages"}):
+            with self.subTest(languages=languages):
+                client.get_repository_languages.return_value = languages
+                self.assertFalse(
+                    RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+                )
+        client.get_repository_languages.side_effect = GitHubApiError(403, "Forbidden")
+        self.assertFalse(
+            RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
+        )
 
     def test_code_scanning_not_applicable_requires_configured_setup_and_no_languages(self):
         repo = SimpleNamespace(name=".github", get_languages=lambda: {})
@@ -125,14 +149,15 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         client.get_code_scanning_default_setup.return_value = {
             "state": "configured", "languages": [],
         }
+        client.get_repository_languages.return_value = {}
         self.assertTrue(
             RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
         )
-        repo.get_languages = lambda: {"Python": 1200}
+        client.get_repository_languages.return_value = {"Python": 1200}
         self.assertFalse(
             RepositoryInfoFactory._code_scanning_is_not_applicable(repo, client)
         )
-        repo.get_languages = lambda: {}
+        client.get_repository_languages.return_value = {}
         client.get_code_scanning_default_setup.return_value = {
             "state": "not_configured", "languages": [],
         }
