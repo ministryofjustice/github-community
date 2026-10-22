@@ -29,9 +29,12 @@ kubectl --context <context> -n <namespace> logs job/<job-name>
 ```
 
 Check that the Job completed, then reload Flow Metrics. **Last updated** shows
-the latest successful observation; Admin shows collection status. A handled
+the latest successful observation; Admin shows the latest recorded attempt time,
+outcome and latest successful capture separately. Attempts include scheduled and
+manual collections; imports do not create attempt records. A handled
 failure keeps the previous data and reports a failed collection. Pod startup
-failures or missed runs also need checking in Kubernetes.
+failures or missed runs also need checking in Kubernetes. A job killed after
+recording its start may remain marked Running; this is not a live pod check.
 
 ## Run a capture manually
 

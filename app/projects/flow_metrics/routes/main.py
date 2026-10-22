@@ -76,7 +76,7 @@ def collection_health():
         run = db.session.execute(
             select(FlowCollectionRun)
             .where(FlowCollectionRun.board_id == BOARD_ID)
-            .order_by(FlowCollectionRun.started_at.desc())
+            .order_by(FlowCollectionRun.started_at.desc(), FlowCollectionRun.id.desc())
             .limit(1)
         ).scalar_one_or_none()
         scheduled_status = None
@@ -92,6 +92,21 @@ def collection_health():
                     "Flow Metrics scheduler health could not be read."
                 )
                 scheduled_status = "unavailable"
+        def run_timestamp(value):
+            if value is None:
+                return None
+            return (value.replace(tzinfo=UTC) if value.tzinfo is None else value).isoformat()
+
+        failure_reasons = {
+            "github_credentials_missing": "GitHub credentials are not configured.",
+            "github_app_authentication_failed": "GitHub App authentication failed.",
+            "github_connection_failed": "Could not connect to GitHub.",
+            "github_query_incomplete": "GitHub returned an incomplete result.",
+            "github_item_inaccessible": "Some board items could not be read.",
+            "github_board_changed_during_collection": "The board changed during collection.",
+            "field_mapping_changed_during_collection": "The field mapping changed during collection.",
+            "snapshot_publication_failed": "The capture could not be saved.",
+        }
         response = jsonify(
             capturedAt=captured_at.isoformat() if captured_at else None,
             status=run.status
@@ -100,6 +115,14 @@ def collection_health():
             if os.getenv("FLOW_METRICS_ENABLED") == "true"
             else "not_configured",
             scheduledStatus=scheduled_status,
+            latestRun={
+                "startedAt": run_timestamp(run.started_at),
+                "completedAt": run_timestamp(run.completed_at),
+                "status": run.status,
+                "failureReason": failure_reasons.get(
+                    run.error_code, "Collection failed; check the job logs."
+                ) if run.status == "failed" else None,
+            } if run else None,
             stale=not captured_at or captured_at.date() < datetime.now(UTC).date(),
             configured=os.getenv("FLOW_METRICS_ENABLED") == "true",
         )

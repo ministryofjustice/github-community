@@ -1068,6 +1068,45 @@ def test_health_imported_only_and_empty_never_use_fiction_timestamp(app, client,
     imported = client.get("/flow-metrics/api/collection-health").json
     assert imported["capturedAt"].startswith("2026-10-20T12:00:00")
     assert imported["status"] == "not_configured"
+    assert imported["latestRun"] is None
+
+
+@pytest.mark.parametrize("status", ["complete", "failed", "running"])
+def test_health_latest_attempt_preserves_earlier_success(app, client, status):
+    start = datetime(2026, 10, 22, 8, 30, tzinfo=UTC)
+    finish = datetime(2026, 10, 22, 8, 31, tzinfo=UTC) if status != "running" else None
+    with app.app_context():
+        db.session.add(FlowCollectionRun(
+            id="earlier-success", board_id=BOARD_ID,
+            started_at=datetime(2026, 10, 16, 11, 59, tzinfo=UTC),
+            completed_at=datetime(2026, 10, 16, 12, tzinfo=UTC), status="complete",
+        ))
+        db.session.add(FlowCollectionRun(
+            id="latest-attempt", board_id=BOARD_ID, started_at=start,
+            completed_at=finish, status=status,
+            error_code="github_connection_failed" if status == "failed" else None,
+        ))
+        db.session.commit()
+    health = client.get("/flow-metrics/api/collection-health").json
+    assert health["capturedAt"].startswith("2026-10-16T12:00:00")
+    assert health["latestRun"] == {
+        "startedAt": start.isoformat(),
+        "completedAt": finish.isoformat() if finish else None,
+        "status": status,
+        "failureReason": "Could not connect to GitHub." if status == "failed" else None,
+    }
+
+
+def test_health_failure_reason_never_exposes_raw_error(app, client):
+    with app.app_context():
+        db.session.add(FlowCollectionRun(
+            id="failed-sensitive", board_id=BOARD_ID, started_at=datetime.now(UTC),
+            status="failed", error_code="untrusted-private-detail",
+        ))
+        db.session.commit()
+    response = client.get("/flow-metrics/api/collection-health")
+    assert response.json["latestRun"]["failureReason"] == "Collection failed; check the job logs."
+    assert "untrusted-private-detail" not in response.get_data(as_text=True)
 
 
 @pytest.mark.parametrize("mode", ["sample", "real"])

@@ -3,6 +3,9 @@
   <button id="add-team-board" class="govuk-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Add team board</button>
 </div>
 <p id="collection-status" class="govuk-body-s flow-status-message" role="status">Collection status unavailable.</p>
+<p id="collection-attempt" class="govuk-body-s flow-status-message" role="status">Latest attempt unavailable.</p>
+<p id="collection-success" class="govuk-body-s flow-status-message" role="status">Latest successful capture unavailable.</p>
+<p class="govuk-body-s">Attempts include scheduled and manual collections recorded by the app. Jobs that never reach the collector are not shown. A stopped job may remain marked Running; check Kubernetes for missed or interrupted jobs.</p>
 <div class="flow-table-scroll" role="region" aria-label="Team boards" tabindex="0">
   <table class="govuk-table flow-admin-table">
     <thead><tr>

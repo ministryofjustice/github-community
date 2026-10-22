@@ -282,7 +282,8 @@ test("Team freshness retains capture/failure/errors while routine staleness belo
   const start = source.indexOf("async function refreshCollectionHealth()");
   const end = source.indexOf("\nrefreshCollectionHealth();", start);
   assert.ok(start >= 0 && end > start);
-  const elements = { "live-freshness": { textContent: "" }, "collection-status": { textContent: "" } };
+  const elements = Object.fromEntries(["live-freshness", "collection-status", "collection-attempt", "collection-success"]
+    .map(id => [id, { textContent: "" }]));
   let health = { capturedAt: "generated-capture", stale: true, status: "not_configured", configured: false };
   let failure;
   const refresh = runInNewContext(`${source.slice(start, end)}\nrefreshCollectionHealth`, {
@@ -293,6 +294,22 @@ test("Team freshness retains capture/failure/errors while routine staleness belo
   await refresh();
   assert.equal(elements["live-freshness"].textContent, "Last updated: generated-capture");
   assert.equal(elements["collection-status"].textContent, "Data may be out of date.");
+  assert.equal(elements["collection-attempt"].textContent, "No collection attempts recorded.");
+  assert.match(elements["collection-success"].textContent, /generated-capture/);
+  for (const [status, outcome] of [["complete", "Succeeded"], ["failed", "Failed"], ["running", "Running (completion not recorded)"]]) {
+    health = { ...health, status, latestRun: {
+      status, startedAt: "generated-start", completedAt: status === "running" ? null : "generated-finish",
+      failureReason: status === "failed" ? "Could not connect to GitHub." : null,
+    } };
+    await refresh();
+    assert.ok(elements["collection-attempt"].textContent.includes(outcome));
+    assert.match(elements["collection-attempt"].textContent, /generated-start/);
+    assert.equal(elements["collection-attempt"].textContent.includes("generated-finish"), status !== "running");
+    assert.equal(elements["collection-attempt"].textContent.includes("Could not connect"), status === "failed");
+    assert.ok(elements["live-freshness"].textContent.startsWith("Last updated: generated-capture"));
+    assert.match(elements["collection-success"].textContent, /generated-capture/);
+  }
+  health = { ...health, status: "not_configured", latestRun: null };
   health = { ...health, capturedAt: null };
   await refresh();
   assert.equal(elements["collection-status"].textContent, "");
@@ -310,6 +327,61 @@ test("Team freshness retains capture/failure/errors while routine staleness belo
   await refresh();
   assert.equal(elements["live-freshness"].textContent, "Last updated unavailable. Generated API error");
   assert.equal(elements["collection-status"].textContent, "Collection status unavailable. Generated API error");
+  assert.equal(elements["collection-attempt"].textContent, "Latest attempt unavailable.");
+  assert.equal(elements["collection-success"].textContent, "Latest successful capture unavailable.");
+});
+
+test("actual tab and chart navigation preserve URL selection with safe fallback and accessible tabs", () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, {
+      hidden: false, attributes: {}, handlers: {},
+      setAttribute(key, value) { this.attributes[key] = value; },
+      getAttribute(key) { return this.attributes[key]; },
+      addEventListener(key, handler) { this.handlers[key] = handler; },
+      after() {}, focus() { this.focused = true; },
+    });
+    return elements.get(id);
+  };
+  const tabs = ["team-tab", "admin-tab"].map(element);
+  tabs[0].attributes["aria-controls"] = "team-panel";
+  tabs[1].attributes["aria-controls"] = "admin-panel";
+  const location = { href: "https://example.test/flow-metrics/?view=admin&chart=planned&other=kept#anchor" };
+  const context = {
+    $: element, tabs, URL, window: { location, history: { replaceState(_state, _title, url) { location.href = String(url); } } },
+    charts: [{ id: "cycle", metric: "cycle", filters: { query: "" } }, { id: "planned", metric: "status", filters: { query: "planned:Planned" } }],
+    live: false, selected: undefined, draft: null, chart: null,
+    clone: structuredClone, syncControls() {}, renderList() {}, renderPreview() {},
+  };
+  context.currentSaved = () => context.charts.find(item => item.id === context.selected);
+  runInNewContext(source.slice(source.indexOf("function updateWorkspaceURL("), source.indexOf("\nfunction chartConfig()")), context);
+  runInNewContext(source.slice(source.indexOf("function activateTab("), source.indexOf('window.addEventListener("beforeunload"')), context);
+  assert.equal(element("admin-panel").hidden, false);
+  assert.equal(tabs[1].attributes["aria-selected"], "true");
+  context.select("planned");
+  assert.equal(context.selected, "planned");
+  assert.equal(context.draft.filters.query, "planned:Planned");
+  assert.equal(new URL(location.href).searchParams.get("view"), "admin");
+  tabs[0].handlers.click();
+  assert.equal(new URL(location.href).searchParams.get("view"), null);
+  assert.equal(element("team-panel").hidden, false);
+  tabs[0].handlers.keydown({ key: "ArrowRight", preventDefault() {} });
+  assert.equal(new URL(location.href).searchParams.get("view"), "admin");
+  assert.equal(tabs[1].focused, true);
+  assert.equal(tabs[0].tabIndex, -1);
+  context.select("deleted-or-invalid");
+  assert.equal(context.selected, "cycle");
+  assert.equal(new URL(location.href).searchParams.get("chart"), "cycle");
+  context.live = true;
+  context.select(null);
+  assert.equal(context.selected, "planned", "Real mode retains its status-chart default");
+  context.charts = [];
+  context.select("missing");
+  assert.equal(context.draft, null);
+  assert.equal(new URL(location.href).searchParams.get("chart"), null);
+  assert.equal(new URL(location.href).searchParams.get("other"), "kept");
+  assert.equal(new URL(location.href).hash, "#anchor");
 });
 
 test("keywords find readable genuine references without changing explicit title filters", () => {

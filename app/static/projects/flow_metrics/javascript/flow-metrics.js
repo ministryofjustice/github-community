@@ -167,9 +167,20 @@ async function refreshCollectionHealth() {
     ].filter(Boolean).join(" ");
     if ($("live-freshness").textContent !== freshness) $("live-freshness").textContent = freshness;
     if ($("collection-status").textContent !== automation) $("collection-status").textContent = automation;
+    const stamp = value => captureLabel(value).replace("Last updated: ", "");
+    const run = health.latestRun;
+    const outcome = { complete: "Succeeded", failed: "Failed", running: "Running (completion not recorded)" };
+    $("collection-attempt").textContent = run
+      ? `Latest recorded attempt: ${stamp(run.startedAt)} (London time). ${outcome[run.status] || "Unknown outcome"}.${run.completedAt ? ` Finished: ${stamp(run.completedAt)}.` : ""}${run.failureReason ? ` ${run.failureReason}` : ""}`
+      : "No collection attempts recorded.";
+    $("collection-success").textContent = health.capturedAt
+      ? `Latest successful capture: ${stamp(health.capturedAt)} (London time).`
+      : "No successful capture recorded.";
   } catch (error) {
     $("live-freshness").textContent = `Last updated unavailable. ${error.message}`;
     $("collection-status").textContent = `Collection status unavailable. ${error.message}`;
+    $("collection-attempt").textContent = "Latest attempt unavailable.";
+    $("collection-success").textContent = "Latest successful capture unavailable.";
   }
 }
 refreshCollectionHealth();
@@ -484,8 +495,18 @@ function syncFieldVisibility() {
   }
 }
 
+function updateWorkspaceURL(view) {
+  const url = new URL(window.location.href);
+  if (view === "admin") url.searchParams.set("view", "admin");
+  else if (view === "team") url.searchParams.delete("view");
+  if (charts.some(item => item.id === selected)) url.searchParams.set("chart", selected);
+  else url.searchParams.delete("chart");
+  window.history.replaceState(null, "", url);
+}
+
 function select(id) {
-  selected = id;
+  selected = charts.some(item => item.id === id) ? id
+    : (live ? charts.find(item => item.metric === "status")?.id : null) || charts[0]?.id;
   draft = currentSaved() ? clone(currentSaved()) : null;
   $("configuration").hidden = true;
   $("configure-toggle").setAttribute("aria-expanded", "false");
@@ -494,6 +515,7 @@ function select(id) {
   if (draft) $("search-error").after($("flow-message"));
   renderList();
   renderPreview();
+  updateWorkspaceURL();
 }
 
 function chartConfig() {
@@ -938,7 +960,7 @@ syncPickers.push(enhanceIconSelect("y-axis", (measure) => chartIcon(measure.star
     else configureSampleData(workspace.dataset);
     charts = workspace.charts;
     $("new-chart").disabled = false;
-    select(live ? charts.find((item) => item.metric === "status")?.id || charts[0]?.id : charts[0]?.id);
+    select(new URL(window.location.href).searchParams.get("chart"));
     if (!live) {
       const local = readStorage();
       if (local.length) {
@@ -1517,7 +1539,9 @@ function activateTab(index) {
     $(tab.getAttribute("aria-controls")).hidden = i !== index;
   });
   if (index === 0 && chart) chart.resize();
+  updateWorkspaceURL(index === 1 ? "admin" : "team");
 }
+activateTab(new URL(window.location.href).searchParams.get("view") === "admin" ? 1 : 0);
 tabs.forEach((tab, index) => {
   tab.addEventListener("click", () => activateTab(index));
   tab.addEventListener("keydown", (event) => {
