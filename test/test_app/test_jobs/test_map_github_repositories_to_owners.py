@@ -20,12 +20,112 @@ test_owner_id = 1
 
 
 @patch(
-    "app.projects.repository_standards.services.github_service.GithubService.__new__"
+    "app.projects.repository_standards.jobs.map_github_repositories_to_owners.GithubService"
 )
-@patch("app.projects.repository_standards.services.asset_service.AssetService.__new__")
-@patch("app.projects.repository_standards.services.owner_service.OwnerService.__new__")
+@patch("app.projects.repository_standards.jobs.map_github_repositories_to_owners.AssetService")
+@patch("app.projects.repository_standards.jobs.map_github_repositories_to_owners.OwnerService")
 class TestMain(unittest.TestCase):
+    def test_two_installations_save_same_named_repos_without_cross_org_ownership(
+        self, mock_owner_service, mock_asset_service, mock_github_service
+    ):
+        repositories = [
+            RepositoryInfo(
+                basic=BasicRepositoryInfo(
+                    name="shared", visibility="private", default_branch_name="main",
+                    delete_branch_on_merge=True, organisation=organisation,
+                ),
+                access=RepositoryAccess(
+                    teams_with_admin=["shared-team"], teams_with_admin_parents=[],
+                    teams=[], teams_parents=[],
+                ),
+            )
+            for organisation in ("ministryofjustice", "moj-analytical-services")
+        ]
+        owner = OwnerView(
+            id=1, name="MOJ owner", type="TEAM",
+            config=OwnerConfig(name="MOJ owner", teams=["shared-team"]),
+        )
+        mock_owner_service.return_value.find_all.return_value = [owner]
+        mock_owner_service.return_value.find_by_name.return_value = [owner]
+        first, second = MagicMock(), MagicMock()
+        first.get_repositories.return_value = [repositories[0]]
+        second.get_repositories.return_value = [repositories[1]]
+        mock_github_service.side_effect = [first, second]
+        with (
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_standards_orgs",
+                "ministryofjustice:123,moj-analytical-services:456",
+            ),
+            self.app.app_context(),
+        ):
+            main()
+        self.assertEqual(
+            [entry.args[2] for entry in mock_github_service.call_args_list], [123, 456]
+        )
+        self.assertEqual(
+            [entry.kwargs["organisation_name"] for entry in mock_github_service.call_args_list],
+            ["ministryofjustice", "moj-analytical-services"],
+        )
+        service = mock_asset_service.return_value
+        self.assertEqual(service.update_asset_by_name.call_count, 2)
+        self.assertEqual(
+            [entry.kwargs["organisation"] for entry in service.update_asset_by_name.call_args_list],
+            ["ministryofjustice", "moj-analytical-services"],
+        )
+        service.update_relationships_with_owner.assert_called_once()
+        service.remove_stale_assets.assert_called_once_with(
+            ["ministryofjustice", "moj-analytical-services"]
+        )
+
+    def test_second_org_failure_does_not_persist_partial_collection(
+        self, mock_owner_service, mock_asset_service, mock_github_service
+    ):
+        mock_owner_service.return_value.find_all.return_value = []
+        mock_github_service.return_value.get_repositories.side_effect = [
+            [MagicMock()], RuntimeError("second org failed")
+        ]
+        with (
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_standards_orgs",
+                "ministryofjustice:123,moj-analytical-services:456",
+            ),
+            self.app.app_context(),
+            self.assertRaisesRegex(RuntimeError, "second org failed"),
+        ):
+            main()
+        service = mock_asset_service.return_value
+        service.update_asset_by_name.assert_not_called()
+        service.remove_stale_assets.assert_not_called()
+        service.remove_stale_relationships.assert_not_called()
+
+    def test_capped_collection_does_not_cleanup_or_contact_unscanned_org(
+        self, mock_owner_service, mock_asset_service, mock_github_service
+    ):
+        mock_owner_service.return_value.find_all.return_value = []
+        mock_github_service.return_value.get_repositories.return_value = [MagicMock()]
+        with (
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_standards_orgs",
+                "ministryofjustice:123,moj-analytical-services:456",
+            ),
+            patch(
+                "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.repository_limit", 1
+            ),
+            self.app.app_context(),
+        ):
+            main()
+        mock_github_service.assert_called_once()
+        mock_asset_service.return_value.update_asset_by_name.assert_called_once()
+        mock_asset_service.return_value.remove_stale_assets.assert_called_once_with([])
+        mock_asset_service.return_value.remove_stale_relationships.assert_called_once_with([])
+
     def setUp(self):
+        installation_id = patch(
+            "app.projects.repository_standards.jobs.map_github_repositories_to_owners.app_config.github.app.installation_id",
+            123,
+        )
+        installation_id.start()
+        self.addCleanup(installation_id.stop)
         self.app = Flask(__name__)
         self.app.config["TESTING"] = True
         self.app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
@@ -99,7 +199,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
@@ -189,7 +289,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "ADMIN_ACCESS")]
@@ -242,7 +342,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
@@ -295,7 +395,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
@@ -348,7 +448,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_has_calls(
             [call(mock_asset, mock_owner, "OTHER")]
@@ -401,7 +501,7 @@ class TestMain(unittest.TestCase):
             [call("Test Owners")]
         )
         mock_asset_service.return_value.update_asset_by_name.assert_has_calls(
-            [call(mock_repository.basic.name, mock_repository.to_dict())]
+            [call(mock_repository.basic.name, mock_repository.to_dict(), organisation="ministryofjustice")]
         )
         mock_asset_service.return_value.update_relationships_with_owner.assert_not_called()
 

@@ -175,11 +175,13 @@ class RepositoryInfoFactory:
         teams_with_any_parents,
         github_client: GitHubClient,
         team_admin_maintainer_counts: Optional[dict[str, int]] = None,
+        organisation: str = "ministryofjustice",
     ):
         custom_properties = github_client.get_repository_custom_properties(repo.name)
 
         basic_info = BasicRepositoryInfo(
             name=repo.name,
+            organisation=organisation,
             visibility=repo.visibility,
             description=repo.description,
             default_branch_name=repo.default_branch,
@@ -445,6 +447,7 @@ class BasicRepositoryInfo:
     license: Optional[str] = None
     license_path: Optional[str] = None
     business_unit: Optional[str] = None
+    organisation: str = "ministryofjustice"
 
 
 @dataclass

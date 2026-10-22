@@ -26,9 +26,13 @@ class Owner(db.Model):
 
 class Asset(db.Model):
     __tablename__ = "assets"
+    __table_args__ = (db.Index("ix_assets_organisation_name", "organisation", "name"),)
 
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
     name: Mapped[str] = mapped_column(db.String)
+    organisation: Mapped[str] = mapped_column(
+        db.String, nullable=False, default="ministryofjustice", server_default="ministryofjustice"
+    )
     type: Mapped[str] = mapped_column(db.String)
     last_updated: Mapped[datetime] = mapped_column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

@@ -5,6 +5,7 @@ from flask import g
 from app.projects.repository_standards.db_models import Asset
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
+    DEFAULT_ORGANISATION,
     RepositoryView,
     get_asset_repository,
 )
@@ -46,18 +47,22 @@ class AssetService:
     def find_asset_by_id(self, asset_id: int) -> Asset | None:
         return self.__asset_repository.find_by_id(asset_id)
 
-    def update_asset_by_name(self, name: str, data: dict) -> Asset:
-        return self.__asset_repository.update_by_name(name, data)
+    def update_asset_by_name(
+        self, name: str, data: dict, organisation: str = DEFAULT_ORGANISATION
+    ) -> Asset:
+        return self.__asset_repository.update_by_name(name, data, organisation)
 
-    def get_repository_by_name(self, name: str) -> RepositoryView | None:
-        asset = self.__asset_repository.find_by_name(name)
+    def get_repository_by_name(
+        self, name: str, organisation: str = DEFAULT_ORGANISATION
+    ) -> RepositoryView | None:
+        asset = self.__asset_repository.find_by_name(name, organisation)
         return RepositoryView.from_asset(asset[0]) if len(asset) > 0 else None
 
-    def remove_stale_assets(self):
-        self.__asset_repository.remove_stale_assets()
+    def remove_stale_assets(self, organisations: list[str] | None = None):
+        self.__asset_repository.remove_stale_assets(organisations)
 
-    def remove_stale_relationships(self):
-        self.__asset_repository.remove_stale_assets()
+    def remove_stale_relationships(self, organisations: list[str] | None = None):
+        self.__asset_repository.remove_stale_relationships(organisations)
 
 
 def get_asset_service() -> AssetService:

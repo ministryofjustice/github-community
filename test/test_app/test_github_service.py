@@ -61,9 +61,11 @@ class TestGithubService(unittest.TestCase):
             patch(f"{MODULE}.Github", side_effect=[Mock(), Mock(), Mock()]),
             patch(f"{MODULE}.GitHubClient", side_effect=[Mock(), Mock(), Mock()]),
         ):
-            service = GithubService("client", "key", 123)
+            service = GithubService("client", "key", 123, organisation_name="moj-analytical-services")
             first = service._new_worker_service()
             second = service._new_worker_service()
+        self.assertEqual(first.organisation_name, "moj-analytical-services")
+        self.assertEqual(second.organisation_name, "moj-analytical-services")
         self.assertIsNot(first.github_client_core_api, second.github_client_core_api)
         self.assertIsNot(first.github_client, second.github_client)
         self.assertIsNot(first.github_client.session, second.github_client.session)
@@ -149,7 +151,7 @@ class TestGithubService(unittest.TestCase):
             ),
             patch(
                 "app.projects.repository_standards.services.github_service.RepositoryInfoFactory.from_github_repo",
-                side_effect=lambda repo, *args: repo.name,
+                side_effect=lambda repo, *args, **kwargs: repo.name,
             ) as factory,
         ):
             result = service.get_repositories()
@@ -161,4 +163,8 @@ class TestGithubService(unittest.TestCase):
         self.assertEqual(
             [factory_call.args[-1] for factory_call in factory.call_args_list],
             [{"team-alpha": 2}, {"team-alpha": 2}],
+        )
+        self.assertEqual(
+            [factory_call.kwargs["organisation"] for factory_call in factory.call_args_list],
+            ["ministryofjustice", "ministryofjustice"],
         )

@@ -54,6 +54,7 @@ class TechnicalStandardService:
             description=repository.data.basic.description,
             last_updated=getattr(repository, "last_updated", None),
             visibility=getattr(repository.data.basic, "visibility", None),
+            organisation=repository.organisation,
         )
 
     def get_all_repositories(self) -> List[TechnicalStandardReportView]:
@@ -153,8 +154,10 @@ class TechnicalStandardService:
             and not repository.authoritative_team_owners
         ]
 
-    def get_repository_by_name(self, name: str) -> TechnicalStandardReportView | None:
-        repository = self.__asset_service.get_repository_by_name(name)
+    def get_repository_by_name(
+        self, name: str, organisation: str = "ministryofjustice"
+    ) -> TechnicalStandardReportView | None:
+        repository = self.__asset_service.get_repository_by_name(name, organisation)
         return self.__get_report(repository) if repository else None
 
 

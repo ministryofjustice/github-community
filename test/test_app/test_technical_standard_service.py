@@ -23,6 +23,7 @@ def _check(status):
 def _repository():
     return SimpleNamespace(
         name="repo",
+        organisation="ministryofjustice",
         business_unit_owners_names=[],
         team_owners_names=[],
         data=SimpleNamespace(basic=SimpleNamespace(description=None)),
@@ -32,7 +33,7 @@ def _repository():
 class TestTechnicalStandardService(unittest.TestCase):
     def setUp(self):
         asset_service = SimpleNamespace(
-            get_repository_by_name=lambda name: _repository(),
+            get_repository_by_name=lambda name, organisation: _repository(),
             is_owner_authoritative_for_repository=lambda repo, owner: True,
         )
         self.service = TechnicalStandardService(asset_service)
@@ -61,7 +62,7 @@ class TestTechnicalStandardService(unittest.TestCase):
         repository.data.basic.visibility = "internal"
         self.service = TechnicalStandardService(
             SimpleNamespace(
-                get_repository_by_name=lambda name: repository,
+                get_repository_by_name=lambda name, organisation: repository,
                 is_owner_authoritative_for_repository=lambda repo, owner: True,
             )
         )
@@ -140,7 +141,7 @@ class TestTechnicalStandardService(unittest.TestCase):
         repository.last_updated = datetime(2026, 10, 15, 3, 24)
         self.service = TechnicalStandardService(
             SimpleNamespace(
-                get_repository_by_name=lambda name: repository,
+                get_repository_by_name=lambda name, organisation: repository,
                 is_owner_authoritative_for_repository=lambda repo, owner: True,
             )
         )
@@ -154,6 +155,7 @@ class TestTechnicalStandardService(unittest.TestCase):
         asset = SimpleNamespace(
             id=1,
             name="repo",
+            organisation="ministryofjustice",
             relationships=[],
             data={},
             last_updated=datetime(2026, 10, 15, 3, 24),

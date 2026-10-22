@@ -32,6 +32,22 @@ def _filter_repositories_by_visibility(repositories):
     return filtered, visibility_filter
 
 
+def _filter_repositories(repositories):
+    organisations = sorted({repository.organisation for repository in repositories})
+    organisation_filter = request.args.get("organisation", "all").lower()
+    filtered, visibility_filter = _filter_repositories_by_visibility(repositories)
+    if organisation_filter != "all":
+        filtered = [
+            repository for repository in filtered
+            if repository.organisation.lower() == organisation_filter
+        ]
+    return filtered, {
+        "visibility_filter": visibility_filter,
+        "organisation_filter": organisation_filter,
+        "organisations": organisations,
+    }
+
+
 @technical_standard.route("/", methods=["GET"])
 def index():
     return render_template(f"{TEMPLATES}/home.html")
@@ -41,14 +57,14 @@ def index():
 @requires_auth
 def repositories():
     all_repositories = get_technical_standard_service().get_all_repositories()
-    repositories, visibility_filter = _filter_repositories_by_visibility(
+    repositories, filters = _filter_repositories(
         all_repositories
     )
     return render_template(
         f"{TEMPLATES}/repositories.html",
         repositories=repositories,
         compliant_repositories=[repo for repo in repositories if repo.compliant],
-        visibility_filter=visibility_filter,
+        **filters,
     )
 
 
@@ -89,7 +105,7 @@ def business_unit(owner_id: str):
     if owner is None or owner.type != "BUSINESS_UNIT":
         abort(404)
 
-    repositories, visibility_filter = _filter_repositories_by_visibility(
+    repositories, filters = _filter_repositories(
         get_technical_standard_service().get_repositories_for_owner(owner)
     )
     return render_template(
@@ -98,7 +114,7 @@ def business_unit(owner_id: str):
         parent_title="Business Units",
         parent_url="/repository-standards/technical-standard/business-units",
         repositories=repositories,
-        visibility_filter=visibility_filter,
+        **filters,
     )
 
 
@@ -125,7 +141,7 @@ def team(owner_id: str):
     if owner is None or owner.type != "TEAM":
         abort(404)
 
-    repositories, visibility_filter = _filter_repositories_by_visibility(
+    repositories, filters = _filter_repositories(
         get_technical_standard_service().get_repositories_for_owner(owner)
     )
     return render_template(
@@ -134,14 +150,14 @@ def team(owner_id: str):
         parent_title="Teams",
         parent_url="/repository-standards/technical-standard/teams",
         repositories=repositories,
-        visibility_filter=visibility_filter,
+        **filters,
     )
 
 
 @technical_standard.route("/unowned-repositories", methods=["GET"])
 @requires_auth
 def unowned_repositories():
-    repositories, visibility_filter = _filter_repositories_by_visibility(
+    repositories, filters = _filter_repositories(
         get_technical_standard_service().get_unowned_repositories()
     )
     return render_template(
@@ -150,15 +166,20 @@ def unowned_repositories():
         parent_title="Technical Standard",
         parent_url="/repository-standards/technical-standard",
         repositories=repositories,
-        visibility_filter=visibility_filter,
+        **filters,
     )
 
 
-@technical_standard.route("/repositories/<repository_name>", methods=["GET"])
+@technical_standard.route(
+    "/repositories/<repository_name>",
+    defaults={"organisation": "ministryofjustice"},
+    methods=["GET"],
+)
+@technical_standard.route("/repositories/<organisation>/<repository_name>", methods=["GET"])
 @requires_auth
-def repository(repository_name: str):
+def repository(repository_name: str, organisation: str):
     repository = get_technical_standard_service().get_repository_by_name(
-        repository_name
+        repository_name, organisation
     )
     if repository is None:
         abort(404)

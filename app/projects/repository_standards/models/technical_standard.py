@@ -23,6 +23,7 @@ class TechnicalStandardReportView:
     description: Optional[str] = None
     last_updated: datetime | None = None
     visibility: str | None = None
+    organisation: str = "ministryofjustice"
 
     @property
     def checks_passed(self) -> int:

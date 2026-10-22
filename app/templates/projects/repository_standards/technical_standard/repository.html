@@ -4,8 +4,8 @@
 {% block pageTitle %}{{ repository.name }}{% endblock %}
 
 {% block content %}
-  {% set badge_url = url_for("repository_standards_api.get_repository_badge", repository_name=repository.name, _external=True) %}
-  {% set report_url = url_for("technical_standard.repository", repository_name=repository.name, _external=True) %}
+  {% set badge_url = url_for("repository_standards_api.get_repository_badge", repository_name=repository.name, organisation=repository.organisation, _external=True) %}
+  {% set report_url = url_for("technical_standard.repository", repository_name=repository.name, organisation=repository.organisation, _external=True) %}
   {% set badge_markdown = "[![MOJ Repository Compliance Badge](" ~ badge_url ~ ")](" ~ report_url ~ ")" %}
   {{ govukBreadcrumbs({
     "items": [
@@ -21,6 +21,10 @@
   <p class="govuk-body-s">Last updated: {{ snapshot_time(repository.last_updated) }}</p>
 
   <section class="govuk-summary-list govuk-!-margin-bottom-6">
+    <div class="govuk-summary-list__row">
+      <dt class="govuk-summary-list__key">Organisation</dt>
+      <dd class="govuk-summary-list__value">{{ repository.organisation }}</dd>
+    </div>
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Owner</dt>
       <dd class="govuk-summary-list__value">{{ repository.authoritative_business_unit_owners | join(", ") or "Not identified" }}</dd>
@@ -56,7 +60,7 @@
     <div class="govuk-summary-list__row">
       <dt class="govuk-summary-list__key">Repository</dt>
       <dd class="govuk-summary-list__value">
-        <a href="https://github.com/ministryofjustice/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View repository on GitHub</a>
+        <a href="https://github.com/{{ repository.organisation }}/{{ repository.name }}" rel="noreferrer noopener" target="_blank" class="govuk-link">View repository on GitHub</a>
       </dd>
     </div>
   </section>

@@ -55,8 +55,8 @@ class TestCoordinatedGithubRetry(unittest.TestCase):
     def test_wait_does_not_hold_lock_or_shorten_an_existing_cooldown(self):
         coordinator = GitHubRequestCoordinator()
         with (
-            patch("app.projects.repository_standards.clients.github_client.monotonic", side_effect=[0, 0, 0, 30]),
-            patch("app.projects.repository_standards.clients.github_client.sleep") as wait,
+            patch("app.shared.services.github_app_client.monotonic", side_effect=[0, 0, 0, 30]),
+            patch("app.shared.services.github_app_client.sleep") as wait,
         ):
             coordinator.defer(30)
             coordinator.defer(5)
@@ -190,15 +190,17 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
         )
         response.json.return_value = [{"state": "open"}]
         with (
-            patch.object(self.client, "_GitHubClient__get_token", return_value="token"),
-            patch.object(self.client.session, "get", return_value=response) as request,
+            patch.object(self.client, "get_token", return_value="token"),
+            patch.object(self.client.session, "request", return_value=response) as request,
         ):
             alerts = self.client.get_open_dependabot_alerts("example-repo")
 
         self.assertEqual(alerts, [{"state": "open"}])
         request.assert_called_once_with(
+            "GET",
             "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts",
             params={"state": "open", "per_page": 100},
+            timeout=(10, 60),
         )
 
     def test_follows_dependabot_next_link(self):
@@ -213,10 +215,10 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
         second_response.json.return_value = [{"number": 2}]
 
         with (
-            patch.object(self.client, "_GitHubClient__get_token", return_value="token"),
+            patch.object(self.client, "get_token", return_value="token"),
             patch.object(
                 self.client.session,
-                "get",
+                "request",
                 side_effect=[first_response, second_response],
             ) as request,
         ):
@@ -225,12 +227,16 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
         self.assertEqual(alerts, [{"number": 1}, {"number": 2}])
         self.assertEqual(request.call_count, 2)
         request.assert_any_call(
+            "GET",
             "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts",
             params={"state": "open", "per_page": 100},
+            timeout=(10, 60),
         )
         request.assert_any_call(
+            "GET",
             "https://api.github.com/repos/ministryofjustice/example-repo/dependabot/alerts?after=cursor&per_page=100&state=open",
             params=None,
+            timeout=(10, 60),
         )
 
 
@@ -242,14 +248,15 @@ class TestRepositoryLanguages(unittest.TestCase):
                 response = unittest.mock.Mock(ok=True)
                 response.json.return_value = languages
                 with (
-                    patch.object(client, "_GitHubClient__get_token", return_value="token"),
+                    patch.object(client, "get_token", return_value="token"),
                     patch.object(client.session, "request", return_value=response) as request,
                 ):
                     result = client.get_repository_languages(".github")
                 self.assertEqual(result, languages)
                 self.assertNotIn("url", result)
                 request.assert_called_once_with(
-                    "GET", "https://api.github.com/repos/ministryofjustice/.github/languages"
+                    "GET", "https://api.github.com/repos/ministryofjustice/.github/languages",
+                    timeout=(10, 60),
                 )
 
 

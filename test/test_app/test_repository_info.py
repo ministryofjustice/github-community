@@ -15,6 +15,32 @@ from app.projects.repository_standards.models.repository_info import RepositoryI
 
 
 class TestRepositoryInfoFactory(unittest.TestCase):
+    def test_snapshot_records_the_requested_organization(self):
+        repo = SimpleNamespace(
+            name="shared-name", visibility="private", description=None,
+            default_branch="main", license=None, delete_branch_on_merge=True,
+            security_and_analysis=SimpleNamespace(**{
+                name: SimpleNamespace(status=None) for name in (
+                    "secret_scanning", "secret_scanning_validity_checks",
+                    "secret_scanning_push_protection", "advanced_security",
+                    "secret_scanning_non_provider_patterns",
+                )
+            }),
+            get_contents=Mock(side_effect=Exception("not configured")),
+            get_branch=Mock(return_value=SimpleNamespace(get_protection=lambda: None)),
+        )
+        client = Mock()
+        client.get_repository_custom_properties.return_value = {}
+        client.get_open_code_scanning_alerts.return_value = []
+        client.get_open_dependabot_alerts.return_value = []
+        client.get_open_secret_scanning_alerts.return_value = []
+        client.get_branch_rulesets.return_value = []
+        info = RepositoryInfoFactory.from_github_repo(
+            repo, [], [], [], [], client, organisation="moj-analytical-services"
+        )
+        self.assertEqual(info.basic.name, "shared-name")
+        self.assertEqual(info.basic.organisation, "moj-analytical-services")
+
     def test_configured_codeql_without_repository_languages_is_saved_as_not_applicable(self):
         class NotFound(Exception):
             status = 404

@@ -31,6 +31,47 @@ def make_report(name, compliant, business_units=None, teams=None, visibility=Non
 
 
 class TestTechnicalStandardReportRoutes(unittest.TestCase):
+    def test_organisation_and_visibility_filters_combine(self):
+        mojas = make_report("repo-one", False, visibility="private")
+        mojas.organisation = "moj-analytical-services"
+        self.repositories.append(mojas)
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories"
+            "?organisation=moj-analytical-services&visibility=private"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('value="moj-analytical-services" selected', body)
+        self.assertIn('value="private" selected', body)
+        self.assertIn('value="ministryofjustice"', body)
+        self.assertIn("repositories/moj-analytical-services/repo-one", body)
+        self.assertNotIn('href="/repository-standards/technical-standard/repositories/repo-one"', body)
+        self.assertNotIn("repo-two", body)
+
+    def test_same_named_reports_use_the_right_org_and_preserve_legacy_url(self):
+        mojas = make_report("repo-one", False, visibility="internal")
+        mojas.organisation = "moj-analytical-services"
+        mojas.description = "MOJAS repository"
+        self.repositories.append(mojas)
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories/moj-analytical-services/repo-one"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("MOJAS repository", body)
+        self.assertIn("https://github.com/moj-analytical-services/repo-one", body)
+        self.assertIn("api/moj-analytical-services/repo-one/badge", body)
+        self.assertIn("repositories/moj-analytical-services/repo-one", body)
+        legacy = self.client.get(
+            "/repository-standards/technical-standard/repositories/repo-one"
+        )
+        self.assertEqual(legacy.status_code, 200)
+        self.assertNotIn("MOJAS repository", legacy.get_data(as_text=True))
+        self.assertIn("https://github.com/ministryofjustice/repo-one", legacy.get_data(as_text=True))
+        self.assertEqual(self.client.get(
+            "/repository-standards/technical-standard/repositories/another-org/repo-one"
+        ).status_code, 404)
+
     def setUp(self):
         self.app = Flask(__name__)
         self.app.secret_key = "test"
@@ -66,8 +107,9 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.service = SimpleNamespace(
             get_all_repositories=lambda: self.repositories,
             get_check_summaries=lambda repositories: [],
-            get_repository_by_name=lambda name: next(
-                (repository for repository in self.repositories if repository.name == name),
+            get_repository_by_name=lambda name, organisation: next(
+                (repository for repository in self.repositories
+                 if repository.name == name and repository.organisation == organisation),
                 None,
             ),
             get_owner_counts=lambda owners: {
@@ -370,7 +412,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
             "/repository-standards/technical-standard/repositories?visibility=internal"
         )
         self.assertEqual(response.status_code, 200)
-        self.assertIn("No repositories found for this visibility.", response.get_data(as_text=True))
+        self.assertIn("No repositories found for these filters.", response.get_data(as_text=True))
 
     def test_repository_detail_shows_legacy_style_summary_and_new_badge_snippet(self):
         response = self.client.get(

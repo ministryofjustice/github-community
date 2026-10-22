@@ -8,13 +8,30 @@ from app.projects.repository_standards.routes.api import repository_standards_ap
 
 
 class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
+    def test_org_qualified_badge_looks_up_the_requested_org(self):
+        app = Flask(__name__)
+        app.register_blueprint(repository_standards_api, url_prefix="/repository-standards/api")
+        service = Mock()
+        service.get_repository_by_name.return_value = SimpleNamespace(compliant=False)
+        with (
+            patch("app.projects.repository_standards.routes.api.get_technical_standard_service", return_value=service),
+            patch("app.projects.repository_standards.routes.api.requests.get", return_value=SimpleNamespace(
+                content=b"badge-image", headers={"content-type": "image/svg+xml"}
+            )),
+        ):
+            response = app.test_client().get(
+                "/repository-standards/api/moj-analytical-services/shared/badge"
+            )
+        self.assertEqual(response.status_code, 200)
+        service.get_repository_by_name.assert_called_once_with("shared", "moj-analytical-services")
+
     def test_existing_badge_url_uses_new_standard_and_keeps_style(self):
         app = Flask(__name__)
         app.register_blueprint(
             repository_standards_api, url_prefix="/repository-standards/api"
         )
         technical_standard_service = SimpleNamespace(
-            get_repository_by_name=lambda name: SimpleNamespace(compliant=True)
+            get_repository_by_name=lambda name, organisation: SimpleNamespace(compliant=True)
         )
         shields_response = SimpleNamespace(
             content=b"badge-image",
@@ -47,7 +64,7 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
             repository_standards_api, url_prefix="/repository-standards/api"
         )
         technical_standard_service = SimpleNamespace(
-            get_repository_by_name=lambda name: None
+            get_repository_by_name=lambda name, organisation: None
         )
         shields_response = SimpleNamespace(
             content=b"badge-image",

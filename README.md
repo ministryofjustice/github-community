@@ -142,14 +142,42 @@ The ownership-mapping CronJob uses `GITHUB_COLLECTION_WORKERS` (1 to 8,
 default 1). Helm sets this from
 `app.jobs.map_github_repositories_to_owners.workers`: dev uses 3 and production
 uses 1. This controls threads inside a single Job, not Kubernetes Pod parallelism
-or Gunicorn workers. The existing repository scope and 1,500-repository cap are
-unchanged.
+or Gunicorn workers. Dev collects all accessible visibilities with a combined
+10,000-repository cap and a four-hour deadline. Production retains public-only
+collection, a 1,500-repository cap and a two-hour deadline. Archived repositories
+and forks remain excluded.
+
+Set `GITHUB_REPOSITORY_STANDARDS_ORGS` to a comma-separated list of organization
+installation IDs, for example:
+
+```text
+ministryofjustice:12345,moj-analytical-services:67890
+```
+
+Each organization uses its own installation token from the same GitHub App.
+If unset, collection uses `ministryofjustice` and `GITHUB_APP_INSTALLATION_ID`
+as before. The dev workflow uses the `DEVX_GH_APP_CLIENT_ID`,
+`DEVX_GH_APP_PRIVATE_KEY`, `DEVX_GH_APP_INSTALLATION_ID_MOJ` and
+`DEVX_GH_APP_INSTALLATION_ID_MOJAS` Actions variables/secret. Production retains
+its existing `GH_APP_*` configuration.
+
+The asset migration backfills existing repositories to `ministryofjustice`.
+Repository identity is organization plus name; reports can filter by organization
+and visibility, and org-qualified report/badge URLs distinguish duplicate names.
+Existing name-only URLs still refer to MOJ. Legacy maturity-level reports remain
+MOJ-only; the current Technical Standard reports include all collected organizations.
+Owner configurations default to MOJ; an explicit `organisation` in owner config
+is needed for another organization. Newly collected MOJAS repositories remain
+unowned until matching owner mappings are configured.
 
 Workers have separate GitHub clients, HTTP sessions and team caches. They share
 a rate-limit cooldown; custom REST requests and retries wait for it, and workers
 check it before starting another repository. Requests retry rate limits and
 transient server errors up to three times. Database mapping remains serial and
-starts only after all repositories have been collected successfully.
+starts only after the collection phase completes without errors.
+Each repository is saved once before ownership mapping. Stale cleanup is scoped
+to fully scanned organizations; capped or skipped organizations retain their
+previous records. The cap is shared across organizations in configuration order.
 
 Compare `Collection phase complete` and `Mapping and cleanup complete` log lines
 with the previous benchmark. `Collected repository` logs give individual timings;
@@ -160,6 +188,31 @@ DEBUG level, and cooldowns at WARNING level.
 After a PR deployment updates the dev CronJob, its next scheduled run uses these
 settings unless another deployment replaces them. No manual trigger is required.
 Checkpoint/resume is not included: a Pod eviction still restarts collection.
+
+### Shared GitHub Collection Services
+
+Reusable collection infrastructure lives under `app/shared/services`:
+
+- `github_collection_config.py` provides `OrganisationInstallation` and
+  `parse_organisation_installations`. Callers supply the configuration value,
+  configuration name and fallback organization; it does not read project env vars.
+- `github_app_client.py` provides installation-token creation/refresh, an isolated
+  HTTP session with timeouts, and optional shared rate-limit coordination/retries.
+  `get`/`request` return raw responses for project-specific status handling;
+  `request_json` decodes JSON and raises `GitHubApiError` on unsuccessful responses.
+  Absolute pagination URLs must match the API origin. Call `close` when finished.
+
+Create a client per worker and a coordinator per installation, not a session
+shared by threads or a cooldown shared across different installation quotas.
+Repository Standards uses this infrastructure but owns its repository filters,
+checks, ownership mapping and persistence. Its existing client/config imports
+remain available as compatibility adapters.
+
+Repository Stats has **not** been migrated. A future change can adapt its
+`REPOSITORY_STATS_ORGS` value to the shared parser and replace its local REST
+transport with `GitHubAppClient`, retaining its inventory policy, pagination,
+response-status handling, schedules and data model. No Stats configuration or
+behaviour is changed by the shared-service extraction.
 
 Occasionally, you may need to debug a failed deployment or failing CronJob in the Cloud Platform Kubernetes cluster. Replace `github-community-dev` with the namespace you’re working in. Below are some commands to help you debug issues.
 Before trying these commands, follow the [Connecting to the Cloud Platform’s Kubernetes cluster](https://user-guide.cloud-platform.service.justice.gov.uk/documentation/getting-started/kubectl-config.html) guide.

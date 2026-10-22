@@ -11,8 +11,13 @@ from app.projects.repository_standards.services.technical_standard_service impor
 repository_standards_api = Blueprint("repository_standards_api", __name__)
 
 
-@repository_standards_api.route("/<repository_name>/badge", methods=["GET"])
-def get_repository_badge(repository_name: str):
+@repository_standards_api.route(
+    "/<repository_name>/badge",
+    defaults={"organisation": "ministryofjustice"},
+    methods=["GET"],
+)
+@repository_standards_api.route("/<organisation>/<repository_name>/badge", methods=["GET"])
+def get_repository_badge(repository_name: str, organisation: str):
     default_badge_style = "for-the-badge"
     valid_badge_styles = ["for-the-badge", "flat"]
     style_parameter = request.args.get("style", default_badge_style, type=str)
@@ -22,7 +27,7 @@ def get_repository_badge(repository_name: str):
         else default_badge_style
     )
     repository = get_technical_standard_service().get_repository_by_name(
-        repository_name
+        repository_name, organisation
     )
     shields_url = get_technical_standard_badge_shield_url(
         repository.compliant if repository else None,

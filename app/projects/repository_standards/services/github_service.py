@@ -11,6 +11,8 @@ from github.Team import Team
 from app.projects.repository_standards.clients.github_client import (
     retries_github_rate_limit_exception_at_next_reset_once,
     GitHubClient,
+)
+from app.shared.services.github_app_client import (
     GitHubRequestCoordinator,
     CoordinatedGithubRetry,
 )
@@ -29,10 +31,11 @@ class GithubService:
         app_private_key: str,
         app_installation_id: int,
         request_coordinator: GitHubRequestCoordinator | None = None,
+        organisation_name: str = "ministryofjustice",
     ) -> None:
         self._credentials = (app_client_id, app_private_key, app_installation_id)
         self._request_coordinator = request_coordinator or GitHubRequestCoordinator()
-        self.organisation_name: str = "ministryofjustice"
+        self.organisation_name = organisation_name
         app_auth = Auth.AppAuth(app_client_id, app_private_key)
         app_installation_auth = app_auth.get_installation_auth(app_installation_id)
         self.github_client_core_api: Github = Github(
@@ -51,7 +54,9 @@ class GithubService:
 
     def _new_worker_service(self):
         return GithubService(
-            *self._credentials, request_coordinator=self._request_coordinator
+            *self._credentials,
+            request_coordinator=self._request_coordinator,
+            organisation_name=self.organisation_name,
         )
 
     @retries_github_rate_limit_exception_at_next_reset_once
@@ -140,6 +145,7 @@ class GithubService:
             teams_with_any_access_parents,
             self.github_client,
             admin_team_maintainer_counts,
+            organisation=self.organisation_name,
         )
         logger.info("Collected repository %s in %.2fs", repo.name, perf_counter() - started)
         return result

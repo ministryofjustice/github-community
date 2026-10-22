@@ -143,6 +143,8 @@ class RepositoryComplianceService:
         repositories_compliance_reports = []
         repositories = self.__asset_service.get_all_repositories()
         for repository in repositories:
+            if repository.organisation != "ministryofjustice":
+                continue
             repository_compliance_report = self.__get_repository_compliance_report(
                 repository
             )
