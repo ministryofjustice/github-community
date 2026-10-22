@@ -157,30 +157,25 @@ async function refreshCollectionHealth() {
     const freshness = health.capturedAt
       ? `${captureLabel(health.capturedAt)}${failed ? " Latest collection failed." : ""}`
       : failed ? "No complete capture yet. Latest collection failed." : "No complete capture yet.";
-    const automation = [
-      health.status === "failed" ? "Latest collection failed."
-        : health.configured === false || health.status === "not_configured" ? ""
-          : health.status === "running" ? "Collection is running."
-            : health.status === "complete" ? "Latest collection completed." : "Automatic collection has not run.",
-      health.scheduledStatus ? `Scheduled collection: ${health.scheduledStatus}.` : "",
-      health.stale && health.capturedAt ? "Data may be out of date." : "",
-    ].filter(Boolean).join(" ");
     if ($("live-freshness").textContent !== freshness) $("live-freshness").textContent = freshness;
-    if ($("collection-status").textContent !== automation) $("collection-status").textContent = automation;
-    const stamp = value => captureLabel(value).replace("Last updated: ", "");
     const run = health.latestRun;
-    const outcome = { complete: "Succeeded", failed: "Failed", running: "Running (completion not recorded)" };
-    $("collection-attempt").textContent = run
-      ? `Latest recorded attempt: ${stamp(run.startedAt)} (London time). ${outcome[run.status] || "Unknown outcome"}.${run.completedAt ? ` Finished: ${stamp(run.completedAt)}.` : ""}${run.failureReason ? ` ${run.failureReason}` : ""}`
-      : "No collection attempts recorded.";
-    $("collection-success").textContent = health.capturedAt
-      ? `Latest successful capture: ${stamp(health.capturedAt)} (London time).`
-      : "No successful capture recorded.";
+    const outcome = { complete: "Succeeded", failed: "Failed", running: "Running" };
+    const stamp = value => {
+      const date = new Date(value);
+      const day = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric",
+      }).format(date);
+      const time = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hour12: true,
+      }).format(date).replace(/\s/g, "");
+      return `${day}, ${time}`;
+    };
+    $("collection-status").textContent = run
+      ? `${stamp(run.startedAt)} · ${outcome[run.status] || "Unknown outcome"}${run.failureReason ? ` — ${run.failureReason}` : ""}`
+      : "No runs recorded";
   } catch (error) {
     $("live-freshness").textContent = `Last updated unavailable. ${error.message}`;
-    $("collection-status").textContent = `Collection status unavailable. ${error.message}`;
-    $("collection-attempt").textContent = "Latest attempt unavailable.";
-    $("collection-success").textContent = "Latest successful capture unavailable.";
+    $("collection-status").textContent = `Run status unavailable. ${error.message}`;
   }
 }
 refreshCollectionHealth();

@@ -277,12 +277,12 @@ for (const recovery of ["preset", "custom"]) {
   });
 }
 
-test("Team freshness retains capture/failure/errors while routine staleness belongs in Admin", async () => {
+test("board Last run cell shows attempt outcome without changing Team successful freshness", async () => {
   const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
   const start = source.indexOf("async function refreshCollectionHealth()");
   const end = source.indexOf("\nrefreshCollectionHealth();", start);
   assert.ok(start >= 0 && end > start);
-  const elements = Object.fromEntries(["live-freshness", "collection-status", "collection-attempt", "collection-success"]
+  const elements = Object.fromEntries(["live-freshness", "collection-status"]
     .map(id => [id, { textContent: "" }]));
   let health = { capturedAt: "generated-capture", stale: true, status: "not_configured", configured: false };
   let failure;
@@ -293,42 +293,35 @@ test("Team freshness retains capture/failure/errors while routine staleness belo
   });
   await refresh();
   assert.equal(elements["live-freshness"].textContent, "Last updated: generated-capture");
-  assert.equal(elements["collection-status"].textContent, "Data may be out of date.");
-  assert.equal(elements["collection-attempt"].textContent, "No collection attempts recorded.");
-  assert.match(elements["collection-success"].textContent, /generated-capture/);
-  for (const [status, outcome] of [["complete", "Succeeded"], ["failed", "Failed"], ["running", "Running (completion not recorded)"]]) {
+  assert.equal(elements["collection-status"].textContent, "No runs recorded");
+  for (const [status, outcome] of [["complete", "Succeeded"], ["failed", "Failed"], ["running", "Running"]]) {
     health = { ...health, status, latestRun: {
-      status, startedAt: "generated-start", completedAt: status === "running" ? null : "generated-finish",
+      status, startedAt: "2026-10-22T08:30:00Z", completedAt: status === "running" ? null : "2026-10-22T08:31:00Z",
       failureReason: status === "failed" ? "Could not connect to GitHub." : null,
     } };
     await refresh();
-    assert.ok(elements["collection-attempt"].textContent.includes(outcome));
-    assert.match(elements["collection-attempt"].textContent, /generated-start/);
-    assert.equal(elements["collection-attempt"].textContent.includes("generated-finish"), status !== "running");
-    assert.equal(elements["collection-attempt"].textContent.includes("Could not connect"), status === "failed");
+    assert.ok(elements["collection-status"].textContent.startsWith(`22 Oct 2026, 9:30am · ${outcome}`));
+    assert.equal(elements["collection-status"].textContent.includes("Could not connect"), status === "failed");
     assert.ok(elements["live-freshness"].textContent.startsWith("Last updated: generated-capture"));
-    assert.match(elements["collection-success"].textContent, /generated-capture/);
   }
   health = { ...health, status: "not_configured", latestRun: null };
   health = { ...health, capturedAt: null };
   await refresh();
-  assert.equal(elements["collection-status"].textContent, "");
+  assert.equal(elements["collection-status"].textContent, "No runs recorded");
   health = { ...health, capturedAt: "generated-capture", status: "failed" };
   await refresh();
-  assert.match(elements["collection-status"].textContent, /Latest collection failed/);
+  assert.equal(elements["collection-status"].textContent, "No runs recorded");
   health = { ...health, status: "complete", configured: true, scheduledStatus: "failed" };
   await refresh();
   assert.match(elements["live-freshness"].textContent, /Latest collection failed/);
-  assert.match(elements["collection-status"].textContent, /Scheduled collection: failed.*Data may be out of date/);
+  assert.equal(elements["collection-status"].textContent, "No runs recorded");
   health = { capturedAt: null, stale: true, status: "failed" };
   await refresh();
   assert.equal(elements["live-freshness"].textContent, "No complete capture yet. Latest collection failed.");
   failure = new Error("Generated API error");
   await refresh();
   assert.equal(elements["live-freshness"].textContent, "Last updated unavailable. Generated API error");
-  assert.equal(elements["collection-status"].textContent, "Collection status unavailable. Generated API error");
-  assert.equal(elements["collection-attempt"].textContent, "Latest attempt unavailable.");
-  assert.equal(elements["collection-success"].textContent, "Latest successful capture unavailable.");
+  assert.equal(elements["collection-status"].textContent, "Run status unavailable. Generated API error");
 });
 
 test("actual tab and chart navigation preserve URL selection with safe fallback and accessible tabs", () => {

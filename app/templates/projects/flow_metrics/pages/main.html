@@ -8,6 +8,7 @@
 {% endblock %}
 
 {% block content %}
+{% set admin_selected = request.args.get('view') == 'admin' %}
 <!-- Flow Metrics extends the Hub's GOV.UK/MoJ visual system: a task-led chart
      workspace, blue/orange series, persistent chart navigation and an inline
      configuration preview. Dataset provenance remains in API/export metadata. -->
@@ -15,12 +16,12 @@
 <noscript><p class="govuk-body">Flow Metrics needs JavaScript to display charts and tables.</p></noscript>
 <div class="flow-navigation">
   <div class="flow-tabs" role="tablist" aria-label="Flow Metrics views">
-    <button id="team-tab" class="flow-tab" role="tab" aria-selected="true" aria-controls="team-panel" tabindex="0">Team</button>
-    <button id="admin-tab" class="flow-tab" role="tab" aria-selected="false" aria-controls="admin-panel" tabindex="-1">Admin</button>
+    <button id="team-tab" class="flow-tab" role="tab" aria-selected="{{ 'false' if admin_selected else 'true' }}" aria-controls="team-panel" tabindex="{{ '-1' if admin_selected else '0' }}">Team</button>
+    <button id="admin-tab" class="flow-tab" role="tab" aria-selected="{{ 'true' if admin_selected else 'false' }}" aria-controls="admin-panel" tabindex="{{ '0' if admin_selected else '-1' }}">Admin</button>
   </div>
-  <button id="open-guide" class="flow-link-button" type="button" aria-haspopup="dialog">How-to guide</button>
+  <button id="open-guide" class="flow-link-button" type="button" aria-haspopup="dialog"{% if admin_selected %} hidden{% endif %}>How-to guide</button>
 </div>
-<section id="team-panel" role="tabpanel" aria-labelledby="team-tab" data-live="{{ 'true' if live else 'false' }}">
+<section id="team-panel" role="tabpanel" aria-labelledby="team-tab" data-live="{{ 'true' if live else 'false' }}"{% if admin_selected %} hidden{% endif %}>
   <h1 class="govuk-heading-l"><a id="data-source" class="govuk-link" href="{{ source_url }}">{{ workspace_name }} board</a></h1>
   <p id="live-freshness" class="govuk-body-s flow-status-message" role="status">Last updated unavailable.</p>
   <div class="flow-workspace">
@@ -41,7 +42,7 @@
         <h2 class="govuk-heading-l">No charts yet</h2>
         <p class="govuk-body">Create a chart to explore {{ 'captured board observations' if live else 'the combined workspace' }}. Your team workspace starts here.</p>
       </section>
-      <section id="chart-workspace" aria-labelledby="chart-title">
+      <section id="chart-workspace" aria-labelledby="chart-title" hidden>
         <div class="flow-chart-heading">
           <div><h2 id="chart-title" class="govuk-heading-l" tabindex="-1"></h2><p id="save-state" class="govuk-body-s flow-status-message"></p></div>
           <button id="configure-toggle" class="govuk-button govuk-button--secondary" type="button" aria-expanded="false" aria-controls="configuration">Configure</button>
@@ -138,7 +139,7 @@
     </div>
   </div>
 </section>
-<section id="admin-panel" role="tabpanel" aria-labelledby="admin-tab" hidden>
+<section id="admin-panel" role="tabpanel" aria-labelledby="admin-tab"{% if not admin_selected %} hidden{% endif %}>
   {% include "projects/flow_metrics/components/admin.html" %}
 </section>
 <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description" class="flow-dialog">

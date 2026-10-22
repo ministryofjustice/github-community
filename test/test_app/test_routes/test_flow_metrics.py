@@ -1,4 +1,5 @@
 import time
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 import pytest
@@ -27,6 +28,32 @@ def test_flow_metrics_requires_hub_auth(client):
     assert response.location == "/auth/login"
 
 
+@pytest.mark.parametrize("view,admin", [("", False), ("admin", True), ("team", False), ("invalid", False)])
+def test_flow_metrics_initial_html_selects_requested_panel_before_javascript(client, view, admin):
+    class Elements(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.by_id = {}
+
+        def handle_starttag(self, tag, attrs):
+            values = dict(attrs)
+            if "id" in values:
+                self.by_id[values["id"]] = values
+
+    with client.session_transaction() as session:
+        session["user"] = {"expires_at": time.time() + 3600}
+    response = client.get(f"/flow-metrics/?view={view}&chart=chosen-saved-chart")
+    assert response.status_code == 200
+    parsed = Elements()
+    parsed.feed(response.get_data(as_text=True))
+    for name, selected in [("admin", admin), ("team", not admin)]:
+        assert parsed.by_id[f"{name}-tab"]["aria-selected"] == str(selected).lower()
+        assert parsed.by_id[f"{name}-tab"]["tabindex"] == ("0" if selected else "-1")
+        assert ("hidden" not in parsed.by_id[f"{name}-panel"]) is selected
+    assert ("hidden" in parsed.by_id["open-guide"]) is admin
+    assert "hidden" in parsed.by_id["chart-workspace"]
+
+
 def test_flow_metrics_uses_existing_signed_in_session(client):
     with client.session_transaction() as session:
         session["user"] = {"expires_at": time.time() + 3600}
@@ -40,6 +67,15 @@ def test_flow_metrics_uses_existing_signed_in_session(client):
     assert '<h1 class="govuk-heading-l">Team boards</h1>' in html
     assert html.count('id="data-source"') == 1
     assert html.index('id="collection-status"') > html.index('id="admin-panel"')
+    admin_table = html[html.index('aria-label="Team boards"'):html.index("</table>", html.index('aria-label="Team boards"'))]
+    assert '<th class="govuk-table__header" scope="col">Last run</th>' in admin_table
+    assert admin_table.count('data-label="Last run"') == 1
+    assert 'id="collection-status"' in admin_table
+    assert "About runs" not in admin_table
+    assert "<details" not in admin_table
+    assert "Missed jobs are not recorded" not in html
+    assert 'id="collection-attempt"' not in html
+    assert 'id="collection-success"' not in html
     assert html.index('id="live-freshness"') > html.index('id="team-panel"')
     assert "Team boards" in html
     assert "Add team board" in html

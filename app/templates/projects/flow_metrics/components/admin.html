@@ -2,16 +2,13 @@
   <h1 class="govuk-heading-l">Team boards</h1>
   <button id="add-team-board" class="govuk-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Add team board</button>
 </div>
-<p id="collection-status" class="govuk-body-s flow-status-message" role="status">Collection status unavailable.</p>
-<p id="collection-attempt" class="govuk-body-s flow-status-message" role="status">Latest attempt unavailable.</p>
-<p id="collection-success" class="govuk-body-s flow-status-message" role="status">Latest successful capture unavailable.</p>
-<p class="govuk-body-s">Attempts include scheduled and manual collections recorded by the app. Jobs that never reach the collector are not shown. A stopped job may remain marked Running; check Kubernetes for missed or interrupted jobs.</p>
 <div class="flow-table-scroll" role="region" aria-label="Team boards" tabindex="0">
   <table class="govuk-table flow-admin-table">
     <thead><tr>
       <th class="govuk-table__header" scope="col">Team</th>
       <th class="govuk-table__header" scope="col">GitHub project</th>
       <th class="govuk-table__header" scope="col">Status</th>
+      <th class="govuk-table__header" scope="col">Last run</th>
       <th class="govuk-table__header" scope="col">Action</th>
     </tr></thead>
     <tbody>
@@ -19,6 +16,9 @@
         <th class="govuk-table__header" scope="row">Developer Experience</th>
         <td class="govuk-table__cell" data-label="GitHub project"><a class="govuk-link" href="{{ source_url }}">Project #152</a></td>
         <td class="govuk-table__cell" data-label="Status"><strong class="govuk-tag govuk-tag--blue">Current workspace</strong></td>
+        <td class="govuk-table__cell" data-label="Last run">
+          <span id="collection-status" role="status">Run status unavailable.</span>
+        </td>
         <td class="govuk-table__cell" data-label="Action"><button id="manage-current-board" class="flow-link-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Manage<span class="govuk-visually-hidden"> Developer Experience</span></button></td>
       </tr>
     </tbody>
