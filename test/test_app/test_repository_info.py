@@ -1,9 +1,11 @@
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
+from datetime import datetime, timezone
 
 from app.projects.repository_standards.config.technical_standard_config import (
     get_all_technical_standard_checks,
+    get_no_high_critical_security_alerts_check,
 )
 from app.projects.repository_standards.clients.github_client import GitHubApiError
 from app.projects.repository_standards.models.repository_info import (
@@ -41,6 +43,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             "state": "configured", "languages": [],
         }
         client.get_open_dependabot_alerts.return_value = []
+        client.get_open_secret_scanning_alerts.return_value = []
         client.get_branch_rulesets.return_value = []
 
         result = RepositoryInfoFactory.from_github_repo(
@@ -53,6 +56,40 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         self.assertIs(result.security_alerts.code_scanning_not_applicable, True)
         restored = RepositoryInfo.from_dict(result.to_dict())
         self.assertIs(restored.security_alerts.code_scanning_not_applicable, True)
+        self.assertEqual(restored.security_alerts.code_scanning_alerts, [])
+        self.assertEqual(restored.security_alerts.open_secret_scanning_count, 0)
+        self.assertEqual(
+            get_no_high_critical_security_alerts_check(SimpleNamespace(data=restored)).status,
+            "pass",
+        )
+
+        client.get_open_code_scanning_alerts.side_effect = None
+        client.get_open_code_scanning_alerts.return_value = [{
+            "state": "open", "created_at": "2026-10-20T00:00:00Z",
+            "rule": {"security_severity_level": "low", "description": "Do not store"},
+        }]
+        client.get_open_dependabot_alerts.return_value = [{
+            "state": "open", "created_at": "2026-10-20T00:00:00Z",
+            "security_advisory": {"severity": "critical", "description": "Do not store"},
+        }]
+        client.get_open_secret_scanning_alerts.return_value = [
+            {"state": "open", "secret": "never-persist-this"}
+        ]
+        snapshot = RepositoryInfoFactory.from_github_repo(repo, [], [], [], [], client)
+        self.assertEqual(snapshot.security_alerts.code_scanning_alerts, [
+            {"state": "open", "created_at": "2026-10-20T00:00:00Z"}
+        ])
+        self.assertEqual(snapshot.security_alerts.dependabot_alerts, [
+            {"state": "open", "created_at": "2026-10-20T00:00:00Z", "severity": "critical"}
+        ])
+        self.assertNotIn("never-persist-this", str(snapshot.to_dict()))
+        self.assertNotIn("Do not store", str(snapshot.to_dict()))
+        self.assertEqual(snapshot.security_alerts.open_secret_scanning_count, 1)
+        check = get_no_high_critical_security_alerts_check(
+            SimpleNamespace(data=snapshot), now=datetime(2026, 10, 21, tzinfo=timezone.utc)
+        )
+        self.assertEqual(check.status, "fail")
+        self.assertEqual(check.recommendations, ["Resolve open Secret Scanning alerts."])
 
     def test_only_confirmed_no_analysis_with_no_languages_is_not_applicable(self):
         repo = SimpleNamespace(name=".github", get_languages=lambda: {})
@@ -64,7 +101,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             "state": "configured", "languages": [],
         }
         result = RepositoryInfoFactory._get_code_scanning_alert_result(repo, client)
-        self.assertEqual(result, (0, True))
+        self.assertEqual(result, (0, True, []))
 
     def test_other_alert_errors_remain_unavailable(self):
         repo = SimpleNamespace(name=".github", get_languages=Mock(return_value={}))
@@ -77,7 +114,7 @@ class TestRepositoryInfoFactory(unittest.TestCase):
                 client.get_open_code_scanning_alerts.side_effect = error
                 self.assertEqual(
                     RepositoryInfoFactory._get_code_scanning_alert_result(repo, client),
-                    (None, False),
+                    (None, False, None),
                 )
                 client.get_code_scanning_default_setup.assert_not_called()
                 repo.get_languages.assert_not_called()

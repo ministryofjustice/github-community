@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.projects.repository_standards.models.repository_info import (
@@ -7,6 +8,7 @@ from app.projects.repository_standards.models.repository_info import (
     RepositoryInfo,
 )
 from app.projects.repository_standards.config.technical_standard_config import (
+    _has_overdue_alerts,
     FAIL,
     PASS,
     get_authoritative_owner_check,
@@ -119,9 +121,83 @@ def make_security_alerts_repository(
                 open_high_critical_code_scanning_count=code_scanning_count,
                 open_high_critical_dependabot_count=dependabot_count,
                 code_scanning_not_applicable=code_scanning_not_applicable,
+                code_scanning_alerts=(
+                    [{"state": "open", "created_at": "2020-01-01T00:00:00Z"}] * code_scanning_count
+                    if code_scanning_count is not None else None
+                ),
+                dependabot_alerts=(
+                    [{"state": "open", "severity": "high", "created_at": "2020-01-01T00:00:00Z"}] * dependabot_count
+                    if dependabot_count is not None else None
+                ),
+                open_secret_scanning_count=0,
             )
         )
     )
+
+
+class TestSecurityAlertDeadlines(unittest.TestCase):
+    def test_check_five_uses_all_agreed_remediation_windows(self):
+        now = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
+        for source, severity, window in (
+            ("code_scanning_alerts", "low", timedelta(days=14)),
+            ("code_scanning_alerts", "critical", timedelta(days=14)),
+            ("dependabot_alerts", "critical", timedelta(hours=72)),
+            ("dependabot_alerts", "high", timedelta(days=7)),
+        ):
+            for extra, expected in ((-1, PASS), (0, PASS), (1, FAIL)):
+                with self.subTest(source=source, severity=severity, extra=extra):
+                    repository = make_security_alerts_repository(0, 0)
+                    setattr(repository.data.security_alerts, source, [{
+                        "state": "open", "severity": severity,
+                        "created_at": (now - window - timedelta(seconds=extra)).isoformat(),
+                    }])
+                    check = get_no_high_critical_security_alerts_check(repository, now=now)
+                    self.assertEqual(check.status, expected)
+
+    def test_any_open_secret_fails_even_when_other_sources_pass(self):
+        repository = make_security_alerts_repository(0, 0)
+        repository.data.security_alerts.open_secret_scanning_count = 1
+        check = get_no_high_critical_security_alerts_check(repository)
+        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.recommendations, ["Resolve open Secret Scanning alerts."])
+
+    def test_old_counts_alone_cannot_pass_the_new_rules(self):
+        repository = make_security_alerts_repository(0, 0)
+        del repository.data.security_alerts.code_scanning_alerts
+        del repository.data.security_alerts.dependabot_alerts
+        del repository.data.security_alerts.open_secret_scanning_count
+        check = get_no_high_critical_security_alerts_check(repository)
+        self.assertEqual(check.status, FAIL)
+        self.assertEqual(len(check.recommendations), 3)
+
+    def test_no_languages_exception_does_not_exempt_secret_scanning(self):
+        repository = make_security_alerts_repository(None, 0, code_scanning_not_applicable=True)
+        repository.data.security_alerts.open_secret_scanning_count = 1
+        self.assertEqual(get_no_high_critical_security_alerts_check(repository).status, FAIL)
+
+    def test_deadlines_are_strict_and_use_creation_time(self):
+        now = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
+        for window in (timedelta(hours=72), timedelta(days=7), timedelta(days=14)):
+            for offset, expected in ((-1, False), (0, False), (1, True)):
+                with self.subTest(window=window, offset=offset):
+                    alert = {"state": "open", "created_at": (now - window - timedelta(seconds=offset)).isoformat(),
+                             "updated_at": now.isoformat()}
+                    self.assertIs(_has_overdue_alerts([alert], now, window), expected)
+
+    def test_unknown_dates_and_missing_data_cannot_pass(self):
+        now = datetime(2026, 10, 21, tzinfo=timezone.utc)
+        for alerts in (None, [{"state": "open"}], [{"state": "open", "created_at": "invalid"}],
+                       [{"state": "open", "created_at": "2026-10-22T00:00:00Z"}]):
+            with self.subTest(alerts=alerts):
+                self.assertIsNone(_has_overdue_alerts(alerts, now, timedelta(days=14)))
+
+    def test_dependency_severities_and_closed_alerts(self):
+        now = datetime(2026, 10, 21, tzinfo=timezone.utc)
+        deadlines = {"critical": timedelta(hours=72), "high": timedelta(days=7)}
+        for severity, expected in (("critical", True), ("high", False), ("medium", False), ("low", False)):
+            alert = {"state": "open", "severity": severity, "created_at": "2026-10-17T00:00:00Z"}
+            self.assertIs(_has_overdue_alerts([alert], now, deadlines), expected)
+        self.assertIs(_has_overdue_alerts([{"state": "fixed"}], now, deadlines), False)
 
 
 class TestCheckRecommendations(unittest.TestCase):
@@ -219,8 +295,8 @@ class TestCheckRecommendations(unittest.TestCase):
             make_security_alerts_repository(12, 3)
         )
         self.assertEqual(check.recommendations, [
-            "Resolve High/Critical Code Scanning alerts.",
-            "Resolve High/Critical Dependabot alerts.",
+            "Resolve open Code Scanning alerts older than 14 days.",
+            "Resolve open Dependabot Critical alerts older than 72 hours and High alerts older than 7 days.",
         ])
 
     def test_unavailable_alerts_do_not_claim_scanning_is_disabled(self):
@@ -228,7 +304,7 @@ class TestCheckRecommendations(unittest.TestCase):
             make_security_alerts_repository(None, 0)
         )
         self.assertEqual(check.recommendations, [
-            "Code Scanning data is unavailable. Check that Code Scanning is enabled."
+            "Code Scanning SLA data is unavailable or incomplete. Check that Code Scanning is enabled and refresh the report data."
         ])
 
     def test_passing_security_check_has_no_recommendations(self):
@@ -250,15 +326,15 @@ class TestCheckRecommendations(unittest.TestCase):
         )
         self.assertEqual(check.status, FAIL)
         self.assertEqual(len(check.recommendations), 1)
-        self.assertIn("Dependabot data is unavailable", check.recommendations[0])
+        self.assertIn("Dependabot SLA data is unavailable", check.recommendations[0])
 
     def test_mixed_alert_data_has_distinct_recommendations(self):
         check = get_no_high_critical_security_alerts_check(
             make_security_alerts_repository(10, None)
         )
         self.assertEqual(check.recommendations, [
-            "Resolve High/Critical Code Scanning alerts.",
-            "Dependabot data is unavailable. Check that Dependabot alerts are enabled.",
+            "Resolve open Code Scanning alerts older than 14 days.",
+            "Dependabot SLA data is unavailable or incomplete. Check that Dependabot alerts are enabled and refresh the report data.",
         ])
 
 
@@ -335,6 +411,9 @@ class TestPassingRepositoryFixture(unittest.TestCase):
                 security_alerts=SimpleNamespace(
                     open_high_critical_code_scanning_count=0,
                     open_high_critical_dependabot_count=0,
+                    code_scanning_alerts=[],
+                    dependabot_alerts=[],
+                    open_secret_scanning_count=0,
                 ),
                 codeowners_file_present=True,
                 codeowners_file_valid=True,

@@ -267,14 +267,14 @@ class GitHubClient:
             f"/repos/{self.org}/{repo}/codeowners/errors",
         )
 
-    def __get_paginated_repository_alerts(self, path: str) -> List[Dict[str, Any]]:
+    def __get_paginated_repository_alerts(self, path: str, extra_params=None) -> List[Dict[str, Any]]:
         alerts = []
         page = 1
         while True:
             page_alerts = self.__call(
                 "GET",
                 path,
-                params={"state": "open", "per_page": 100, "page": page},
+                params={"state": "open", "per_page": 100, "page": page, **(extra_params or {})},
             )
             alerts.extend(page_alerts)
             if len(page_alerts) < 100:
@@ -290,6 +290,18 @@ class GitHubClient:
         return self.__call(
             "GET", f"/repos/{self.org}/{repo}/code-scanning/default-setup"
         )
+
+    def get_open_secret_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        try:
+            alerts = self.__get_paginated_repository_alerts(
+                f"/repos/{self.org}/{repo}/secret-scanning/alerts",
+                extra_params={"hide_secret": "true"},
+            )
+            if any(alert.get("state") not in {"open", "resolved"} for alert in alerts):
+                raise ValueError("Invalid secret alert state")
+            return [{"state": alert["state"]} for alert in alerts]
+        except Exception:
+            raise ValueError("Secret Scanning alert data could not be retrieved") from None
 
     def get_open_dependabot_alerts(self, repo: str) -> List[Dict[str, Any]]:
         alerts = []

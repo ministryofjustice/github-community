@@ -26,7 +26,11 @@ class RepositoryInfoFactory:
                     in {"high", "critical"}
                 )
             )
-            return count, False
+            metadata = [
+                {"state": alert.get("state"), "created_at": alert.get("created_at")}
+                for alert in alerts
+            ]
+            return count, False, metadata
         except Exception as error:
             no_analysis_found = (
                 isinstance(error, GitHubApiError)
@@ -36,9 +40,9 @@ class RepositoryInfoFactory:
             if no_analysis_found and RepositoryInfoFactory._code_scanning_is_not_applicable(
                 repo, github_client
             ):
-                return 0, True
+                return 0, True, []
             logger.debug("Error getting Code Scanning alerts: %s", error)
-            return None, False
+            return None, False, None
 
     @staticmethod
     def _code_scanning_is_not_applicable(repo, github_client) -> bool:
@@ -251,9 +255,11 @@ class RepositoryInfoFactory:
         (
             open_high_critical_code_scanning_alerts,
             code_scanning_not_applicable,
+            code_scanning_metadata,
         ) = RepositoryInfoFactory._get_code_scanning_alert_result(repo, github_client)
 
         open_high_critical_dependabot_alerts = None
+        dependabot_metadata = None
         try:
             dependabot_alerts = github_client.get_open_dependabot_alerts(repo.name)
             open_high_critical_dependabot_alerts = sum(
@@ -268,8 +274,28 @@ class RepositoryInfoFactory:
                     in {"high", "critical"}
                 )
             )
+            dependabot_metadata = [
+                {
+                    "state": alert.get("state"),
+                    "created_at": alert.get("created_at"),
+                    "severity": (
+                        (alert.get("security_advisory") or {}).get("severity")
+                        or (alert.get("security_vulnerability") or {}).get("severity")
+                    ),
+                }
+                for alert in dependabot_alerts
+            ]
         except Exception as e:
             logger.debug("Error getting Dependabot alerts: %s", e)
+
+        open_secret_scanning_count = None
+        try:
+            secret_alerts = github_client.get_open_secret_scanning_alerts(repo.name)
+            open_secret_scanning_count = sum(
+                alert["state"] == "open" for alert in secret_alerts
+            )
+        except Exception as error:
+            logger.debug("Secret Scanning collection failed (%s)", type(error).__name__)
 
         security_alerts = SecurityAlertsInfo(
             open_high_critical_code_scanning_count=(
@@ -279,6 +305,9 @@ class RepositoryInfoFactory:
                 open_high_critical_dependabot_alerts
             ),
             code_scanning_not_applicable=code_scanning_not_applicable,
+            code_scanning_alerts=code_scanning_metadata,
+            dependabot_alerts=dependabot_metadata,
+            open_secret_scanning_count=open_secret_scanning_count,
         )
 
         try:
@@ -432,6 +461,9 @@ class SecurityAlertsInfo:
     open_high_critical_code_scanning_count: Optional[int] = None
     open_high_critical_dependabot_count: Optional[int] = None
     code_scanning_not_applicable: Optional[bool] = None
+    code_scanning_alerts: Optional[list[dict]] = None
+    dependabot_alerts: Optional[list[dict]] = None
+    open_secret_scanning_count: Optional[int] = None
 
 
 @dataclass

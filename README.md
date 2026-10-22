@@ -108,6 +108,34 @@ make app-start
 
 ## 🚀 Managing Deployments and CronJobs
 
+### Check 5 Security Alert Remediation
+
+Check 5 uses calendar time from each alert's GitHub `created_at` timestamp:
+
+- Any open Secret Scanning alert fails immediately, regardless of validity or age.
+- Open Dependabot Critical alerts fail after 72 hours; High alerts fail after
+  7 days. Medium and Low dependency alerts do not affect this check.
+- Any open Code Scanning alert fails after 14 days, regardless of severity.
+
+Alerts within their remediation window pass that part of the check; an alert
+becomes overdue strictly after its deadline. Acknowledgement, production status
+and formal risk-acceptance evidence are not evaluated. Fixed, resolved and
+dismissed alerts do not count as open findings.
+
+CodeQL's confirmed configured/no-languages exception still applies only to Code
+Scanning; Dependabot and Secret Scanning must be assessed independently. Missing
+or malformed required alert metadata fails conservatively. Old snapshots need a
+fresh collection after deployment because alert counts alone cannot prove SLA
+compliance. Deadlines are evaluated when reports are generated, so an alert can
+become overdue before the next scrape.
+
+The GitHub App needs Secret scanning alerts read permission approved on its
+installation. The collector requests hidden secret values and stores only the
+open-secret count; no secret values or raw secret-alert responses are stored.
+Code Scanning and Dependabot snapshots retain only state, creation time and
+dependency severity for SLA evaluation. Recommendations do not display alert
+counts.
+
 ### Repository Standards Collection Concurrency
 
 The ownership-mapping CronJob uses `GITHUB_COLLECTION_WORKERS` (1 to 8,

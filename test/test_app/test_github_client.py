@@ -161,6 +161,28 @@ class TestRepositorySecurityAlerts(unittest.TestCase):
             params={"state": "open", "per_page": 100, "page": 2},
         )
 
+    def test_secret_alerts_hide_and_discard_secret_values_across_pages(self):
+        with patch.object(
+            self.client, "_GitHubClient__call",
+            side_effect=[
+                [{"state": "open", "secret": "never-store-this"}] * 100,
+                [{"state": "open", "secret": "also-sensitive"}],
+            ],
+        ) as request:
+            alerts = self.client.get_open_secret_scanning_alerts("example-repo")
+        self.assertEqual(alerts, [{"state": "open"}] * 101)
+        request.assert_any_call(
+            "GET", "/repos/ministryofjustice/example-repo/secret-scanning/alerts",
+            params={"state": "open", "per_page": 100, "page": 2, "hide_secret": "true"},
+        )
+
+    def test_secret_alert_errors_do_not_expose_response_contents(self):
+        with patch.object(
+            self.client, "_GitHubClient__call", side_effect=ValueError("sensitive-body")
+        ):
+            with self.assertRaisesRegex(ValueError, "^Secret Scanning alert data could not be retrieved$"):
+                self.client.get_open_secret_scanning_alerts("example-repo")
+
     def test_gets_open_dependabot_alerts(self):
         response = unittest.mock.Mock(
             ok=True,

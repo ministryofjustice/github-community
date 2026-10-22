@@ -1,4 +1,5 @@
 from typing import List
+from datetime import datetime, timedelta, timezone
 
 from app.projects.repository_standards.config import (
     repository_compliance_config as legacy,
@@ -198,43 +199,90 @@ def get_signed_commits_check(repository: RepositoryView) -> TechnicalStandardChe
     )
 
 
+def _has_overdue_alerts(alerts, now, deadlines):
+    if alerts is None:
+        return None
+    unknown = False
+    for alert in alerts:
+        state = alert.get("state")
+        if state in {"fixed", "dismissed", "resolved", "auto_dismissed"}:
+            continue
+        if state != "open":
+            unknown = True
+            continue
+        if isinstance(deadlines, timedelta):
+            deadline = deadlines
+        else:
+            severity = (alert.get("severity") or "").lower()
+            if severity in {"low", "medium"}:
+                continue
+            deadline = deadlines.get(severity)
+            if deadline is None:
+                unknown = True
+                continue
+        try:
+            created_at = datetime.fromisoformat(alert["created_at"].replace("Z", "+00:00"))
+            if created_at.tzinfo is None or created_at > now:
+                unknown = True
+                continue
+            if now - created_at > deadline:
+                return True
+        except (KeyError, TypeError, ValueError, AttributeError):
+            unknown = True
+    return None if unknown else False
+
+
 def get_no_high_critical_security_alerts_check(
     repository: RepositoryView,
+    now: datetime | None = None,
 ) -> TechnicalStandardCheck:
     alerts = repository.data.security_alerts
-    code_scanning_count = alerts.open_high_critical_code_scanning_count
-    dependabot_count = alerts.open_high_critical_dependabot_count
+    now = now or datetime.now(timezone.utc)
     code_scanning_not_applicable = (
         getattr(alerts, "code_scanning_not_applicable", None) is True
     )
-    if code_scanning_not_applicable:
-        code_scanning_count = 0
-
+    code_scanning_alerts = getattr(alerts, "code_scanning_alerts", None)
+    code_scanning_overdue = (
+        False if code_scanning_not_applicable and code_scanning_alerts in (None, [])
+        else _has_overdue_alerts(code_scanning_alerts, now, timedelta(days=14))
+    )
+    dependabot_overdue = _has_overdue_alerts(
+        getattr(alerts, "dependabot_alerts", None), now,
+        {"critical": timedelta(hours=72), "high": timedelta(days=7)},
+    )
+    secret_count = getattr(alerts, "open_secret_scanning_count", None)
     status = (
         PASS
-        if code_scanning_count == 0 and dependabot_count == 0
+        if code_scanning_overdue is False and dependabot_overdue is False
+        and secret_count == 0
         else FAIL
     )
     recommendations = []
-    for source, count, setting in (
-        ("Code Scanning", code_scanning_count, "Code Scanning is enabled"),
-        ("Dependabot", dependabot_count, "Dependabot alerts are enabled"),
+    for source, overdue, setting, action in (
+        ("Code Scanning", code_scanning_overdue, "Code Scanning is enabled",
+         "Resolve open Code Scanning alerts older than 14 days."),
+        ("Dependabot", dependabot_overdue, "Dependabot alerts are enabled",
+         "Resolve open Dependabot Critical alerts older than 72 hours and High alerts older than 7 days."),
     ):
-        if source == "Code Scanning" and code_scanning_not_applicable:
-            continue
-        if count is None:
+        if overdue is None:
             recommendations.append(
-                f"{source} data is unavailable. Check that {setting}."
+                f"{source} SLA data is unavailable or incomplete. Check that {setting} and refresh the report data."
             )
-        elif count > 0:
-            recommendations.append(f"Resolve High/Critical {source} alerts.")
+        elif overdue:
+            recommendations.append(action)
+    if secret_count is None:
+        recommendations.append(
+            "Secret Scanning data is unavailable. Check that Secret Scanning is enabled and refresh the report data."
+        )
+    elif secret_count > 0:
+        recommendations.append("Resolve open Secret Scanning alerts.")
 
     return _check(
         5,
-        "Must have no outstanding high or critical security alerts",
+        "Must resolve security alerts within required timescales",
         "5-must-have-no-outstanding-high-or-critical-security-alerts",
         status,
-        "No open High or Critical Code Scanning or Dependabot alerts; configured CodeQL with no supported languages is not applicable, while unavailable alert data does not pass.",
+        "No open Secret Scanning alerts or overdue Dependabot or Code Scanning alerts.",
         recommendations,
     )
 
