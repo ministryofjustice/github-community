@@ -27,7 +27,13 @@ class RepositoryInfoFactory:
                 )
             )
             metadata = [
-                {"state": alert.get("state"), "created_at": alert.get("created_at")}
+                {
+                    "state": alert.get("state"),
+                    "created_at": alert.get("created_at"),
+                    "severity": (alert.get("rule") or {}).get(
+                        "security_severity_level"
+                    ),
+                }
                 for alert in alerts
             ]
             return count, False, metadata

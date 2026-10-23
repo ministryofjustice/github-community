@@ -145,7 +145,11 @@ class TestRepositoryInfoFactory(unittest.TestCase):
         ]
         snapshot = RepositoryInfoFactory.from_github_repo(repo, [], [], [], [], client)
         self.assertEqual(snapshot.security_alerts.code_scanning_alerts, [
-            {"state": "open", "created_at": "2026-10-20T00:00:00Z"}
+            {
+                "state": "open",
+                "created_at": "2026-10-20T00:00:00Z",
+                "severity": "low",
+            }
         ])
         self.assertEqual(snapshot.security_alerts.dependabot_alerts, [
             {"state": "open", "created_at": "2026-10-20T00:00:00Z", "severity": "critical"}

@@ -251,6 +251,12 @@ def get_no_high_critical_security_alerts_check(
         getattr(alerts, "code_scanning_not_applicable", None) is True
     )
     code_scanning_alerts = getattr(alerts, "code_scanning_alerts", None)
+    if code_scanning_alerts is not None:
+        code_scanning_alerts = [
+            alert
+            for alert in code_scanning_alerts
+            if (alert.get("severity") or "").lower() in {"high", "critical"}
+        ]
     code_scanning_overdue = (
         False if code_scanning_not_applicable and code_scanning_alerts in (None, [])
         else _has_overdue_alerts(code_scanning_alerts, now, timedelta(days=14))
@@ -269,7 +275,7 @@ def get_no_high_critical_security_alerts_check(
     recommendations = []
     for source, overdue, setting, action in (
         ("Code Scanning", code_scanning_overdue, "Code Scanning is enabled",
-         "Resolve open Code Scanning alerts older than 14 days."),
+         "Resolve open High and Critical Code Scanning alerts older than 14 days."),
         ("Dependabot", dependabot_overdue, "Dependabot alerts are enabled",
          "Resolve open Dependabot Critical alerts older than 72 hours and High alerts older than 7 days."),
     ):

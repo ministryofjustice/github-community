@@ -115,7 +115,8 @@ Check 5 uses calendar time from each alert's GitHub `created_at` timestamp:
 - Any open Secret Scanning alert fails immediately, regardless of validity or age.
 - Open Dependabot Critical alerts fail after 72 hours; High alerts fail after
   7 days. Medium and Low dependency alerts do not affect this check.
-- Any open Code Scanning alert fails after 14 days, regardless of severity.
+- Open High and Critical Code Scanning alerts fail after 14 days. Low, Medium
+  and alerts with no recognized severity do not affect this check.
 
 Alerts within their remediation window pass that part of the check; an alert
 becomes overdue strictly after its deadline. Acknowledgement, production status
