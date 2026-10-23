@@ -295,7 +295,7 @@ def get_no_high_critical_security_alerts_check(
     return _check(
         5,
         "Must resolve security alerts within required timescales",
-        "5-must-have-no-outstanding-high-or-critical-security-alerts",
+        "5-must-resolve-security-alerts-within-required-timescales",
         status,
         "No open Secret Scanning alerts or overdue Dependabot or Code Scanning alerts.",
         recommendations,

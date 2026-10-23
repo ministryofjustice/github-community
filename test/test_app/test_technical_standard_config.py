@@ -136,6 +136,18 @@ def make_security_alerts_repository(
 
 
 class TestSecurityAlertDeadlines(unittest.TestCase):
+    def test_check_five_guidance_link_uses_the_updated_heading(self):
+        repository = make_security_alerts_repository(0, 0)
+
+        check = get_no_high_critical_security_alerts_check(repository)
+
+        self.assertEqual(
+            check.link_to_guidance,
+            "https://octo-documentation.justice.gov.uk/docs/standards/"
+            "github-repository-technical-standard.html"
+            "#5-must-resolve-security-alerts-within-required-timescales",
+        )
+
     def test_check_five_uses_all_agreed_remediation_windows(self):
         now = datetime(2026, 10, 21, 12, tzinfo=timezone.utc)
         for source, severity, window in (

@@ -21,6 +21,7 @@
 
   <h1 class="govuk-heading-xl">Repositories</h1>
   {{ latest_snapshot(repositories) }}
+  <p class="govuk-body-s">This report excludes archived and forked repositories.</p>
 
   {{ repository_report_filters(organisations, organisation_filter, visibility_filter) }}
 

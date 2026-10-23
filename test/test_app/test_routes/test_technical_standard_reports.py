@@ -39,6 +39,9 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('value="all" selected>All organisations', body)
         self.assertIn('value="public" selected>Public', body)
+        self.assertIn(
+            "This report excludes archived and forked repositories.", body
+        )
         self.assertEqual(self.repository_query_calls[-1], (None, "public"))
 
     def test_unowned_repositories_defaults_to_all_organisations_and_public(self):
