@@ -49,8 +49,16 @@ spec:
                value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
              - name: GITHUB_APP_INSTALLATION_ID
                value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
+             - name: GITHUB_REPOSITORY_STANDARDS_ORGS
+               value: {{ .Values.app.deployment.env.GITHUB_REPOSITORY_STANDARDS_ORGS | default "" | quote }}
              - name: GUNICORN_WORKERS
                value: "1"
+             - name: GITHUB_COLLECTION_WORKERS
+               value: {{ .Values.app.jobs.map_github_repositories_to_owners.workers | default 1 | quote }}
+             - name: GITHUB_REPOSITORY_VISIBILITY
+               value: {{ .Values.app.jobs.map_github_repositories_to_owners.repository_visibility | default "public" | quote }}
+             - name: GITHUB_REPOSITORY_LIMIT
+               value: {{ .Values.app.jobs.map_github_repositories_to_owners.repository_limit | default 1500 | quote }}
 
           restartPolicy: Never
-          activeDeadlineSeconds: 7200
+          activeDeadlineSeconds: {{ .Values.app.jobs.map_github_repositories_to_owners.active_deadline_seconds | default 7200 }}

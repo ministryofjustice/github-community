@@ -1,0 +1,64 @@
+{% extends "shared/components/base.html" %}
+{% from "projects/repository_standards/technical_standard/macros.html" import latest_snapshot, repository_report_filters %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/repository-standards-reports.css') }}">
+{% endblock %}
+
+{% block pageTitle %}Checks overview – Technical Standard{% endblock %}
+
+{% block content %}
+<div class="repository-reports-wide">
+  {{ govukBreadcrumbs({
+    "items": [
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": "Technical Standard", "href": "/repository-standards/technical-standard" },
+      { "text": "Checks overview" }
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl">Compliance by requirement</h1>
+  {{ latest_snapshot(repositories) }}
+  {{ repository_report_filters(organisations, organisation_filter, visibility_filter) }}
+  <p class="govuk-body">Pass rate is the percentage of all repositories that pass each requirement. Repositories with a failed or missing result remain in the total.</p>
+
+  {% if not repositories %}
+    <p class="govuk-body">No repository data is available.</p>
+  {% elif not checks %}
+    <p class="govuk-body">No check results are available.</p>
+  {% else %}
+    <div class="moj-scrollable-pane" style="position: relative" role="region" aria-label="Compliance by requirement" tabindex="0">
+      <table class="govuk-table" data-module="moj-sortable-table">
+        <thead class="govuk-table__head">
+          <tr class="govuk-table__row">
+            <th scope="col" class="govuk-table__header" aria-sort="ascending">Requirement</th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">Pass</th>
+            <th scope="col" class="govuk-table__header" aria-sort="none">Fail</th>
+            {% if show_not_checked %}
+              <th scope="col" class="govuk-table__header" aria-sort="none">Not checked</th>
+            {% endif %}
+            <th scope="col" class="govuk-table__header" aria-sort="none">Pass rate</th>
+          </tr>
+        </thead>
+        <tbody class="govuk-table__body">
+          {% for check in checks %}
+            <tr class="govuk-table__row">
+              <td class="govuk-table__cell">
+                <a class="govuk-link" href="{{ check.link_to_guidance }}" target="_blank" rel="noopener noreferrer">{{ check.number }}. {{ check.name }}</a>
+              </td>
+              <td class="govuk-table__cell" data-sort-value="{{ check.pass_count }}">{{ check.pass_count }}</td>
+              <td class="govuk-table__cell" data-sort-value="{{ check.fail_count }}">{{ check.fail_count }}</td>
+              {% if show_not_checked %}
+                <td class="govuk-table__cell" data-sort-value="{{ check.not_checked_count }}">{{ check.not_checked_count }}</td>
+              {% endif %}
+              <td class="govuk-table__cell" data-sort-value="{{ check.pass_rate }}">{{ "%.0f" | format(check.pass_rate) }}%</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  </div>
+{% endblock %}

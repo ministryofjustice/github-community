@@ -1,12 +1,18 @@
 import logging
 from calendar import timegm
-from time import gmtime, sleep, time
-from datetime import datetime, timezone, timedelta
+from time import gmtime, sleep
 from typing import Any, Callable, Dict, List
 
-import jwt
-import requests
 from github import RateLimitExceededException
+
+from app.shared.services.github_app_client import (
+    CoordinatedGithubRetry as CoordinatedGithubRetry,
+    CoordinatedGitHubAdapter as CoordinatedGitHubAdapter,
+    GitHubApiError as GitHubApiError,
+    GitHubAppClient,
+    GitHubRequestCoordinator as GitHubRequestCoordinator,
+    create_installation_token as create_installation_token,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,51 +53,23 @@ def retries_github_rate_limit_exception_at_next_reset_once(func: Callable) -> Ca
             )
 
             wait_time_buffer = 5
-            sleep(
+            wait_seconds = (
                 time_until_core_api_rate_limit_resets + wait_time_buffer
                 if time_until_core_api_rate_limit_resets
                 else 0
             )
+            coordinator = getattr(args[0], "_request_coordinator", None)
+            if coordinator is not None:
+                coordinator.defer(wait_seconds)
+                coordinator.wait()
+            else:
+                sleep(wait_seconds)
             return func(*args, **kwargs)
 
     return decorator
 
 
-def create_installation_token(
-    app_id: str, private_key: str, installation_id: int
-) -> dict:
-    """
-    Create a GitHub App installation token.
-
-    Returns:
-        dict: { "token": str, "expires_at": datetime }
-    """
-    now_ts = int(time())
-    payload = {
-        "iat": now_ts,
-        "exp": now_ts + 600,  # max 10 minutes
-        "iss": app_id,
-    }
-    encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
-
-    url = f"https://api.github.com/app/installations/{installation_id}/access_tokens"
-    headers = {
-        "Authorization": f"Bearer {encoded_jwt}",
-        "Accept": "application/vnd.github+json",
-    }
-    response = requests.post(url, headers=headers)
-    response.raise_for_status()
-    data = response.json()
-
-    return {
-        "token": data["token"],
-        "expires_at": datetime.strptime(
-            data["expires_at"], "%Y-%m-%dT%H:%M:%SZ"
-        ).replace(tzinfo=timezone.utc),
-    }
-
-
-class GitHubClient:
+class GitHubClient(GitHubAppClient):
     def __init__(
         self,
         app_client_id: str,
@@ -99,44 +77,16 @@ class GitHubClient:
         app_installation_id: int,
         org: str,
         base_url: str = "https://api.github.com",
+        request_coordinator: GitHubRequestCoordinator | None = None,
     ):
         self.org = org
-        self.base_url = base_url.rstrip("/")
-        self.app_client_id = app_client_id
-        self.app_private_key = app_private_key
-        self.app_installation_id = app_installation_id
-
-        self.__token = None
-        self.__token_expires_at = datetime.fromtimestamp(0, tz=timezone.utc)
-
-        self.session = requests.Session()
-        self.session.headers.update({"Accept": "application/vnd.github+json"})
-
-    def __get_token(self) -> str:
-        now = datetime.now(timezone.utc)
-        if not self.__token or now >= self.__token_expires_at:
-            token_data = create_installation_token(
-                self.app_client_id,
-                self.app_private_key,
-                self.app_installation_id,
-            )
-            self.__token = token_data["token"]
-            self.__token_expires_at = now + timedelta(minutes=55)
-        return self.__token
+        super().__init__(
+            app_client_id, app_private_key, app_installation_id,
+            base_url=base_url, request_coordinator=request_coordinator,
+        )
 
     def __call(self, method: str, path: str, **kwargs) -> Any:
-        """Internal request helper."""
-        self.session.headers.update({"Authorization": f"Bearer {self.__get_token()}"})
-
-        url = f"{self.base_url}{path}"
-        response = self.session.request(method, url, **kwargs)
-
-        if not response.ok:
-            raise ValueError(
-                f"Error calling URL: [{url}], Status Code: [{response.status_code}], Response: {response.text}"
-            )
-
-        return response.json()
+        return self.request_json(method, path, **kwargs)
 
     def get_branch_rulesets(self, repo: str, branch: str) -> List[Dict[str, Any]]:
         """
@@ -151,3 +101,85 @@ class GitHubClient:
         Docs: https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28#get-a-repository-ruleset
         """
         return self.__call("GET", f"/repos/{self.org}/{repo}/rulesets/{ruleset_id}")
+
+    def get_repository_custom_properties(self, repo: str) -> Dict[str, Any]:
+        values = self.__call(
+            "GET",
+            f"/repos/{self.org}/{repo}/properties/values",
+        )
+        return {
+            item["property_name"]: item.get("value")
+            for item in values
+            if "property_name" in item
+        }
+
+    def get_codeowners_errors(self, repo: str) -> Dict[str, Any]:
+        return self.__call(
+            "GET",
+            f"/repos/{self.org}/{repo}/codeowners/errors",
+        )
+
+    def __get_paginated_repository_alerts(self, path: str, extra_params=None) -> List[Dict[str, Any]]:
+        alerts = []
+        page = 1
+        while True:
+            page_alerts = self.__call(
+                "GET",
+                path,
+                params={"state": "open", "per_page": 100, "page": page, **(extra_params or {})},
+            )
+            alerts.extend(page_alerts)
+            if len(page_alerts) < 100:
+                return alerts
+            page += 1
+
+    def get_open_code_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        return self.__get_paginated_repository_alerts(
+            f"/repos/{self.org}/{repo}/code-scanning/alerts"
+        )
+
+    def get_code_scanning_default_setup(self, repo: str) -> Dict[str, Any]:
+        return self.__call(
+            "GET", f"/repos/{self.org}/{repo}/code-scanning/default-setup"
+        )
+
+    def get_repository_languages(self, repo: str) -> Dict[str, int]:
+        return self.__call("GET", f"/repos/{self.org}/{repo}/languages")
+
+    def get_open_secret_scanning_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        try:
+            alerts = self.__get_paginated_repository_alerts(
+                f"/repos/{self.org}/{repo}/secret-scanning/alerts",
+                extra_params={"hide_secret": "true"},
+            )
+            if any(alert.get("state") not in {"open", "resolved"} for alert in alerts):
+                raise ValueError("Invalid secret alert state")
+            return [{"state": alert["state"]} for alert in alerts]
+        except Exception:
+            raise ValueError("Secret Scanning alert data could not be retrieved") from None
+
+    def get_open_dependabot_alerts(self, repo: str) -> List[Dict[str, Any]]:
+        alerts = []
+        url = f"{self.base_url}/repos/{self.org}/{repo}/dependabot/alerts"
+        params = {"state": "open", "per_page": 100}
+        while url:
+            response = self.get(url, params=params)
+            if not response.ok:
+                raise ValueError(
+                    f"Error calling URL: [{url}], Status Code: "
+                    f"[{response.status_code}], Response: {response.text}"
+                )
+
+            alerts.extend(response.json())
+            url = response.links.get("next", {}).get("url")
+            params = None
+
+        return alerts
+
+    def get_team_maintainer_count(self, team_slug: str) -> int:
+        members = self.__call(
+            "GET",
+            f"/orgs/{self.org}/teams/{team_slug}/members",
+            params={"role": "maintainer", "per_page": 2},
+        )
+        return min(len(members), 2)

@@ -31,6 +31,8 @@ class RelationshipsService:
 
         repositories = self.__asset_service.get_all_repositories()
         for repository in repositories:
+            if repository.organisation != owner.config.organisation:
+                continue
             logger.debug(f"Mapping Repository [ {repository.name} ]")
 
             asset = self.__asset_service.find_asset_by_id(repository.id)

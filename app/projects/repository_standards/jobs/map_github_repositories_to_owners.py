@@ -1,8 +1,12 @@
 import logging
+from time import perf_counter
 from typing import List
 
 from app.app import create_app
 from app.projects.repository_standards.models.repository_info import RepositoryInfo
+from app.projects.repository_standards.config.collection_config import (
+    parse_organisation_installations,
+)
 from app.projects.repository_standards.repositories.asset_repository import (
     AssetRepository,
 )
@@ -31,26 +35,23 @@ def contains_one_or_more(values: list[str], lists_to_check: list[list[str]]) -> 
     return found
 
 
-def main():
-    configure_logging(app_config.logging_level)
-    logger.info("Running...")
-
-    asset_service = AssetService(AssetRepository())
-    owner_service = OwnerService(OwnerRepository())
-    github_service = GithubService(
-        app_config.github.app.client_id,
-        app_config.github.app.private_key,
-        app_config.github.app.installation_id,
-    )
-
-    owners_config = owner_service.find_all()
-    if not owners_config:
-        logger.info("No owners found, exiting early")
-        return
-
-    repositories: List[RepositoryInfo] = github_service.get_repositories()
+def _save_organisation(
+    repositories: List[RepositoryInfo], owners_config,
+    asset_service: AssetService, owner_service: OwnerService,
+    organisation: str, collection_complete: bool,
+):
+    assets_by_repository = {}
+    for repository in repositories:
+        key = (repository.basic.organisation, repository.basic.name)
+        assets_by_repository[key] = asset_service.update_asset_by_name(
+            repository.basic.name,
+            repository.to_dict(),
+            organisation=repository.basic.organisation,
+        )
 
     for owner_config in owners_config:
+        if owner_config.config.organisation != organisation:
+            continue
         logger.info(f"Mapping Repositories for Owner [ {owner_config.name} ]")
 
         owners = owner_service.find_by_name(owner_config.name)
@@ -62,9 +63,12 @@ def main():
         for repository in repositories:
             logger.debug(f"Mapping Repository [ {repository.basic.name} ]")
 
-            asset = asset_service.update_asset_by_name(
-                repository.basic.name, repository.to_dict()
-            )
+            if repository.basic.organisation != owner_config.config.organisation:
+                continue
+
+            asset = assets_by_repository[
+                (repository.basic.organisation, repository.basic.name)
+            ]
 
             repository_name_starts_with_prefix = (
                 repository.basic.name.startswith(owner_config.config.prefix)
@@ -94,9 +98,79 @@ def main():
             ):
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")
 
-    asset_service.remove_stale_assets()
-    asset_service.remove_stale_relationships()
+    if collection_complete:
+        asset_service.remove_stale_assets([organisation])
+        asset_service.remove_stale_relationships([organisation])
 
+
+def main():
+    configure_logging(app_config.logging_level)
+    logger.info("Running...")
+
+    asset_service = AssetService(AssetRepository())
+    owner_service = OwnerService(OwnerRepository())
+    installations = parse_organisation_installations(
+        app_config.github.repository_standards_orgs,
+        app_config.github.app.installation_id,
+    )
+    owners_config = owner_service.find_all()
+    if not owners_config:
+        logger.info("No owners found; collected repositories will remain unowned")
+
+    repository_count = 0
+    collection_seconds = 0.0
+    mapping_seconds = 0.0
+    for installation in installations:
+        remaining_limit = max(0, app_config.github.repository_limit - repository_count)
+        if remaining_limit == 0:
+            logger.warning(
+                "Repository limit reached before collecting organization=%s",
+                installation.organisation,
+            )
+            break
+        logger.info("Organization collection starting: organisation=%s", installation.organisation)
+        collection_started = perf_counter()
+        github_service = GithubService(
+            app_config.github.app.client_id,
+            app_config.github.app.private_key,
+            installation.installation_id,
+            organisation_name=installation.organisation,
+        )
+        repositories = github_service.get_repositories(
+            workers=app_config.github.collection_workers,
+            visibility=app_config.github.repository_visibility,
+            limit=remaining_limit,
+        )
+        collection_elapsed = perf_counter() - collection_started
+        collection_seconds += collection_elapsed
+        repository_count += len(repositories)
+        collection_complete = len(repositories) < remaining_limit
+        if not collection_complete:
+            logger.warning(
+                "Repository cap reached for organisation=%s; skipping stale cleanup",
+                installation.organisation,
+            )
+        logger.info(
+            "Organization collection complete: organisation=%s repositories=%s elapsed=%.2fs",
+            installation.organisation, len(repositories), collection_elapsed,
+        )
+        mapping_started = perf_counter()
+        _save_organisation(
+            repositories, owners_config, asset_service, owner_service,
+            installation.organisation, collection_complete,
+        )
+        mapping_elapsed = perf_counter() - mapping_started
+        mapping_seconds += mapping_elapsed
+        logger.info(
+            "Organization save complete: organisation=%s repositories=%s cleanup=%s elapsed=%.2fs",
+            installation.organisation, len(repositories), collection_complete, mapping_elapsed,
+        )
+
+    logger.info(
+        "Collection phase complete: repositories=%s workers=%s elapsed=%.2fs",
+        repository_count, app_config.github.collection_workers, collection_seconds,
+    )
+    logger.info("Mapping and cleanup complete: elapsed=%.2fs", mapping_seconds)
     logger.info("Complete!")
 
 
