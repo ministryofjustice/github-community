@@ -57,11 +57,18 @@ class TechnicalStandardService:
             organisation=repository.organisation,
         )
 
-    def get_all_repositories(self) -> List[TechnicalStandardReportView]:
+    def get_all_repositories(
+        self, organisation: str | None = None, visibility: str | None = None
+    ) -> List[TechnicalStandardReportView]:
         return [
             self.__get_report(repository)
-            for repository in self.__asset_service.get_all_repositories()
+            for repository in self.__asset_service.get_all_repositories(
+                organisation, visibility
+            )
         ]
+
+    def get_organisations(self) -> list[str]:
+        return self.__asset_service.get_organisations()
 
     def get_check_summaries(
         self, repositories: List[TechnicalStandardReportView]

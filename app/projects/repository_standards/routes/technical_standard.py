@@ -56,15 +56,25 @@ def index():
 @technical_standard.route("/repositories", methods=["GET"])
 @requires_auth
 def repositories():
-    all_repositories = get_technical_standard_service().get_all_repositories()
-    repositories, filters = _filter_repositories(
-        all_repositories
+    service = get_technical_standard_service()
+    organisations = service.get_organisations()
+    organisation_filter = request.args.get("organisation", "all").lower()
+    visibility_filter = request.args.get("visibility", "public").lower()
+    if visibility_filter not in VISIBILITY_FILTERS:
+        abort(400)
+    if organisation_filter != "all" and organisation_filter not in organisations:
+        abort(400)
+    repositories = service.get_all_repositories(
+        organisation=None if organisation_filter == "all" else organisation_filter,
+        visibility=None if visibility_filter == "all" else visibility_filter,
     )
     return render_template(
         f"{TEMPLATES}/repositories.html",
         repositories=repositories,
         compliant_repositories=[repo for repo in repositories if repo.compliant],
-        **filters,
+        organisations=organisations,
+        organisation_filter=organisation_filter,
+        visibility_filter=visibility_filter,
     )
 
 

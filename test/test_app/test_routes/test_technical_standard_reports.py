@@ -31,6 +31,23 @@ def make_report(name, compliant, business_units=None, teams=None, visibility=Non
 
 
 class TestTechnicalStandardReportRoutes(unittest.TestCase):
+    def test_all_repositories_defaults_to_public_across_organisations(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('value="all" selected>All organisations', body)
+        self.assertIn('value="public" selected>Public', body)
+        self.assertIn("repo-one", body)
+        self.assertNotIn("repo-two", body)
+        self.assertEqual(self.repository_query_calls[-1], (None, "public"))
+        organisation_position = body.index('id="organisation"')
+        visibility_position = body.index('id="visibility"')
+        filter_position = body.index(">Filter</button>")
+        self.assertLess(organisation_position, filter_position)
+        self.assertLess(visibility_position, filter_position)
+
     def test_organisation_and_visibility_filters_combine(self):
         mojas = make_report("repo-one", False, visibility="private")
         mojas.organisation = "moj-analytical-services"
@@ -104,8 +121,21 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
             ),
             make_report("repo-two", False, visibility="private"),
         ]
+
+        self.repository_query_calls = []
+
+        def get_all_repositories(organisation=None, visibility=None):
+            self.repository_query_calls.append((organisation, visibility))
+            return [
+                repository
+                for repository in self.repositories
+                if (organisation is None or repository.organisation == organisation)
+                and (visibility is None or repository.visibility == visibility)
+            ]
+
         self.service = SimpleNamespace(
-            get_all_repositories=lambda: self.repositories,
+            get_all_repositories=get_all_repositories,
+            get_organisations=lambda: ["ministryofjustice", "moj-analytical-services"],
             get_check_summaries=lambda repositories: [],
             get_repository_by_name=lambda name, organisation: next(
                 (repository for repository in self.repositories
@@ -376,7 +406,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn(
             "/repository-standards/technical-standard/badges/compliant.svg", body
         )
-        self.assertEqual(body.count("(50%)"), 2)
+        self.assertEqual(body.count("(100%)"), 1)
 
     def test_all_repositories_can_filter_visibility(self):
         response = self.client.get(
@@ -389,6 +419,24 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn('id="visibility" name="visibility"', body)
         self.assertIn('<option value="private" selected>', body)
         self.assertIn("Private", body)
+        self.assertEqual(self.repository_query_calls[-1], (None, "private"))
+
+    def test_all_repositories_filters_organisation_in_the_service_query(self):
+        mojas = make_report("repo-three", False, visibility="public")
+        mojas.organisation = "moj-analytical-services"
+        self.repositories.append(mojas)
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories"
+            "?organisation=moj-analytical-services&visibility=public"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("repo-three", body)
+        self.assertNotIn("repo-one", body)
+        self.assertEqual(
+            self.repository_query_calls[-1],
+            ("moj-analytical-services", "public"),
+        )
 
     def test_all_repositories_rejects_unknown_visibility_filter(self):
         response = self.client.get(

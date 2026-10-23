@@ -80,10 +80,28 @@ class AssetRepository:
     def __init__(self, db_session: scoped_session = db.session):
         self.db_session = db_session
 
-    def find_all(self) -> list[RepositoryView]:
-        assets = self.db_session.query(Asset).all()
+    def find_all(
+        self, organisation: str | None = None, visibility: str | None = None
+    ) -> list[RepositoryView]:
+        query = self.db_session.query(Asset)
+        if organisation is not None:
+            query = query.filter(Asset.organisation == organisation)
+        if visibility is not None:
+            query = query.filter(
+                Asset.data["basic"]["visibility"].as_string() == visibility
+            )
+        assets = query.all()
 
         return [RepositoryView.from_asset(asset) for asset in assets]
+
+    def find_all_organisations(self) -> list[str]:
+        return [
+            organisation
+            for (organisation,) in self.db_session.query(Asset.organisation)
+            .distinct()
+            .order_by(Asset.organisation)
+            .all()
+        ]
 
     def find_all_by_owners(self, owner_names: list[str]) -> list[RepositoryView]:
         assets = (

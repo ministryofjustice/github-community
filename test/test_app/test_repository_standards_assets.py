@@ -1,6 +1,7 @@
 import unittest
 from datetime import datetime, timedelta
 from importlib import import_module
+from unittest.mock import patch
 
 import sqlalchemy as sa
 from alembic.migration import MigrationContext
@@ -24,6 +25,27 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
         db.create_all()
         self.repository = AssetRepository()
         self.service = AssetService(self.repository)
+
+    def test_repository_visibility_filter_runs_in_database_and_lists_all_orgs(self):
+        self.repository.add_asset(
+            "public-moj", "REPOSITORY", {"basic": {"visibility": "public"}}
+        )
+        self.repository.add_asset(
+            "private-mojas", "REPOSITORY",
+            {"basic": {"visibility": "private"}},
+            "moj-analytical-services",
+        )
+        with patch(
+            "app.projects.repository_standards.repositories.asset_repository.RepositoryView.from_asset",
+            side_effect=lambda asset: asset.name,
+        ):
+            self.assertEqual(
+                self.repository.find_all(visibility="public"), ["public-moj"]
+            )
+        self.assertEqual(
+            self.repository.find_all_organisations(),
+            ["ministryofjustice", "moj-analytical-services"],
+        )
 
     def test_duplicate_names_are_updated_and_looked_up_independently(self):
         moj = self.service.update_asset_by_name("shared", {"version": 1})

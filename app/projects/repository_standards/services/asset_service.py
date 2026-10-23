@@ -18,9 +18,14 @@ class AssetService:
     def __init__(self, asset_repository: AssetRepository):
         self.__asset_repository = asset_repository
 
-    def get_all_repositories(self) -> List[RepositoryView]:
-        repositories = self.__asset_repository.find_all()
+    def get_all_repositories(
+        self, organisation: str | None = None, visibility: str | None = None
+    ) -> List[RepositoryView]:
+        repositories = self.__asset_repository.find_all(organisation, visibility)
         return repositories
+
+    def get_organisations(self) -> list[str]:
+        return self.__asset_repository.find_all_organisations()
 
     def is_owner_authoritative_for_repository(
         self, repository: RepositoryView, owner_to_filter_by: str
