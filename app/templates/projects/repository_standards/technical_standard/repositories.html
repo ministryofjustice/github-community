@@ -1,5 +1,5 @@
 {% extends "shared/components/base.html" %}
-{% from "projects/repository_standards/technical_standard/macros.html" import technical_standard_badge, check_progress, latest_snapshot %}
+{% from "projects/repository_standards/technical_standard/macros.html" import technical_standard_badge, check_progress, latest_snapshot, repository_report_filters %}
 
 {% block head %}
   {{ super() }}
@@ -22,29 +22,7 @@
   <h1 class="govuk-heading-xl">Repositories</h1>
   {{ latest_snapshot(repositories) }}
 
-  <form class="repository-report-filters" method="get" action="{{ url_for('technical_standard.repositories') }}">
-    <div class="repository-report-filter-controls">
-      <div class="govuk-form-group">
-        <label class="govuk-label" for="organisation">Organisation</label>
-        <select class="govuk-select" id="organisation" name="organisation">
-        <option value="all" {% if organisation_filter == "all" %}selected{% endif %}>All organisations</option>
-        {% for organisation in organisations %}
-          <option value="{{ organisation }}" {% if organisation_filter == organisation %}selected{% endif %}>{{ organisation }}</option>
-        {% endfor %}
-        </select>
-      </div>
-      <div class="govuk-form-group">
-        <label class="govuk-label" for="visibility">Repository visibility</label>
-        <select class="govuk-select" id="visibility" name="visibility">
-        <option value="all" {% if visibility_filter == "all" %}selected{% endif %}>All visibilities</option>
-        <option value="public" {% if visibility_filter == "public" %}selected{% endif %}>Public</option>
-        <option value="private" {% if visibility_filter == "private" %}selected{% endif %}>Private</option>
-        <option value="internal" {% if visibility_filter == "internal" %}selected{% endif %}>Internal</option>
-        </select>
-      </div>
-    </div>
-    <button class="govuk-button" data-module="govuk-button">Filter</button>
-  </form>
+  {{ repository_report_filters(organisations, organisation_filter, visibility_filter) }}
 
   {% set total_count = repositories | length %}
   {% set compliant_count = compliant_repositories | length %}

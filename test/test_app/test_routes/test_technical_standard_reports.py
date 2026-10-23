@@ -31,6 +31,27 @@ def make_report(name, compliant, business_units=None, teams=None, visibility=Non
 
 
 class TestTechnicalStandardReportRoutes(unittest.TestCase):
+    def test_checks_overview_defaults_to_all_organisations_and_public(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/checks-overview"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('value="all" selected>All organisations', body)
+        self.assertIn('value="public" selected>Public', body)
+        self.assertEqual(self.repository_query_calls[-1], (None, "public"))
+
+    def test_unowned_repositories_defaults_to_all_organisations_and_public(self):
+        response = self.client.get(
+            "/repository-standards/technical-standard/unowned-repositories"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('value="all" selected>All organisations', body)
+        self.assertIn('value="public" selected>Public', body)
+        self.assertNotIn("repo-two", body)
+        self.assertEqual(self.repository_query_calls[-1], (None, "public"))
+
     def test_all_repositories_defaults_to_public_across_organisations(self):
         response = self.client.get(
             "/repository-standards/technical-standard/repositories"
@@ -133,6 +154,14 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
                 and (visibility is None or repository.visibility == visibility)
             ]
 
+        def get_unowned_repositories(organisation=None, visibility=None):
+            return [
+                repository
+                for repository in get_all_repositories(organisation, visibility)
+                if not repository.authoritative_business_unit_owners
+                and not repository.authoritative_team_owners
+            ]
+
         self.service = SimpleNamespace(
             get_all_repositories=get_all_repositories,
             get_organisations=lambda: ["ministryofjustice", "moj-analytical-services"],
@@ -147,7 +176,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
                 for owner in owners
             },
             get_repositories_for_owner=lambda owner: [self.repositories[0]],
-            get_unowned_repositories=lambda: [self.repositories[1]],
+            get_unowned_repositories=get_unowned_repositories,
         )
         self.owner_repository = SimpleNamespace(
             find_all_business_units=lambda: [self.business_unit],
@@ -353,7 +382,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         for path in (
             "/repository-standards/technical-standard/business-units/1",
             "/repository-standards/technical-standard/teams/2",
-            "/repository-standards/technical-standard/unowned-repositories",
+            "/repository-standards/technical-standard/unowned-repositories?visibility=all",
         ):
             with self.subTest(path=path):
                 response = self.client.get(path)
@@ -385,7 +414,14 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
                 self.assertIn("Private", body)
 
     def test_unowned_repository_list_filters_visibility(self):
-        self.service.get_unowned_repositories = lambda: self.repositories
+        self.service.get_unowned_repositories = (
+            lambda organisation=None, visibility=None: [
+                repository
+                for repository in self.repositories
+                if (organisation is None or repository.organisation == organisation)
+                and (visibility is None or repository.visibility == visibility)
+            ]
+        )
         response = self.client.get(
             "/repository-standards/technical-standard/unowned-repositories?visibility=public"
         )

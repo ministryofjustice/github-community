@@ -42,7 +42,9 @@ class TestTechnicalStandardServiceReports(unittest.TestCase):
             make_report("repo-three", True, teams=["Other Team"]),
             make_report("repo-four", False),
         ]
-        self.service.get_all_repositories = lambda: self.repositories
+        self.service.get_all_repositories = (
+            lambda organisation=None, visibility=None: self.repositories
+        )
 
     def test_counts_business_unit_repositories_by_new_standard_compliance(self):
         owner = make_owner(1, "HMPPS", "BUSINESS_UNIT")

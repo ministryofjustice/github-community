@@ -1,9 +1,15 @@
 {% extends "shared/components/base.html" %}
-{% from "projects/repository_standards/technical_standard/macros.html" import latest_snapshot %}
+{% from "projects/repository_standards/technical_standard/macros.html" import latest_snapshot, repository_report_filters %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='stylesheets/repository-standards-reports.css') }}">
+{% endblock %}
 
 {% block pageTitle %}Checks overview – Technical Standard{% endblock %}
 
 {% block content %}
+<div class="repository-reports-wide">
   {{ govukBreadcrumbs({
     "items": [
       { "text": "Home", "href": "/" },
@@ -15,6 +21,7 @@
 
   <h1 class="govuk-heading-xl">Compliance by requirement</h1>
   {{ latest_snapshot(repositories) }}
+  {{ repository_report_filters(organisations, organisation_filter, visibility_filter) }}
   <p class="govuk-body">Pass rate is the percentage of all repositories that pass each requirement. Repositories with a failed or missing result remain in the total.</p>
 
   {% if not repositories %}
@@ -53,4 +60,5 @@
       </table>
     </div>
   {% endif %}
+  </div>
 {% endblock %}

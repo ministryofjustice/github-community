@@ -16,3 +16,29 @@
   {% set updated = repositories | selectattr("last_updated") | sort(attribute="last_updated") | list %}
   <p class="govuk-body-s">Last updated: {{ snapshot_time(updated[-1].last_updated if updated else none) }}.</p>
 {%- endmacro %}
+
+{% macro repository_report_filters(organisations, organisation_filter, visibility_filter) -%}
+  <form class="repository-report-filters" method="get" action="{{ request.path }}">
+    <div class="repository-report-filter-controls">
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="organisation">Organisation</label>
+        <select class="govuk-select" id="organisation" name="organisation">
+          <option value="all" {% if organisation_filter == "all" %}selected{% endif %}>All organisations</option>
+          {% for organisation in organisations %}
+            <option value="{{ organisation }}" {% if organisation_filter == organisation %}selected{% endif %}>{{ organisation }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="govuk-form-group">
+        <label class="govuk-label" for="visibility">Repository visibility</label>
+        <select class="govuk-select" id="visibility" name="visibility">
+          <option value="all" {% if visibility_filter == "all" %}selected{% endif %}>All visibilities</option>
+          <option value="public" {% if visibility_filter == "public" %}selected{% endif %}>Public</option>
+          <option value="private" {% if visibility_filter == "private" %}selected{% endif %}>Private</option>
+          <option value="internal" {% if visibility_filter == "internal" %}selected{% endif %}>Internal</option>
+        </select>
+      </div>
+    </div>
+    <button class="govuk-button" data-module="govuk-button">Filter</button>
+  </form>
+{%- endmacro %}

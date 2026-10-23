@@ -48,6 +48,23 @@ def _filter_repositories(repositories):
     }
 
 
+def _get_report_filters(service):
+    organisations = service.get_organisations()
+    organisation_filter = request.args.get("organisation", "all").lower()
+    visibility_filter = request.args.get("visibility", "public").lower()
+    if visibility_filter not in VISIBILITY_FILTERS:
+        abort(400)
+    if organisation_filter != "all" and organisation_filter not in organisations:
+        abort(400)
+    return {
+        "organisations": organisations,
+        "organisation_filter": organisation_filter,
+        "visibility_filter": visibility_filter,
+        "organisation": None if organisation_filter == "all" else organisation_filter,
+        "visibility": None if visibility_filter == "all" else visibility_filter,
+    }
+
+
 @technical_standard.route("/", methods=["GET"])
 def index():
     return render_template(f"{TEMPLATES}/home.html")
@@ -57,24 +74,17 @@ def index():
 @requires_auth
 def repositories():
     service = get_technical_standard_service()
-    organisations = service.get_organisations()
-    organisation_filter = request.args.get("organisation", "all").lower()
-    visibility_filter = request.args.get("visibility", "public").lower()
-    if visibility_filter not in VISIBILITY_FILTERS:
-        abort(400)
-    if organisation_filter != "all" and organisation_filter not in organisations:
-        abort(400)
+    filters = _get_report_filters(service)
     repositories = service.get_all_repositories(
-        organisation=None if organisation_filter == "all" else organisation_filter,
-        visibility=None if visibility_filter == "all" else visibility_filter,
+        organisation=filters["organisation"], visibility=filters["visibility"]
     )
     return render_template(
         f"{TEMPLATES}/repositories.html",
         repositories=repositories,
         compliant_repositories=[repo for repo in repositories if repo.compliant],
-        organisations=organisations,
-        organisation_filter=organisation_filter,
-        visibility_filter=visibility_filter,
+        organisations=filters["organisations"],
+        organisation_filter=filters["organisation_filter"],
+        visibility_filter=filters["visibility_filter"],
     )
 
 
@@ -82,13 +92,19 @@ def repositories():
 @requires_auth
 def checks_overview():
     service = get_technical_standard_service()
-    repositories = service.get_all_repositories()
+    filters = _get_report_filters(service)
+    repositories = service.get_all_repositories(
+        organisation=filters["organisation"], visibility=filters["visibility"]
+    )
     checks = service.get_check_summaries(repositories)
     return render_template(
         f"{TEMPLATES}/checks_overview.html",
         repositories=repositories,
         checks=checks,
         show_not_checked=any(check["not_checked_count"] for check in checks),
+        organisations=filters["organisations"],
+        organisation_filter=filters["organisation_filter"],
+        visibility_filter=filters["visibility_filter"],
     )
 
 
@@ -167,8 +183,10 @@ def team(owner_id: str):
 @technical_standard.route("/unowned-repositories", methods=["GET"])
 @requires_auth
 def unowned_repositories():
-    repositories, filters = _filter_repositories(
-        get_technical_standard_service().get_unowned_repositories()
+    service = get_technical_standard_service()
+    filters = _get_report_filters(service)
+    repositories = service.get_unowned_repositories(
+        organisation=filters["organisation"], visibility=filters["visibility"]
     )
     return render_template(
         f"{TEMPLATES}/repository_list.html",
@@ -176,7 +194,9 @@ def unowned_repositories():
         parent_title="Technical Standard",
         parent_url="/repository-standards/technical-standard",
         repositories=repositories,
-        **filters,
+        organisations=filters["organisations"],
+        organisation_filter=filters["organisation_filter"],
+        visibility_filter=filters["visibility_filter"],
     )
 
 

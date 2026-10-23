@@ -153,10 +153,12 @@ class TechnicalStandardService:
             if owner.name in getattr(repository, owner_field_name)
         ]
 
-    def get_unowned_repositories(self) -> List[TechnicalStandardReportView]:
+    def get_unowned_repositories(
+        self, organisation: str | None = None, visibility: str | None = None
+    ) -> List[TechnicalStandardReportView]:
         return [
             repository
-            for repository in self.get_all_repositories()
+            for repository in self.get_all_repositories(organisation, visibility)
             if not repository.authoritative_business_unit_owners
             and not repository.authoritative_team_owners
         ]
