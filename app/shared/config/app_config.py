@@ -44,6 +44,10 @@ app_config = SimpleNamespace(
     ),
     logging_level=__get_env_var("LOGGING_LEVEL"),
     phase_banner_text=__get_env_var("PHASE_BANNER_TEXT"),
+    public_base_url=(
+        __get_env_var("GITHUB_COMMUNITY_PUBLIC_URL")
+        or "https://github-community.service.justice.gov.uk"
+    ).rstrip("/"),
     postgres=SimpleNamespace(
         user=__get_env_var("POSTGRES_USER"),
         password=__get_env_var("POSTGRES_PASSWORD"),
@@ -56,6 +60,10 @@ app_config = SimpleNamespace(
         ),
     ),
     github=SimpleNamespace(
+        collection_workers=int(__get_env_var("GITHUB_COLLECTION_WORKERS") or "1"),
+        repository_visibility=__get_env_var("GITHUB_REPOSITORY_VISIBILITY") or "public",
+        repository_limit=int(__get_env_var("GITHUB_REPOSITORY_LIMIT") or "1500"),
+        repository_standards_orgs=__get_env_var("GITHUB_REPOSITORY_STANDARDS_ORGS"),
         app=SimpleNamespace(
             client_id=__get_env_var("GITHUB_APP_CLIENT_ID"),
             installation_id=int(__get_env_var("GITHUB_APP_INSTALLATION_ID") or 0),

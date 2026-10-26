@@ -20,6 +20,10 @@ app:
   jobs:
     map_github_repositories_to_owners:
       schedule: "0 3 * * *"
+      workers: 3
+      repository_visibility: all
+      repository_limit: 10000
+      active_deadline_seconds: 14400
     # Repository Stats visibility snapshot (UTC)
     record_repository_visibility:
       schedule: "0 4,13 * * *"

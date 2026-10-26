@@ -278,23 +278,14 @@ def unowned_repositories():
 @repository_standards_main.route("/<repository_name>", methods=["GET"])
 @requires_auth
 def repository_compliance_report(repository_name: str):
-    repository_compliance_service = get_repository_compliance_service()
-
-    repository = repository_compliance_service.get_repository_by_name(repository_name)
-
-    if repository is None:
-        return "Repository not found", 404
-
-    return render_template(
-        "projects/repository_standards/pages/repository.html",
-        repository=repository,
+    return redirect(
+        url_for(
+            "technical_standard.repository",
+            repository_name=repository_name,
+            organisation="ministryofjustice",
+        ),
+        code=302,
     )
-
-
-@repository_standards_main.route("/contact-us", methods=["GET"])
-def contact_us():
-    return render_template("projects/repository_standards/pages/contact_us.html")
-
 
 @repository_standards_main.route("/guidance", methods=["GET"])
 def guidance():

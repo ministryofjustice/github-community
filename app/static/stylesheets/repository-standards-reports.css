@@ -1,0 +1,32 @@
+.repository-reports-wide {
+  position: relative;
+  left: 50%;
+  width: min(1440px, calc(100vw - 64px));
+  transform: translateX(-50%);
+}
+
+.repository-report-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+  align-items: end;
+}
+
+.repository-report-filter-controls .govuk-form-group {
+  margin-bottom: 16px;
+}
+
+.repository-report-filters .govuk-select {
+  max-width: min(100%, 28rem);
+}
+
+@media (max-width: 640px) {
+  .repository-reports-wide {
+    width: calc(100vw - 32px);
+  }
+
+  .repository-report-filter-controls,
+  .repository-report-filter-controls .govuk-form-group {
+    width: 100%;
+  }
+}
