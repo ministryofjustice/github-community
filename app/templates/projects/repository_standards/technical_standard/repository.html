@@ -4,8 +4,8 @@
 {% block pageTitle %}{{ repository.name }}{% endblock %}
 
 {% block content %}
-  {% set badge_url = url_for("repository_standards_api.get_repository_badge", repository_name=repository.name, organisation=repository.organisation, _external=True) %}
-  {% set report_url = url_for("technical_standard.repository", repository_name=repository.name, organisation=repository.organisation, _external=True) %}
+  {% set badge_url = public_base_url ~ url_for("repository_standards_api.get_repository_badge", repository_name=repository.name, organisation=repository.organisation) %}
+  {% set report_url = public_base_url ~ url_for("technical_standard.repository", repository_name=repository.name, organisation=repository.organisation) %}
   {% set badge_markdown = "[![MOJ Repository Compliance Badge](" ~ badge_url ~ ")](" ~ report_url ~ ")" %}
   {{ govukBreadcrumbs({
     "items": [

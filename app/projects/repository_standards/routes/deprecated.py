@@ -1,9 +1,9 @@
 import logging
 
-from flask import Blueprint, redirect
+from flask import Blueprint, redirect, url_for
 
-from app.projects.repository_standards.services.repository_compliance_service import (
-    get_repository_compliance_service,
+from app.projects.repository_standards.services.technical_standard_service import (
+    get_technical_standard_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -24,29 +24,21 @@ repository_standards_deprecated = Blueprint("repository_standards_deprecated", _
     methods=["GET"],
 )
 def deprecated_reports_badge_api(repository_name: str):
-    repository_compliance_service = get_repository_compliance_service()
-
-    repository = repository_compliance_service.get_repository_by_name(repository_name)
-
-    if repository and repository.compliance_status == "pass":
-        return {
-            "color": "005ea5",
-            "label": "MoJ Compliant",
-            "labelColor": "0b0c0c",
-            "message": repository.compliance_status.capitalize()
-            if repository
-            else "Not Found",
-            "schemaVersion": 1,
-            "style": "for-the-badge",
-        }
+    repository = get_technical_standard_service().get_repository_by_name(
+        repository_name, "ministryofjustice"
+    )
+    if repository is None:
+        message, color = "NOT FOUND", "b1b4b6"
+    elif repository.compliant:
+        message, color = "COMPLIANT", "cce2d8"
+    else:
+        message, color = "NON-COMPLIANT", "f4cdc6"
 
     return {
-        "color": "cc0000",
-        "label": "MoJ Compliant",
+        "color": color,
+        "label": "MOJ",
         "labelColor": "0b0c0c",
-        "message": repository.compliance_status.capitalize()
-        if repository
-        else "Not Found",
+        "message": message,
         "schemaVersion": 1,
         "style": "for-the-badge",
     }
@@ -57,7 +49,14 @@ def deprecated_reports_badge_api(repository_name: str):
     methods=["GET"],
 )
 def deprecated_report_page_url(repository_name: str):
-    return redirect(f"/repository-standards/{repository_name}", code=302)
+    return redirect(
+        url_for(
+            "technical_standard.repository",
+            repository_name=repository_name,
+            organisation="ministryofjustice",
+        ),
+        code=302,
+    )
 
 
 @repository_standards_deprecated.route(

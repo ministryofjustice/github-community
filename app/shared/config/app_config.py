@@ -44,6 +44,10 @@ app_config = SimpleNamespace(
     ),
     logging_level=__get_env_var("LOGGING_LEVEL"),
     phase_banner_text=__get_env_var("PHASE_BANNER_TEXT"),
+    public_base_url=(
+        __get_env_var("GITHUB_COMMUNITY_PUBLIC_URL")
+        or "https://github-community.service.justice.gov.uk"
+    ).rstrip("/"),
     postgres=SimpleNamespace(
         user=__get_env_var("POSTGRES_USER"),
         password=__get_env_var("POSTGRES_PASSWORD"),

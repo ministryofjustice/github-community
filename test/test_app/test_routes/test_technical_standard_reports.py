@@ -10,6 +10,9 @@ from app.projects.repository_standards.models.technical_standard import (
     TechnicalStandardReportView,
 )
 from app.projects.repository_standards.routes.api import repository_standards_api
+from app.projects.repository_standards.routes.deprecated import (
+    repository_standards_deprecated,
+)
 from app.projects.repository_standards.routes.main import repository_standards_main
 from app.projects.repository_standards.routes.technical_standard import (
     technical_standard,
@@ -39,9 +42,6 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('value="all" selected>All organisations', body)
         self.assertIn('value="public" selected>Public', body)
-        self.assertIn(
-            "This report excludes archived and forked repositories.", body
-        )
         self.assertEqual(self.repository_query_calls[-1], (None, "public"))
 
     def test_unowned_repositories_defaults_to_all_organisations_and_public(self):
@@ -63,6 +63,9 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('value="all" selected>All organisations', body)
         self.assertIn('value="public" selected>Public', body)
+        self.assertIn(
+            "This report excludes archived and forked repositories.", body
+        )
         self.assertIn("repo-one", body)
         self.assertNotIn("repo-two", body)
         self.assertEqual(self.repository_query_calls[-1], (None, "public"))
@@ -120,6 +123,7 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.app.register_blueprint(
             repository_standards_main, url_prefix="/repository-standards/"
         )
+        self.app.register_blueprint(repository_standards_deprecated)
         self.app.register_blueprint(
             repository_standards_api, url_prefix="/repository-standards/api"
         )
@@ -219,6 +223,19 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn("technical-standard/teams", body)
         self.assertIn("technical-standard/unowned-repositories", body)
         self.assertIn("technical-standard/checks-overview", body)
+
+    def test_legacy_report_links_redirect_to_the_new_moj_technical_standard_report(self):
+        expected = (
+            "/repository-standards/technical-standard/repositories/repo-one"
+        )
+        for path in (
+            "/repository-standards/repo-one",
+            "/public-report/repo-one",
+        ):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response.headers["Location"], expected)
 
     def test_technical_standard_home_does_not_repeat_checks_overview_link(self):
         response = self.client.get(
@@ -515,9 +532,37 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         self.assertIn("Visibility", body)
         self.assertIn("Public", body)
         self.assertIn("MOJ Repository Compliance Badge", body)
-        self.assertIn("/repository-standards/api/repo-one/badge", body)
         self.assertIn(
+            "https://github-community.service.justice.gov.uk"
+            "/repository-standards/api/repo-one/badge",
+            body,
+        )
+        self.assertIn(
+            "https://github-community.service.justice.gov.uk"
             "/repository-standards/technical-standard/repositories/repo-one",
+            body,
+        )
+        self.assertNotIn("github-community-dev", body)
+
+    def test_mojas_badge_snippet_uses_canonical_https_host_and_org_path(self):
+        mojas = make_report("repo-mojas", True, visibility="public")
+        mojas.organisation = "moj-analytical-services"
+        self.repositories.append(mojas)
+        response = self.client.get(
+            "/repository-standards/technical-standard/repositories/"
+            "moj-analytical-services/repo-mojas"
+        )
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "https://github-community.service.justice.gov.uk"
+            "/repository-standards/api/moj-analytical-services/repo-mojas/badge",
+            body,
+        )
+        self.assertIn(
+            "https://github-community.service.justice.gov.uk"
+            "/repository-standards/technical-standard/repositories/"
+            "moj-analytical-services/repo-mojas",
             body,
         )
 

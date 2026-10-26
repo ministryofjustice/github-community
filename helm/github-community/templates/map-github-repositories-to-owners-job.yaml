@@ -12,6 +12,7 @@ spec:
   successfulJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      activeDeadlineSeconds: {{ .Values.app.jobs.map_github_repositories_to_owners.active_deadline_seconds | default 7200 }}
       template:
         spec:
           serviceAccountName: cd-serviceaccount
@@ -60,5 +61,4 @@ spec:
              - name: GITHUB_REPOSITORY_LIMIT
                value: {{ .Values.app.jobs.map_github_repositories_to_owners.repository_limit | default 1500 | quote }}
 
-          restartPolicy: Never
-          activeDeadlineSeconds: {{ .Values.app.jobs.map_github_repositories_to_owners.active_deadline_seconds | default 7200 }}
+            restartPolicy: Never

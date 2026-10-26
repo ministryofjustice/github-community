@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from flask import Flask
 
 from app.projects.repository_standards.routes.api import repository_standards_api
+from app.projects.repository_standards.routes.deprecated import repository_standards_deprecated
 
 
 class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
@@ -87,3 +88,53 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("/badge/MOJ-NOT%20FOUND-b1b4b6", shields_get.call_args.args[0])
+
+
+class TestLegacyBadgeCompatibility(unittest.TestCase):
+    def test_legacy_badge_urls_return_the_new_moj_standard_result(self):
+        app = Flask(__name__)
+        app.register_blueprint(repository_standards_deprecated)
+        service = Mock()
+        service.get_repository_by_name.return_value = SimpleNamespace(compliant=True)
+        paths = (
+            "/api/v1/compliant_public_repositories/example-repo",
+            "/api/v1/compliant_public_repositories/endpoint/example-repo",
+            "/api/v2/compliant-repository/example-repo",
+        )
+        with patch(
+            "app.projects.repository_standards.routes.deprecated.get_technical_standard_service",
+            return_value=service,
+        ):
+            for path in paths:
+                with self.subTest(path=path):
+                    response = app.test_client().get(path)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.json["message"], "COMPLIANT")
+                    self.assertEqual(response.json["color"], "cce2d8")
+                    self.assertEqual(response.json["label"], "MOJ")
+        self.assertEqual(service.get_repository_by_name.call_count, len(paths))
+        service.get_repository_by_name.assert_called_with(
+            "example-repo", "ministryofjustice"
+        )
+
+    def test_legacy_badge_returns_current_noncompliant_and_missing_states(self):
+        app = Flask(__name__)
+        app.register_blueprint(repository_standards_deprecated)
+        service = Mock()
+        service.get_repository_by_name.side_effect = [
+            SimpleNamespace(compliant=False), None
+        ]
+        with patch(
+            "app.projects.repository_standards.routes.deprecated.get_technical_standard_service",
+            return_value=service,
+        ):
+            noncompliant = app.test_client().get(
+                "/api/v2/compliant-repository/example-repo"
+            ).json
+            missing = app.test_client().get(
+                "/api/v2/compliant-repository/missing-repo"
+            ).json
+        self.assertEqual(noncompliant["message"], "NON-COMPLIANT")
+        self.assertEqual(noncompliant["color"], "f4cdc6")
+        self.assertEqual(missing["message"], "NOT FOUND")
+        self.assertEqual(missing["color"], "b1b4b6")
