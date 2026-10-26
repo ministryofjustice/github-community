@@ -21,7 +21,7 @@ app:
 
   jobs:
     map_github_repositories_to_owners:
-      schedule: "0 5,10,15 * * *"
+      schedule: "0 7,12,17 * * *"
       workers: 3
       repository_visibility: all
       repository_limit: 10000
