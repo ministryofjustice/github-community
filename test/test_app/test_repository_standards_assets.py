@@ -124,6 +124,50 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
 
 
 class TestOrganisationMigration(unittest.TestCase):
+    def test_flow_dataset_downgrade_preserves_existing_boards_and_observations(self):
+        migration = import_module(
+            "migrations.versions.20261019T180000_flow_datasets"
+        )
+        engine = sa.create_engine("sqlite://")
+        metadata = sa.MetaData()
+        boards = sa.Table(
+            "flow_metrics_boards",
+            metadata,
+            sa.Column("id", sa.String, primary_key=True),
+        )
+        runs = sa.Table(
+            "flow_metrics_runs",
+            metadata,
+            sa.Column("id", sa.String, primary_key=True),
+            sa.Column("board_id", sa.String, sa.ForeignKey("flow_metrics_boards.id")),
+        )
+        snapshots = sa.Table(
+            "flow_metrics_snapshots",
+            metadata,
+            sa.Column("id", sa.String, primary_key=True),
+            sa.Column("board_id", sa.String, sa.ForeignKey("flow_metrics_boards.id")),
+        )
+        datasets = sa.Table(
+            "flow_metrics_datasets", metadata, sa.Column("id", sa.String, primary_key=True)
+        )
+        evidence = sa.Table(
+            "flow_metrics_evidence", metadata, sa.Column("id", sa.String, primary_key=True)
+        )
+
+        with engine.begin() as connection:
+            metadata.create_all(connection)
+            connection.execute(boards.insert().values(id="sample-three-sprints"))
+            connection.execute(runs.insert().values(id="run-1", board_id="sample-three-sprints"))
+            connection.execute(snapshots.insert().values(id="snapshot-1", board_id="sample-three-sprints"))
+            with Operations.context(MigrationContext.configure(connection)):
+                migration.downgrade()
+            self.assertEqual(connection.execute(sa.select(boards.c.id)).scalars().all(), ["sample-three-sprints"])
+            self.assertEqual(connection.execute(sa.select(runs.c.id)).scalars().all(), ["run-1"])
+            self.assertEqual(connection.execute(sa.select(snapshots.c.id)).scalars().all(), ["snapshot-1"])
+            self.assertNotIn("flow_metrics_datasets", sa.inspect(connection).get_table_names())
+            self.assertNotIn("flow_metrics_evidence", sa.inspect(connection).get_table_names())
+        engine.dispose()
+
     def test_existing_rows_are_backfilled_and_legacy_inserts_keep_working(self):
         migration = import_module(
             "migrations.versions.20261022T120000_repository_standards_add_asset_organisation"
