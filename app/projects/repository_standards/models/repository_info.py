@@ -15,17 +15,24 @@ logger = logging.getLogger(__name__)
 class RepositoryInfoFactory:
     @staticmethod
     def _codeowners_has_owner_rule(content: str) -> bool:
+        has_owner_rule = False
+        catch_all_patterns = {"*", "**", "**/*", "/**"}
         for line in content.splitlines():
             stripped = line.strip()
             if not stripped or stripped.startswith("#"):
                 continue
             rule = re.split(r"\s+#", stripped, maxsplit=1)[0].strip()
             entries = rule.split()
-            if len(entries) < 2:
+            if not entries:
                 continue
-            if any(owner.startswith("@") or "@" in owner for owner in entries[1:]):
-                return True
-        return False
+            has_owners = any(
+                owner.startswith("@") or "@" in owner for owner in entries[1:]
+            )
+            if entries[0] in catch_all_patterns:
+                has_owner_rule = has_owners
+            elif has_owners:
+                has_owner_rule = True
+        return has_owner_rule
 
     @staticmethod
     def _get_code_scanning_alert_result(repo, github_client):

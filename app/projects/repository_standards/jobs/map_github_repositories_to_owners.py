@@ -38,7 +38,7 @@ def contains_one_or_more(values: list[str], lists_to_check: list[list[str]]) -> 
 def _save_organisation(
     repositories: List[RepositoryInfo], owners_config,
     asset_service: AssetService, owner_service: OwnerService,
-    organisation: str, collection_complete: bool,
+    organisation: str, collection_complete: bool, visibility: str,
 ):
     assets_by_repository = {}
     for repository in repositories:
@@ -99,8 +99,8 @@ def _save_organisation(
                 asset_service.update_relationships_with_owner(asset, owner, "OTHER")
 
     if collection_complete:
-        asset_service.remove_stale_assets([organisation])
-        asset_service.remove_stale_relationships([organisation])
+        asset_service.remove_stale_assets([organisation], visibility)
+        asset_service.remove_stale_relationships([organisation], visibility)
 
 
 def main():
@@ -120,6 +120,7 @@ def main():
     repository_count = 0
     collection_seconds = 0.0
     mapping_seconds = 0.0
+    visibility = app_config.github.repository_visibility
     for installation in installations:
         remaining_limit = max(0, app_config.github.repository_limit - repository_count)
         if remaining_limit == 0:
@@ -138,7 +139,7 @@ def main():
         )
         repositories = github_service.get_repositories(
             workers=app_config.github.collection_workers,
-            visibility=app_config.github.repository_visibility,
+            visibility=visibility,
             limit=remaining_limit,
         )
         collection_elapsed = perf_counter() - collection_started
@@ -157,7 +158,7 @@ def main():
         mapping_started = perf_counter()
         _save_organisation(
             repositories, owners_config, asset_service, owner_service,
-            installation.organisation, collection_complete,
+            installation.organisation, collection_complete, visibility,
         )
         mapping_elapsed = perf_counter() - mapping_started
         mapping_seconds += mapping_elapsed

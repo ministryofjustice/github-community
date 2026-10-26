@@ -228,12 +228,20 @@ class AssetRepository:
 
         return assets[0]
 
-    def remove_stale_assets(self, organisations: list[str] | None = None):
+    def remove_stale_assets(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
         stale_assets = self.db_session.query(Asset).filter(
             Asset.last_updated < datetime.today() - timedelta(days=1)
         )
         if organisations is not None:
             stale_assets = stale_assets.filter(Asset.organisation.in_(organisations))
+        if visibility is not None and visibility != "all":
+            stale_assets = stale_assets.filter(
+                Asset.data["basic"]["visibility"].as_string() == visibility
+            )
         for asset in stale_assets:
             logging.info(f"Removing stale asset: {asset.name}")
             self.db_session.query(Relationship).filter_by(assets_id=asset.id).delete()
@@ -241,14 +249,24 @@ class AssetRepository:
 
         self.db_session.commit()
 
-    def remove_stale_relationships(self, organisations: list[str] | None = None):
+    def remove_stale_relationships(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
         stale_relationships = self.db_session.query(Relationship).filter(
             Relationship.last_updated < datetime.today() - timedelta(days=1)
         )
-        if organisations is not None:
-            stale_relationships = stale_relationships.join(Relationship.asset).filter(
-                Asset.organisation.in_(organisations)
-            )
+        if organisations is not None or (visibility is not None and visibility != "all"):
+            stale_relationships = stale_relationships.join(Relationship.asset)
+            if organisations is not None:
+                stale_relationships = stale_relationships.filter(
+                    Asset.organisation.in_(organisations)
+                )
+            if visibility is not None and visibility != "all":
+                stale_relationships = stale_relationships.filter(
+                    Asset.data["basic"]["visibility"].as_string() == visibility
+                )
         for relationship in stale_relationships:
             logging.info(f"Removing stale relationship: {relationship.id}")
             self.db_session.delete(relationship)

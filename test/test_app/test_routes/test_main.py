@@ -1,9 +1,23 @@
 import unittest
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from app.projects.repository_standards.services.repository_compliance_service import (
     RepositoryComplianceService,
 )
+
+
+class TestLegacyPublicRepositoryScope(unittest.TestCase):
+    def test_legacy_reports_query_only_public_moj_repositories(self):
+        asset_service = Mock()
+        asset_service.get_all_repositories.return_value = []
+        service = RepositoryComplianceService(asset_service=asset_service)
+
+        self.assertEqual(service.get_all_repositories(), [])
+
+        asset_service.get_all_repositories.assert_called_once_with(
+            organisation="ministryofjustice", visibility="public"
+        )
 
 
 class TestAggregateOwnerCounts(unittest.TestCase):

@@ -63,11 +63,19 @@ class AssetService:
         asset = self.__asset_repository.find_by_name(name, organisation)
         return RepositoryView.from_asset(asset[0]) if len(asset) > 0 else None
 
-    def remove_stale_assets(self, organisations: list[str] | None = None):
-        self.__asset_repository.remove_stale_assets(organisations)
+    def remove_stale_assets(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
+        self.__asset_repository.remove_stale_assets(organisations, visibility)
 
-    def remove_stale_relationships(self, organisations: list[str] | None = None):
-        self.__asset_repository.remove_stale_relationships(organisations)
+    def remove_stale_relationships(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
+        self.__asset_repository.remove_stale_relationships(organisations, visibility)
 
 
 def get_asset_service() -> AssetService:

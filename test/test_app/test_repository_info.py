@@ -83,6 +83,8 @@ class TestRepositoryInfoFactory(unittest.TestCase):
             (b"*\n", False),
             (b"# comment only\n/apps/github\n", False),
             (b"* @ministryofjustice/repository-owners # inline comment\n", True),
+            (b"* @ministryofjustice/repository-owners\n*\n", False),
+            (b"* @ministryofjustice/repository-owners\n*\n/src/ @team\n", True),
             (b"*.py reviewers@example.gov.uk\n", True),
         ):
             with self.subTest(content=content):

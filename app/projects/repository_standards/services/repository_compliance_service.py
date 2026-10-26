@@ -141,10 +141,10 @@ class RepositoryComplianceService:
 
     def get_all_repositories(self) -> List[RepositoryComplianceReportView]:
         repositories_compliance_reports = []
-        repositories = self.__asset_service.get_all_repositories()
+        repositories = self.__asset_service.get_all_repositories(
+            organisation="ministryofjustice", visibility="public"
+        )
         for repository in repositories:
-            if repository.organisation != "ministryofjustice":
-                continue
             repository_compliance_report = self.__get_repository_compliance_report(
                 repository
             )

@@ -77,14 +77,62 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
         self.service.remove_stale_assets(["ministryofjustice"])
         self.assertEqual(db.session.query(Asset).all(), [mojas])
 
-    def test_relationship_cleanup_only_removes_scanned_org_relationships(self):
+    def test_asset_cleanup_only_removes_collected_visibility(self):
+        public_moj = self.repository.add_asset(
+            "public", "REPOSITORY", {"basic": {"visibility": "public"}}
+        )
+        private_moj = self.repository.add_asset(
+            "private", "REPOSITORY", {"basic": {"visibility": "private"}}
+        )
+        other_org_public = self.repository.add_asset(
+            "other-org", "REPOSITORY", {"basic": {"visibility": "public"}},
+            "moj-analytical-services",
+        )
+        for asset in (public_moj, private_moj, other_org_public):
+            asset.last_updated = datetime.now() - timedelta(days=2)
+        db.session.commit()
+
+        self.service.remove_stale_assets(["ministryofjustice"], "public")
+
+        self.assertEqual(
+            db.session.query(Asset).order_by(Asset.name).all(),
+            [other_org_public, private_moj],
+        )
+
+    def test_asset_cleanup_with_all_visibility_cleans_all_visibilities(self):
+        public_moj = self.repository.add_asset(
+            "public", "REPOSITORY", {"basic": {"visibility": "public"}}
+        )
+        private_moj = self.repository.add_asset(
+            "private", "REPOSITORY", {"basic": {"visibility": "private"}}
+        )
+        other_org_public = self.repository.add_asset(
+            "other-org", "REPOSITORY", {"basic": {"visibility": "public"}},
+            "moj-analytical-services",
+        )
+        for asset in (public_moj, private_moj, other_org_public):
+            asset.last_updated = datetime.now() - timedelta(days=2)
+        db.session.commit()
+
+        self.service.remove_stale_assets(["ministryofjustice"], "all")
+
+        self.assertEqual(db.session.query(Asset).all(), [other_org_public])
+
+    def test_relationship_cleanup_only_removes_scanned_org_and_visibility(self):
         owner_type = OwnerTypes(name="TEAM")
         owner = Owner(name="team", type=owner_type, config={})
         db.session.add(owner)
         db.session.commit()
         relationships = []
-        for organisation in ("ministryofjustice", "moj-analytical-services"):
-            asset = self.repository.add_asset("shared", "REPOSITORY", {}, organisation)
+        for organisation, visibility in (
+            ("ministryofjustice", "public"),
+            ("ministryofjustice", "private"),
+            ("moj-analytical-services", "public"),
+        ):
+            asset = self.repository.add_asset(
+                "shared", "REPOSITORY", {"basic": {"visibility": visibility}},
+                organisation,
+            )
             relationship = Relationship(
                 owner=owner,
                 asset=asset,
@@ -94,9 +142,12 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
             db.session.add(relationship)
             relationships.append(relationship)
         db.session.commit()
-        self.service.remove_stale_relationships(["ministryofjustice"])
-        self.assertEqual(db.session.query(Relationship).all(), [relationships[1]])
-        self.assertEqual(db.session.query(Asset).count(), 2)
+        self.service.remove_stale_relationships(["ministryofjustice"], "public")
+        self.assertEqual(
+            db.session.query(Relationship).order_by(Relationship.id).all(),
+            [relationships[1], relationships[2]],
+        )
+        self.assertEqual(db.session.query(Asset).count(), 3)
 
     def test_owner_update_preserves_configured_organisation_and_prefix(self):
         owner_type = OwnerTypes(name="TEAM")

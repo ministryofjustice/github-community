@@ -93,7 +93,8 @@ class TestMain(unittest.TestCase):
         )
         service.update_relationships_with_owner.assert_called_once()
         self.assertEqual(service.remove_stale_assets.call_args_list, [
-            call(["ministryofjustice"]), call(["moj-analytical-services"])
+            call(["ministryofjustice"], "public"),
+            call(["moj-analytical-services"], "public"),
         ])
         second.get_repositories.assert_called_once_with(
             workers=1, visibility="public", limit=1499
@@ -110,8 +111,12 @@ class TestMain(unittest.TestCase):
             if mock_github_service.return_value.get_repositories.call_count == 1:
                 return [first_repository]
             service.update_asset_by_name.assert_called_once()
-            service.remove_stale_assets.assert_called_once_with(["ministryofjustice"])
-            service.remove_stale_relationships.assert_called_once_with(["ministryofjustice"])
+            service.remove_stale_assets.assert_called_once_with(
+                ["ministryofjustice"], "public"
+            )
+            service.remove_stale_relationships.assert_called_once_with(
+                ["ministryofjustice"], "public"
+            )
             raise RuntimeError("second org failed")
 
         mock_github_service.return_value.get_repositories.side_effect = collect
@@ -128,8 +133,12 @@ class TestMain(unittest.TestCase):
             first_repository.basic.name, first_repository.to_dict(),
             organisation=first_repository.basic.organisation,
         )
-        service.remove_stale_assets.assert_called_once_with(["ministryofjustice"])
-        service.remove_stale_relationships.assert_called_once_with(["ministryofjustice"])
+        service.remove_stale_assets.assert_called_once_with(
+            ["ministryofjustice"], "public"
+        )
+        service.remove_stale_relationships.assert_called_once_with(
+            ["ministryofjustice"], "public"
+        )
 
     def test_capped_collection_does_not_cleanup_or_contact_unscanned_org(
         self, mock_owner_service, mock_asset_service, mock_github_service
