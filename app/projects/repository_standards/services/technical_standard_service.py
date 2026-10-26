@@ -9,6 +9,7 @@ from app.projects.repository_standards.config.technical_standard_config import (
 from app.projects.repository_standards.models.technical_standard import (
     TechnicalStandardReportView,
 )
+from app.projects.repository_standards.models.owner import OwnerConfig
 from app.projects.repository_standards.db_models import Owner
 from app.projects.repository_standards.repositories.owner_repository import OwnerView
 from app.projects.repository_standards.repositories.asset_repository import (
@@ -123,12 +124,20 @@ class TechnicalStandardService:
         else:
             raise ValueError(f"Unrecognised owner type: {owner_type}")
 
-        owner_ids_by_name = {owner.name: owner.id for owner in owners}
+        owner_ids_by_identity = {
+            (
+                owner.config.organisation
+                if isinstance(owner.config, OwnerConfig)
+                else owner.config.get("organisation", "ministryofjustice"),
+                owner.name,
+            ): owner.id
+            for owner in owners
+        }
         for repository in self.get_all_repositories():
             owner_ids = {
-                owner_ids_by_name[name]
+                owner_ids_by_identity[(repository.organisation, name)]
                 for name in getattr(repository, owner_field_name)
-                if name in owner_ids_by_name
+                if (repository.organisation, name) in owner_ids_by_identity
             }
             for owner_id in owner_ids:
                 counts[owner_id]["repo_count"] += 1
@@ -147,9 +156,14 @@ class TechnicalStandardService:
         else:
             return []
 
+        organisation = (
+            owner.config.organisation
+            if isinstance(owner.config, OwnerConfig)
+            else owner.config.get("organisation", "ministryofjustice")
+        )
         return [
             repository
-            for repository in self.get_all_repositories()
+            for repository in self.get_all_repositories(organisation=organisation)
             if owner.name in getattr(repository, owner_field_name)
         ]
 
