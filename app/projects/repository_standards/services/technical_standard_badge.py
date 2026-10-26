@@ -49,6 +49,6 @@ def get_technical_standard_badge_shield_url(
 
     logo_query = urlencode({"logo": f"data:image/png;base64,{MOJ_CROWN_LOGO}"})
     return (
-        f"https://img.shields.io/badge/{quote('MOJ')}-{quote(message)}-{color}"
+        f"https://img.shields.io/badge/{quote('MOJ')}-{quote(message.replace('-', '--'))}-{color}"
         f"?style={style}&labelColor=0b0c0c&{logo_query}"
     )

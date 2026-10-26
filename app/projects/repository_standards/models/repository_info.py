@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -12,6 +13,20 @@ logger = logging.getLogger(__name__)
 
 
 class RepositoryInfoFactory:
+    @staticmethod
+    def _codeowners_has_owner_rule(content: str) -> bool:
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            rule = re.split(r"\s+#", stripped, maxsplit=1)[0].strip()
+            entries = rule.split()
+            if len(entries) < 2:
+                continue
+            if any(owner.startswith("@") or "@" in owner for owner in entries[1:]):
+                return True
+        return False
+
     @staticmethod
     def _get_code_scanning_alert_result(repo, github_client):
         try:
@@ -232,9 +247,8 @@ class RepositoryInfoFactory:
                 if content is not None:
                     if isinstance(content, bytes):
                         content = content.decode("utf-8", errors="replace")
-                    has_owner_rules = any(
-                        line.strip() and not line.lstrip().startswith("#")
-                        for line in content.splitlines()
+                    has_owner_rules = RepositoryInfoFactory._codeowners_has_owner_rule(
+                        content
                     )
                     try:
                         codeowners_errors = github_client.get_codeowners_errors(

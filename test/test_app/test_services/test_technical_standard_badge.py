@@ -72,7 +72,7 @@ class TestTechnicalStandardBadge(unittest.TestCase):
     def test_non_compliant_badge_uses_red_status(self):
         badge_url = get_technical_standard_badge_shield_url(False, "flat")
 
-        self.assertIn("/badge/MOJ-NON-COMPLIANT-f4cdc6", badge_url)
+        self.assertIn("/badge/MOJ-NON--COMPLIANT-f4cdc6", badge_url)
         self.assertIn("style=flat", badge_url)
 
     def test_unknown_repository_badge_uses_neutral_status(self):

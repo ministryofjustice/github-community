@@ -78,6 +78,28 @@ class TestRepositoryInfoFactory(unittest.TestCase):
                 with self.assertRaises(GitHubApiError):
                     RepositoryInfoFactory.from_github_repo(repo, [], [], [], [], client)
 
+    def test_codeowners_requires_an_owner_assignment(self):
+        for content, expected in (
+            (b"*\n", False),
+            (b"# comment only\n/apps/github\n", False),
+            (b"* @ministryofjustice/repository-owners # inline comment\n", True),
+            (b"*.py reviewers@example.gov.uk\n", True),
+        ):
+            with self.subTest(content=content):
+                repo, client = self._repository_and_client()
+                repo.get_contents.side_effect = None
+                repo.get_contents.return_value = SimpleNamespace(
+                    decoded_content=content
+                )
+                client.get_codeowners_errors.return_value = {"errors": []}
+
+                result = RepositoryInfoFactory.from_github_repo(
+                    repo, [], [], [], [], client
+                )
+
+                self.assertIs(result.codeowners_file_present, True)
+                self.assertIs(result.codeowners_file_valid, expected)
+
     def test_configured_codeql_without_repository_languages_is_saved_as_not_applicable(self):
         class NotFound(Exception):
             status = 404

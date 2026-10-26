@@ -78,9 +78,13 @@ class OwnerRepository:
         owner = self.find_by_id(id)
         if not owner:
             return None
+        existing_config = OwnerConfig.from_dict(owner.config)
         owner.name = owner_name
         owner.config = OwnerConfig(
-            name=owner_name, teams=owner_teams, prefix=""
+            name=owner_name,
+            teams=owner_teams,
+            prefix=existing_config.prefix,
+            organisation=existing_config.organisation,
         ).to_dict()
         self.db_session.add(owner)
         self.db_session.commit()

@@ -10,6 +10,8 @@ from flask import Flask
 
 from app.projects.repository_standards.db_models import Asset, Owner, OwnerTypes, Relationship, db
 from app.projects.repository_standards.repositories.asset_repository import AssetRepository
+from app.projects.repository_standards.repositories.owner_repository import OwnerRepository
+from app.projects.repository_standards.models.owner import OwnerConfig
 from app.projects.repository_standards.services.asset_service import AssetService
 
 
@@ -95,6 +97,30 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
         self.service.remove_stale_relationships(["ministryofjustice"])
         self.assertEqual(db.session.query(Relationship).all(), [relationships[1]])
         self.assertEqual(db.session.query(Asset).count(), 2)
+
+    def test_owner_update_preserves_configured_organisation_and_prefix(self):
+        owner_type = OwnerTypes(name="TEAM")
+        owner = Owner(
+            name="Analytics Team",
+            type=owner_type,
+            config=OwnerConfig(
+                name="Analytics Team",
+                teams=["old-team"],
+                prefix="analytics-",
+                organisation="moj-analytical-services",
+            ).to_dict(),
+        )
+        db.session.add(owner)
+        db.session.commit()
+
+        updated = OwnerRepository().update_by_id(
+            str(owner.id), "Renamed Analytics Team", ["new-team"]
+        )
+
+        config = OwnerConfig.from_dict(updated.config)
+        self.assertEqual(config.organisation, "moj-analytical-services")
+        self.assertEqual(config.prefix, "analytics-")
+        self.assertEqual(config.teams, ["new-team"])
 
 
 class TestOrganisationMigration(unittest.TestCase):

@@ -433,20 +433,94 @@ def get_pull_request_review_protection_check(
     protection = repository.data.default_branch_protection
     ruleset = repository.data.default_branch_ruleset
 
-    classic_protection_passes = (
-        (protection.required_approving_review_count or 0) >= 1
-        and protection.require_last_push_approval is True
+    classic_approval_count = (
+        protection.required_approving_review_count
+        if protection.present is True
+        else 0
+        if protection.present is False
+        else None
+    )
+    classic_latest_push = (
+        protection.require_last_push_approval
+        if protection.present is True
+        else False
+        if protection.present is False
+        else None
     )
 
-    ruleset_passes = (
-        ruleset.enabled
+    ruleset_state_unknown = (
+        ruleset.enabled is None
+        or (
+            ruleset.enabled is True
+            and (
+                ruleset.pull_request_enforcement is None
+                or ruleset.pull_request_bypass_actors_length is None
+            )
+        )
+    )
+    ruleset_is_effective = (
+        ruleset.enabled is True
         and ruleset.pull_request_enforcement == "active"
-        and not ruleset.pull_request_bypass_actors_length
-        and (ruleset.pull_request_required_approving_review_count or 0) >= 1
-        and ruleset.pull_request_require_last_push_approval is True
+        and ruleset.pull_request_bypass_actors_length == 0
     )
+    if ruleset.enabled is False or (
+        ruleset.enabled is True and not ruleset_state_unknown and not ruleset_is_effective
+    ):
+        ruleset_approval_count = 0
+        ruleset_latest_push = False
+    elif ruleset_is_effective:
+        ruleset_approval_count = ruleset.pull_request_required_approving_review_count
+        ruleset_latest_push = ruleset.pull_request_require_last_push_approval
+    else:
+        ruleset_approval_count = None
+        ruleset_latest_push = None
 
-    status = PASS if classic_protection_passes or ruleset_passes else FAIL
+    approval_count_passes = (
+        (classic_approval_count or 0) >= 1
+        or (ruleset_approval_count or 0) >= 1
+    )
+    latest_push_passes = (
+        classic_latest_push is True or ruleset_latest_push is True
+    )
+    status = PASS if approval_count_passes and latest_push_passes else FAIL
+
+    recommendations = []
+    if status == FAIL:
+        ruleset_bypass_blocks_configured_requirement = (
+            ruleset.enabled is True
+            and ruleset.pull_request_enforcement == "active"
+            and (ruleset.pull_request_bypass_actors_length or 0) > 0
+            and (ruleset.pull_request_required_approving_review_count or 0) >= 1
+            and ruleset.pull_request_require_last_push_approval is True
+            and not (
+                (classic_approval_count or 0) >= 1
+                and classic_latest_push is True
+            )
+        )
+        if ruleset_bypass_blocks_configured_requirement:
+            recommendations.append(
+                "Remove bypass actors from the pull request ruleset."
+            )
+        else:
+            approval_count_unknown = (
+                (classic_approval_count is None)
+                or (ruleset_approval_count is None)
+            )
+            latest_push_unknown = (
+                (classic_latest_push is None) or (ruleset_latest_push is None)
+            )
+            if not approval_count_passes:
+                recommendations.append(
+                    "The required approval count could not be verified. Check branch protection and ruleset access, then refresh the report."
+                    if approval_count_unknown
+                    else "Require at least one approving pull request review."
+                )
+            if not latest_push_passes:
+                recommendations.append(
+                    "Approval of the most recent reviewable push could not be verified. Check branch protection and ruleset access, then refresh the report."
+                    if latest_push_unknown
+                    else "Enable Require approval of the most recent reviewable push."
+                )
 
     return _check(
         2,
@@ -454,10 +528,5 @@ def get_pull_request_review_protection_check(
         "2-must-have-pull-request-review-protection",
         status,
         "The default branch requires at least one approval, including approval of the most recent reviewable push.",
-        _review_recommendations(protection, ruleset, [
-            ("required_approving_review_count", "pull_request_required_approving_review_count",
-             "Require at least one approving pull request review."),
-            ("require_last_push_approval", "pull_request_require_last_push_approval",
-             "Enable Require approval of the most recent reviewable push."),
-        ]) if status == FAIL else [],
+        recommendations,
     )

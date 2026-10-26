@@ -847,6 +847,33 @@ class TestMitLicenseCheck(unittest.TestCase):
 
 
 class TestPullRequestReviewProtectionCheck(unittest.TestCase):
+    def test_combines_approval_count_and_latest_push_across_protection_sources(self):
+        configurations = (
+            make_review_repository(
+                classic_count=1,
+                classic_latest_push=False,
+                ruleset_enabled=True,
+                ruleset_enforcement="active",
+                ruleset_bypass_actors=0,
+                ruleset_count=0,
+                ruleset_latest_push=True,
+            ),
+            make_review_repository(
+                classic_count=0,
+                classic_latest_push=True,
+                ruleset_enabled=True,
+                ruleset_enforcement="active",
+                ruleset_bypass_actors=0,
+                ruleset_count=1,
+                ruleset_latest_push=False,
+            ),
+        )
+        for repository in configurations:
+            with self.subTest(repository=repository):
+                check = get_pull_request_review_protection_check(repository)
+                self.assertEqual(check.status, PASS)
+                self.assertEqual(check.recommendations, [])
+
     def test_passes_classic_protection_with_approval_and_latest_push_setting(self):
         repository = make_review_repository(
             classic_count=1,
