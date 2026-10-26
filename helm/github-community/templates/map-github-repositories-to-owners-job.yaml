@@ -61,4 +61,4 @@ spec:
              - name: GITHUB_REPOSITORY_LIMIT
                value: {{ .Values.app.jobs.map_github_repositories_to_owners.repository_limit | default 1500 | quote }}
 
-            restartPolicy: Never
+          restartPolicy: Never
