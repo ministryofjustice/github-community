@@ -12,6 +12,8 @@ from app.projects.repository_standards.repositories.owner_repository import (
     OwnerView,
 )
 
+DEFAULT_ORGANISATION = "ministryofjustice"
+
 
 class RepositoryView:
     def __init__(
@@ -25,9 +27,12 @@ class RepositoryView:
         team_owner_names: List[str],
         team_admin_owner_names: List[str],
         data: RepositoryInfo,
+        last_updated: datetime | None = None,
+        organisation: str = DEFAULT_ORGANISATION,
     ):
         self.id = id
         self.name = name
+        self.organisation = organisation
         self.admin_owner_names = admin_owner_names
         self.owner_names = owner_names
         self.business_unit_owners_names = business_unit_owner_names
@@ -35,6 +40,7 @@ class RepositoryView:
         self.team_owners_names = team_owner_names
         self.team_admin_owners_names = team_admin_owner_names
         self.data = data
+        self.last_updated = last_updated
 
     @classmethod
     def from_asset(cls, asset: Asset):
@@ -48,6 +54,7 @@ class RepositoryView:
         return cls(
             id=asset.id,
             name=asset.name,
+            organisation=asset.organisation,
             owner_names=[owner.name for owner in owners],
             admin_owner_names=[owner.name for owner in admin_owners],
             business_unit_owner_names=[
@@ -65,6 +72,7 @@ class RepositoryView:
                 owner.name for owner in admin_owners if owner.type.name == "TEAM"
             ],
             data=RepositoryInfo.from_dict(asset.data),
+            last_updated=asset.last_updated,
         )
 
 
@@ -72,10 +80,28 @@ class AssetRepository:
     def __init__(self, db_session: scoped_session = db.session):
         self.db_session = db_session
 
-    def find_all(self) -> list[RepositoryView]:
-        assets = self.db_session.query(Asset).all()
+    def find_all(
+        self, organisation: str | None = None, visibility: str | None = None
+    ) -> list[RepositoryView]:
+        query = self.db_session.query(Asset)
+        if organisation is not None:
+            query = query.filter(Asset.organisation == organisation)
+        if visibility is not None:
+            query = query.filter(
+                Asset.data["basic"]["visibility"].as_string() == visibility
+            )
+        assets = query.all()
 
         return [RepositoryView.from_asset(asset) for asset in assets]
+
+    def find_all_organisations(self) -> list[str]:
+        return [
+            organisation
+            for (organisation,) in self.db_session.query(Asset.organisation)
+            .distinct()
+            .order_by(Asset.organisation)
+            .all()
+        ]
 
     def find_all_by_owners(self, owner_names: list[str]) -> list[RepositoryView]:
         assets = (
@@ -98,9 +124,13 @@ class AssetRepository:
 
         return [RepositoryView.from_asset(asset) for asset in assets]
 
-    def add_asset(self, name: str, type: str, data: dict) -> Asset:
+    def add_asset(
+        self, name: str, type: str, data: dict,
+        organisation: str = DEFAULT_ORGANISATION,
+    ) -> Asset:
         asset = Asset()
         asset.name = name
+        asset.organisation = organisation
         asset.type = type
         asset.last_updated = datetime.now()
         asset.data = data
@@ -120,8 +150,14 @@ class AssetRepository:
         self.db_session.commit()
         return relationship
 
-    def find_by_name(self, name: str) -> List[Asset]:
-        assets = self.db_session.query(Asset).filter(Asset.name == name).all()
+    def find_by_name(
+        self, name: str, organisation: str = DEFAULT_ORGANISATION
+    ) -> List[Asset]:
+        assets = (
+            self.db_session.query(Asset)
+            .filter(Asset.name == name, Asset.organisation == organisation)
+            .all()
+        )
         return assets
 
     def find_by_id(self, asset_id: int) -> Asset | None:
@@ -167,8 +203,10 @@ class AssetRepository:
 
         return relationship
 
-    def update_by_name(self, name: str, data: dict) -> Asset:
-        assets = self.find_by_name(name)
+    def update_by_name(
+        self, name: str, data: dict, organisation: str = DEFAULT_ORGANISATION
+    ) -> Asset:
+        assets = self.find_by_name(name, organisation)
 
         if len(assets) > 1:
             raise ValueError(
@@ -177,22 +215,33 @@ class AssetRepository:
 
         if len(assets) == 0:
             logging.debug(f"No repository found [ {name} ] - creating a new asset...")
-            return self.add_asset(name, "REPOSITORY", data)
+            return self.add_asset(name, "REPOSITORY", data, organisation)
 
         asset = assets[0]
         logging.debug(
             f"Found existing respoistory with ID [ {asset.id} ] - updating existing assets data..."
         )
+        asset.organisation = organisation
         asset.last_updated = datetime.now()
         asset.data = data
         self.db_session.commit()
 
         return assets[0]
 
-    def remove_stale_assets(self):
+    def remove_stale_assets(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
         stale_assets = self.db_session.query(Asset).filter(
             Asset.last_updated < datetime.today() - timedelta(days=1)
         )
+        if organisations is not None:
+            stale_assets = stale_assets.filter(Asset.organisation.in_(organisations))
+        if visibility is not None and visibility != "all":
+            stale_assets = stale_assets.filter(
+                Asset.data["basic"]["visibility"].as_string() == visibility
+            )
         for asset in stale_assets:
             logging.info(f"Removing stale asset: {asset.name}")
             self.db_session.query(Relationship).filter_by(assets_id=asset.id).delete()
@@ -200,10 +249,24 @@ class AssetRepository:
 
         self.db_session.commit()
 
-    def remove_stale_relationships(self):
+    def remove_stale_relationships(
+        self,
+        organisations: list[str] | None = None,
+        visibility: str | None = None,
+    ):
         stale_relationships = self.db_session.query(Relationship).filter(
             Relationship.last_updated < datetime.today() - timedelta(days=1)
         )
+        if organisations is not None or (visibility is not None and visibility != "all"):
+            stale_relationships = stale_relationships.join(Relationship.asset)
+            if organisations is not None:
+                stale_relationships = stale_relationships.filter(
+                    Asset.organisation.in_(organisations)
+                )
+            if visibility is not None and visibility != "all":
+                stale_relationships = stale_relationships.filter(
+                    Asset.data["basic"]["visibility"].as_string() == visibility
+                )
         for relationship in stale_relationships:
             logging.info(f"Removing stale relationship: {relationship.id}")
             self.db_session.delete(relationship)

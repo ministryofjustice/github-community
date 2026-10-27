@@ -20,6 +20,7 @@ class OwnerConfig:
     name: str
     teams: List[str]
     prefix: Optional[str] = None
+    organisation: str = "ministryofjustice"
 
     def to_dict(self):
         return json.loads(json.dumps(self, default=lambda o: o.__dict__))
@@ -32,4 +33,9 @@ class OwnerConfig:
             or data.get("prefix") is None
         ):
             raise ValueError("Owner config is missing attributes")
-        return cls(name=data["name"], teams=data["teams"], prefix=data["prefix"])
+        return cls(
+            name=data["name"],
+            teams=data["teams"],
+            prefix=data["prefix"],
+            organisation=data.get("organisation", "ministryofjustice"),
+        )

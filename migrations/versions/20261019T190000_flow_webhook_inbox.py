@@ -40,7 +40,7 @@ def upgrade():
         sa.Column("time_basis", sa.String(40), nullable=False),
         sa.Column("evidence", sa.JSON(), nullable=False),
         sa.Column("quality", sa.String(30), nullable=False),
-        sa.Column("reason", sa.String(100), nullable=False),
+        sa.Column("reason", sa.String(100)),
     )
     op.create_index(
         "ix_flow_metrics_events_item_id", "flow_metrics_events", ["item_id"]

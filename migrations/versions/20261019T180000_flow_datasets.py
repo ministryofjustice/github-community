@@ -62,8 +62,7 @@ def upgrade():
 
 
 def downgrade():
-    # Only the isolated fictional workspace is removed. Existing real tables survive.
-    op.execute("DELETE FROM flow_metrics_boards WHERE id = 'sample-three-sprints'")
+    # This revision does not own flow_metrics_boards or its observations.
     op.drop_table("flow_metrics_evidence")
     op.drop_table("flow_metrics_datasets")
     if op.get_bind().dialect.name == "postgresql":

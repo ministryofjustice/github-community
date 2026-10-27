@@ -1,0 +1,47 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}{{ owner_type_plural }} – Technical Standard{% endblock %}
+
+{% block content %}
+  {{ govukBreadcrumbs({
+    "items": [
+      { "text": "Home", "href": "/" },
+      { "text": "Repository Standards", "href": "/repository-standards" },
+      { "text": "Technical Standard", "href": "/repository-standards/technical-standard" },
+      { "text": owner_type_plural }
+    ]
+  }) }}
+
+  <h1 class="govuk-heading-xl">{{ owner_type_plural }}</h1>
+  <p class="govuk-body">Compliance against the current technical standard, grouped by {{ owner_type | lower }}.</p>
+
+  {% if not owners %}
+    <p class="govuk-body">No {{ owner_type_plural | lower }} found.</p>
+  {% else %}
+    <table class="govuk-table" data-module="moj-sortable-table">
+      <thead class="govuk-table__head">
+        <tr class="govuk-table__row">
+          <th scope="col" class="govuk-table__header" aria-sort="ascending">{{ owner_type }}</th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">Repositories</th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">Compliant</th>
+          <th scope="col" class="govuk-table__header" aria-sort="none">Non-compliant</th>
+        </tr>
+      </thead>
+      <tbody class="govuk-table__body">
+        {% for owner in owners %}
+          {% set counts = owner_counts.get(owner.id, {}) %}
+          {% set repo_count = counts.get("repo_count", 0) %}
+          {% set compliant_count = counts.get("compliant_count", 0) %}
+          <tr class="govuk-table__row">
+            <td class="govuk-table__cell">
+              <a class="govuk-link govuk-!-font-weight-bold" href="{{ owner_url_prefix }}/{{ owner.id }}">{{ owner.name }}</a>
+            </td>
+            <td class="govuk-table__cell">{{ repo_count }}</td>
+            <td class="govuk-table__cell"><strong class="govuk-tag govuk-tag--green">{{ compliant_count }}</strong></td>
+            <td class="govuk-table__cell"><strong class="govuk-tag govuk-tag--red">{{ repo_count - compliant_count }}</strong></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+{% endblock %}
