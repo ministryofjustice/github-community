@@ -1,17 +1,16 @@
 """Source-aware exploration contract; never turn observations into events."""
 
 from copy import deepcopy
-from datetime import UTC, date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from types import SimpleNamespace
 
-from sqlalchemy import select
+from sqlalchemy import case, exists, literal, select, union_all
 
 from app.projects.flow_metrics.collector import BOARD_ID, ESTIMATION_FIELD_ID
 from app.projects.flow_metrics.config import DEFAULT_SOURCE_URL, workspace_config
 from app.projects.flow_metrics.datasets import sample_dataset
 from app.projects.flow_metrics.db_models import (
     FlowBoard,
-    FlowEvent,
     FlowEvidence,
     FlowSnapshot,
 )
@@ -132,61 +131,101 @@ def evidence_payload(document, source, mapping):
     raise ValueError("Unsupported stored source evidence.")
 
 
-def exploratory_dataset():
-    dataset = deepcopy(sample_dataset().payload)
-    board = db.session.get(FlowBoard, BOARD_ID)
-    mapping = board.field_mapping if board else {}
-    observations = {}
-    for evidence in db.session.execute(
-        select(FlowEvidence)
-        .where(FlowEvidence.dataset_id == BOARD_ID)
-        .order_by(FlowEvidence.observed_at)
-    ).scalars():
-        payload = evidence_payload(evidence.document, evidence.source, mapping)
-        contract = observation_contract(
-            payload,
-            evidence.observed_at,
-            evidence.source,
-            evidence.id,
-            payload.get("mapping", {}),
-        )
-        observations[contract["id"]] = contract
-    # The daily published view remains supported even before a private import.
-    for snapshot in db.session.execute(
-        select(FlowSnapshot)
-        .where(FlowSnapshot.board_id == BOARD_ID)
-        .order_by(FlowSnapshot.captured_at)
-    ).scalars():
-        contract = observation_contract(
-            snapshot.payload,
-            snapshot.captured_at,
-            "app-published-observation",
-            snapshot.id,
-            snapshot.payload.get("mapping", {}),
-        )
-        if not any(
-            existing["capturedAt"] == contract["capturedAt"]
-            and existing["source"] == contract["source"]
-            for existing in observations.values()
-        ):
-            observations[contract["id"]] = contract
-    ordered = sorted(
-        observations.values(),
-        key=lambda observation: (
-            observation["capturedAt"],
-            observation["source"] == "app-published-observation",
-            observation["id"],
-        ),
+def capture_index():
+    """Select only identities/times, including non-duplicated snapshot fallback."""
+    evidence = select(
+        literal("evidence").label("kind"), FlowEvidence.id.label("id"),
+        FlowEvidence.observed_at.label("captured_at"), FlowEvidence.source.label("source"),
+    ).where(FlowEvidence.dataset_id == BOARD_ID)
+    snapshots = select(
+        literal("snapshot").label("kind"), FlowSnapshot.id.label("id"),
+        FlowSnapshot.captured_at.label("captured_at"),
+        literal("app-published-observation").label("source"),
+    ).where(
+        FlowSnapshot.board_id == BOARD_ID,
+        ~exists(select(FlowEvidence.id).where(
+            FlowEvidence.dataset_id == BOARD_ID,
+            FlowEvidence.source == "app-published-observation",
+            FlowEvidence.observed_at == FlowSnapshot.captured_at,
+        )),
     )
-    if ordered and workspace_config()["source_url"] != DEFAULT_SOURCE_URL:
+    return union_all(evidence, snapshots).subquery()
+
+
+def capture_order(index):
+    return (
+        index.c.captured_at,
+        case((index.c.source == "app-published-observation", 1), else_=0),
+        index.c.id,
+    )
+
+
+def require_supported_source():
+    if workspace_config()["source_url"] != DEFAULT_SOURCE_URL:
         raise ValueError(
             "Combined exploration with genuine evidence supports only project 152."
         )
+
+
+def read_contract(kind, identity, observed_at, source):
+    board = db.session.get(FlowBoard, BOARD_ID)
+    mapping = board.field_mapping if board else {}
+    if kind == "evidence":
+        document = db.session.scalar(select(FlowEvidence.document).where(FlowEvidence.id == identity))
+        if document is None:
+            raise ValueError("The saved observation is unavailable. Reload the workspace to retry.")
+        payload = evidence_payload(document, source, mapping)
+    else:
+        payload = db.session.scalar(select(FlowSnapshot.payload).where(
+            FlowSnapshot.id == identity, FlowSnapshot.captured_at == observed_at,
+        ))
+        if payload is None:
+            raise ValueError("The capture changed while loading. Reload the workspace to retry.")
+    return observation_contract(payload, observed_at, source, identity, payload.get("mapping", {}))
+
+
+def observation_for(reporting_date):
+    try:
+        upper = date.fromisoformat(reporting_date)
+    except (ValueError, TypeError):
+        raise ValueError("Use a reporting date in YYYY-MM-DD format.") from None
+    if upper.isoformat() != reporting_date or upper == date.max:
+        raise ValueError("Use a reporting date in YYYY-MM-DD format.")
+    require_supported_source()
+    index = capture_index()
+    row = db.session.execute(
+        select(index).where(
+            index.c.captured_at < datetime.combine(upper + timedelta(days=1), time.min, tzinfo=UTC)
+        ).order_by(*(column.desc() for column in capture_order(index))).limit(1)
+    ).first()
+    return read_contract(*row) if row else None
+
+
+def exploratory_dataset():
+    dataset = deepcopy(sample_dataset().payload)
+    index = capture_index()
+    captures = []
+    options = {key: set() for key in ["team", "status", "sprint", "repository", "type", "planned", "objective", *METADATA_FIELDS]}
+    # Stream one document at a time; retain only small option unions and identities.
+    for row in db.session.execute(
+        select(index).order_by(*capture_order(index)).execution_options(yield_per=1)
+    ):
+        require_supported_source()
+        contract = read_contract(*row)
+        captures.append({key: contract[key] for key in ("id", "capturedAt", "source")})
+        for item in contract["items"]:
+            for key, values in options.items():
+                if key in {"team", "status", "sprint"} or key in item["availableFields"]:
+                    value = item.get(key)
+                    if value is not None:
+                        values.update(value if isinstance(value, list) else [value])
     dataset.update(
         provenance="mixed",
         fictionalDatasetId=dataset["id"],
         realDatasetId=BOARD_ID,
-        realObservations=ordered,
+        realObservations=[],
+        realCaptures=captures,
+        realOptions={key: sorted(values) for key, values in options.items()},
         sprintAliases=[
             {
                 "display": "Firebreak",
@@ -194,33 +233,15 @@ def exploratory_dataset():
                 "realIterationId": FIREBREAK_ITERATION,
             }
         ],
-        verifiedRealEvents=[
-            {
-                "deliveryId": event.id,
-                "itemId": f"real:{event.item_id}" if event.item_id else None,
-                "occurredAt": event.occurred_at.isoformat()
-                if event.occurred_at
-                else None,
-                "timeBasis": event.time_basis,
-                "quality": event.quality,
-                "reason": event.reason,
-                "evidence": event.evidence,
-            }
-            for event in db.session.execute(
-                select(FlowEvent)
-                .where(FlowEvent.dataset_id == BOARD_ID)
-                .order_by(FlowEvent.occurred_at, FlowEvent.id)
-            ).scalars()
-        ],
         realEventCoverage={
             "complete": False,
             "reason": "Webhook fragments do not establish an uninterrupted transition stream or sprint-start baseline.",
         },
     )
-    if ordered:
+    if captures:
         dataset["history"]["to"] = max(
             dataset["history"]["to"],
-            ordered[-1]["capturedAt"][:10],
+            captures[-1]["capturedAt"][:10],
         )
     return dataset
 

@@ -40,6 +40,7 @@
 
 
     </div>
+    {% if flow_metrics_enabled() %}
     <div class="govuk-grid-row govuk-!-margin-top-4">
       <div class="govuk-grid-column-one-third">
         <h3 class="govuk-heading-s govuk-!-margin-bottom-1">
@@ -48,6 +49,7 @@
         <p class="govuk-body-s">Explore project board data through shared team charts.</p>
       </div>
     </div>
+    {% endif %}
   </section>
 
   {% endblock %}

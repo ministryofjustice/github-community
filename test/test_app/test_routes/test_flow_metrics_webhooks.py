@@ -1,4 +1,4 @@
-"""Generated webhook fixtures only: no real deliveries or board records."""
+"""Deferred module checks with a test-only receiver, never application wiring."""
 
 import hashlib
 import hmac
@@ -18,7 +18,9 @@ from app.projects.flow_metrics.routes.main import flow_metrics_main
 from app.projects.flow_metrics.webhooks import (
     MAX_BODY,
     PROJECT_NODE_ID,
+    process_command,
     process_deliveries,
+    receive,
 )
 from app.shared.database import db
 
@@ -28,6 +30,7 @@ URL = "/flow-metrics/webhook"
 
 @pytest.fixture
 def app(monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
     monkeypatch.setenv("FLOW_METRICS_WEBHOOK_ENABLED", "true")
     monkeypatch.setenv("FLOW_METRICS_WEBHOOK_SECRET", SECRET)
     monkeypatch.setenv("FLOW_METRICS_WEBHOOK_ORGANISATION_ID", "101")
@@ -36,6 +39,7 @@ def app(monkeypatch):
     application.config.update(TESTING=True, SECRET_KEY="test", SQLALCHEMY_DATABASE_URI="sqlite://")
     db.init_app(application)
     application.register_blueprint(flow_metrics_main, url_prefix="/flow-metrics/")
+    application.add_url_rule(URL, "test_receiver", receive, methods=["POST"])
     with application.app_context():
         db.create_all()
         db.session.add(FlowDataset(id=BOARD_ID, provenance="real", content_sha256="", payload={}))
@@ -105,12 +109,7 @@ def test_signature_disabled_misconfigured_content_size_and_login_boundary(app, m
     with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
         assert send(client).status_code == 202  # Machine authentication, not Microsoft session.
         assert client.get("/flow-metrics/api/workspace").status_code == 302
-        assert client.get("/flow-metrics/api/webhook-health").status_code == 302
-    with patch("app.shared.middleware.auth.app_config.auth_enabled", False):
-        health = client.get("/flow-metrics/api/webhook-health")
-    assert health.json["deliveries"] == {"pending": 1}
-    assert health.json["historicalCoverageComplete"] is False
-    assert health.headers["Cache-Control"] == "no-store"
+        assert client.get("/flow-metrics/api/webhook-health").status_code == 404
     assert send(client, headers={"X-Hub-Signature-256": "sha256=" + "0" * 64}).status_code == 401
     assert send(client, headers={"X-Hub-Signature": "sha1=fake", "X-Hub-Signature-256": ""}).status_code == 401
     assert client.post(URL, data="{}", content_type="text/plain").status_code == 415
@@ -272,7 +271,7 @@ def test_processing_failure_retries_durably_and_cli_reports_it(app):
         assert db.session.get(FlowDelivery, identity).status == "failed"
         assert db.session.get(FlowDelivery, identity).attempts == 1
         assert db.session.get(FlowEvent, identity) is None
-    outcome = app.test_cli_runner().invoke(args=["flow-metrics", "process-deliveries"])
+    outcome = app.test_cli_runner().invoke(process_command)
     assert outcome.exit_code != 0
     with app.app_context():
         assert db.session.get(FlowDelivery, identity).attempts == 2

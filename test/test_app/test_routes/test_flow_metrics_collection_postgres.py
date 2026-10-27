@@ -142,6 +142,24 @@ def delivery_worker(uri, schema, name, entered, release, output):
         output.put((name, process_deliveries()))
 
 
+def initialisation_worker(uri, schema, barrier, output):
+    from app.projects.flow_metrics.collector import initialise_board
+    from app.projects.flow_metrics.service import seeds
+
+    definitions = seeds()
+
+    def simultaneous_seeds():
+        barrier.wait(timeout=15)
+        return definitions
+
+    app = application(uri, schema, f"{schema}_init")
+    with app.app_context(), patch(
+        "app.projects.flow_metrics.service.seeds", side_effect=simultaneous_seeds,
+    ):
+        board = initialise_board()
+        output.put((board.id, board.chart_revision, len(board.charts)))
+
+
 @pytest.fixture
 def isolated_postgres():
     uri = os.environ.get("FLOW_METRICS_TEST_DATABASE_URL")
@@ -247,6 +265,68 @@ def test_processes_serialize_collection_and_recover_after_failure(isolated_postg
                     process.terminate()
                 process.join(10)
         output.close()
+
+
+def test_concurrent_fresh_initialisation_is_idempotent_and_preserves_chart_edits(isolated_postgres):
+    from app.projects.flow_metrics.collector import initialise_board
+    from app.projects.flow_metrics.service import seeds
+
+    uri, schema, _, app = isolated_postgres
+    with app.app_context():
+        db.session.delete(db.session.get(FlowSnapshot, "generated-prior"))
+        db.session.delete(db.session.get(FlowBoard, BOARD_ID))
+        db.session.add(FlowBoard(id="sample-preserved", chart_revision=5, charts=[]))
+        db.session.commit()
+    context = multiprocessing.get_context("spawn")
+    barrier = context.Barrier(2)
+    output = context.Queue()
+    processes = [context.Process(target=initialisation_worker, args=(uri, schema, barrier, output)) for _ in range(2)]
+    try:
+        for process in processes:
+            process.start()
+        assert [output.get(timeout=25) for _ in processes] == [(BOARD_ID, 0, len(seeds()))] * 2
+        for process in processes:
+            process.join(10)
+            assert process.exitcode == 0
+        with app.app_context():
+            board = db.session.get(FlowBoard, BOARD_ID)
+            board.charts = []
+            board.chart_revision = 8
+            db.session.commit()
+            assert initialise_board().chart_revision == 8
+            assert board.charts == []
+            assert db.session.get(FlowBoard, "sample-preserved").chart_revision == 5
+    finally:
+        for process in processes:
+            if process.pid is not None:
+                if process.is_alive():
+                    process.terminate()
+                process.join(10)
+        output.close()
+
+
+def test_postgres_streamed_metadata_and_cutoff_preserve_snapshot_evidence_fallback(isolated_postgres):
+    from app.projects.flow_metrics.archive import snapshot_document
+    from app.projects.flow_metrics.datasets import initialise_sample
+    from app.projects.flow_metrics.workspace import exploratory_dataset, observation_for
+
+    _, _, _, app = isolated_postgres
+    with app.app_context():
+        initialise_sample(json.loads(Path("app/projects/flow_metrics/sample-seed.json").read_text()))
+        snapshot = db.session.get(FlowSnapshot, "generated-prior")
+        original = snapshot_document(snapshot)
+        key = retain_evidence(original)
+        later = {**original, "captured_at": "2000-01-02T12:00:00+00:00", "captured_date": "2000-01-02"}
+        later_key = retain_evidence(later)
+        db.session.commit()
+        metadata = exploratory_dataset()
+        assert len(metadata["realCaptures"]) == 2, "Published evidence replaces its identical daily snapshot"
+        assert metadata["realObservations"] == []
+        assert "Draft item" in metadata["realOptions"]["repository"]
+        assert observation_for("1999-12-31") is None
+        assert observation_for("2000-01-01")["id"] == key
+        assert observation_for("2000-01-03")["id"] == later_key
+        assert db.session.get(FlowEvidence, key).document == original
 
 
 @pytest.mark.parametrize("single", [False, True])

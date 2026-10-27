@@ -14,10 +14,12 @@ export function configureSampleData(dataset) {
   eventData = dataset;
   Object.assign(HISTORY, dataset.history);
   const realItems = (dataset.realObservations || []).flatMap((observation) => observation.items);
-  TEAMS.splice(0, TEAMS.length, ...new Set([...dataset.teams, ...realItems.map((ticket) => ticket.team)]));
+  const realOptions = dataset.realOptions || {};
+  TEAMS.splice(0, TEAMS.length, ...new Set([...dataset.teams, ...(realOptions.team || realItems.map((ticket) => ticket.team))]));
   const statuses = new Set(dataset.tickets.flatMap((ticket) =>
     ticket.events.filter((event) => event.type === "status").map((event) => event.value)));
   realItems.forEach((ticket) => statuses.add(ticket.status));
+  (realOptions.status || []).forEach(status => statuses.add(status));
   STATUSES.splice(0, STATUSES.length, ...new Set([...["Icebox", "TODO", "In Progress", "In Review", "Blocked / On Hold", "Done"].filter((status) => statuses.has(status)), ...statuses]));
   TICKETS.splice(0, TICKETS.length, ...dataset.tickets.map((ticket) => ({
     ...ticket, created: dayNumber(ticket.created), provenance: "synthetic", sourceId: ticket.id,
@@ -27,14 +29,43 @@ export function configureSampleData(dataset) {
     const key = field[0];
     if (key === "team") field[2] = TEAMS;
     else if (key === "source") field[2] = ["Fictional", "Genuine"];
-    else if (key === "sprint") field[2] = [...new Set([...dataset.sprints.map((sprint) => sprint.name), ...realItems.map((ticket) => ticket.sprint)])].sort();
+    else if (key === "sprint") field[2] = [...new Set([...dataset.sprints.map((sprint) => sprint.name), ...(realOptions.sprint || realItems.map((ticket) => ticket.sprint))])].sort();
     else if (["repository", "type", "planned", "objective", ...SAMPLE_METADATA_FIELDS].includes(key)) {
       field[2] = [...new Set([...TICKETS, ...realItems.filter((ticket) => ticket.availableFields?.includes(key))]
-        .flatMap((ticket) => ticket[key]).filter((value) => value !== undefined))].sort();
+        .flatMap((ticket) => ticket[key]).filter((value) => value !== undefined).concat(realOptions[key] || []))].sort();
     }
     else if (!["status", "is", "title", "from", "to"].includes(key)) field[2] = undefined;
   });
 }
+export function setRealObservation(observation) {
+  eventData.realObservations = observation ? [observation] : [];
+}
+
+export function observationLoader(captures, load) {
+  let cachedKey;
+  let cachedRequest;
+  return async (filters) => {
+    validateFilters(filters);
+    const { resolved } = resolveFilters(filters);
+    const to = resolved.to || HISTORY.to;
+    const selected = captures.filter(capture => capture.capturedAt.slice(0, 10) <= to).at(-1);
+    if (!selected) return null;
+    const key = `${selected.source}:${selected.id}:${selected.capturedAt}`;
+    if (cachedKey !== key) {
+      cachedKey = key;
+      const request = load(to).catch(error => {
+        if (cachedRequest === request) {
+          cachedKey = undefined;
+          cachedRequest = undefined;
+        }
+        throw error;
+      });
+      cachedRequest = request;
+    }
+    return cachedRequest;
+  };
+}
+
 export function configureLiveData(metadata) {
   liveData = true;
   eventData = null;

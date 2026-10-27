@@ -12,7 +12,8 @@ from app.shared.routes.main import main
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
     app = Flask("app")
     app.config.update(TESTING=True, SECRET_KEY="test-only")
     app.register_blueprint(main)
@@ -174,6 +175,50 @@ def test_workspace_heading_title_and_source_are_configured(client, monkeypatch):
     assert "Cloud Platform - Flow Metrics" in html
     assert 'href="https://github.com/orgs/example/projects/42"' in html
     assert "Cloud Platform board</a>" in html
+    assert html.count("Project #42</a>") == 2
+    assert "Project #152" not in html
+    assert "Developer Experience" not in html
+    assert 'id="current-workspace-name"' in html
+
+
+@pytest.mark.parametrize("enabled", [None, "false", "true"])
+def test_feature_flag_controls_home_and_all_workspace_routes(client, monkeypatch, enabled):
+    if enabled is None:
+        monkeypatch.delenv("FLOW_METRICS_ENABLED", raising=False)
+    else:
+        monkeypatch.setenv("FLOW_METRICS_ENABLED", enabled)
+    assert ('href="/flow-metrics/"' in client.get("/").get_data(as_text=True)) is (enabled == "true")
+    for path in ["", "api/workspace", "api/collection-health", "api/observation?to=2026-10-20"]:
+        response = client.get(f"/flow-metrics/{path}")
+        assert response.status_code == (302 if enabled == "true" else 404)
+    for path in ["api/charts", "api/result"]:
+        assert client.post(f"/flow-metrics/{path}", json={}).status_code == (302 if enabled == "true" else 404)
+
+
+def test_deferred_receiver_and_processor_are_not_registered(client, monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_WEBHOOK_ENABLED", "true")
+    assert client.post("/flow-metrics/webhook").status_code == 404
+    assert client.get("/flow-metrics/api/webhook-health").status_code == 404
+    commands = client.application.test_cli_runner().invoke(args=["flow-metrics", "--help"])
+    assert commands.exit_code == 0
+    assert "process-deliveries" not in commands.output
+    assert "init" in commands.output
+
+
+def test_local_auth_disabled_still_requires_explicit_feature_enablement(client, monkeypatch):
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", False):
+        monkeypatch.delenv("FLOW_METRICS_ENABLED", raising=False)
+        assert client.get("/flow-metrics/").status_code == 404
+        monkeypatch.setenv("FLOW_METRICS_ENABLED", "true")
+        assert client.get("/flow-metrics/").status_code == 200
+
+
+def test_configured_admin_name_is_escaped_as_text(client, monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_WORKSPACE_NAME", '<b>Team & "Platform"</b>')
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", False):
+        html = client.get("/flow-metrics/").get_data(as_text=True)
+    assert '<b>Team & "Platform"</b>' not in html
+    assert "&lt;b&gt;Team &amp;" in html
 
 
 @pytest.mark.parametrize(

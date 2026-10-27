@@ -4,6 +4,7 @@ import {
   SEARCH_FIELDS, HISTORY, configureLiveData, configureSampleData, captureLabel,
   ticketReference, ticketChartLabel, ticketText, pointTicket, itemCount,
   chartHasDateAxis, datePresetRange, withDateRange, resolveFilters,
+  observationLoader, setRealObservation,
 } from "./flow-metrics-model.mjs";
 import { CALCULATIONS, CALCULATION_DEFAULTS, calculationSettings, builderError, editableRecipe } from "./flow-metrics-builder.mjs";
 import { REQUEST_VERSION, REQUEST_LIMIT, requestDetails, requestKey, parseRequests } from "./flow-metrics-admin.mjs";
@@ -16,6 +17,7 @@ let csrf;
 let previewSequence = 0;
 let saving = false;
 let pendingPreview = false;
+let loadObservation;
 const ticketLabel = "items";
 const colours = ["#1d70b8", "#b85900", "#4c2c92", "#505a5f", "#007c91", "#0b0c0c"];
 const clone = (value) => structuredClone(value);
@@ -712,20 +714,26 @@ async function renderPreview() {
   const sequence = ++previewSequence;
   if (chart) { chart.destroy(); chart = null; }
   if (!draft) return;
-  if (live) {
+  if (live || loadObservation) {
     pendingPreview = true;
+    result = null;
     $("export-csv").disabled = true;
     $("result-summary").textContent = "Loading...";
     $("chart-view").hidden = true;
     $("table-view").hidden = true;
+    $("drill-down").hidden = true;
     await new Promise((resolve) => setTimeout(resolve, 350));
     if (sequence !== previewSequence) return;
     try {
-      const response = await apiRequest("result", draft);
+      const response = live ? await apiRequest("result", draft) : await loadObservation(draft.filters);
       if (sequence !== previewSequence) return;
-      result = response;
+      if (live) result = response;
+      else {
+        setRealObservation(response);
+        result = buildResult(draft);
+      }
       pendingPreview = false;
-      TICKETS.splice(0, TICKETS.length, ...result.tickets);
+      if (live) TICKETS.splice(0, TICKETS.length, ...result.tickets);
     } catch (error) {
       if (sequence !== previewSequence) return;
       result = null;
@@ -952,7 +960,13 @@ syncPickers.push(enhanceIconSelect("y-axis", (measure) => chartIcon(measure.star
     csrf = workspace.csrf;
     workspaceRevision = workspace.revision;
     if (live) configureLiveData(workspace);
-    else configureSampleData(workspace.dataset);
+    else {
+      configureSampleData(workspace.dataset);
+      loadObservation = observationLoader(workspace.dataset.realCaptures, async (to) => {
+        const response = await apiRequest(`observation?to=${encodeURIComponent(to)}`);
+        return response.observation;
+      });
+    }
     charts = workspace.charts;
     $("new-chart").disabled = false;
     select(new URL(window.location.href).searchParams.get("chart"));
@@ -1436,7 +1450,7 @@ function openTeamSetup(trigger, team = "") {
   openAdminPanel("admin-setup", trigger, team ? "admin-project-url" : "admin-team-name", team ? `Set up ${team}` : "Add team board");
 }
 $("add-team-board").addEventListener("click", event => openTeamSetup(event.currentTarget));
-$("manage-current-board").addEventListener("click", event => openAdminPanel("admin-manage", event.currentTarget, "admin-dialog-title", "Developer Experience"));
+$("manage-current-board").addEventListener("click", event => openAdminPanel("admin-manage", event.currentTarget, "admin-dialog-title", $("current-workspace-name").textContent));
 document.querySelectorAll("[data-close-admin]").forEach(button => button.addEventListener("click", () => closeAdminPanel()));
 $("close-admin-dialog").addEventListener("click", () => closeAdminPanel());
 $("admin-dialog").addEventListener("cancel", event => {

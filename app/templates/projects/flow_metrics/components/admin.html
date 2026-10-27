@@ -13,13 +13,13 @@
     </tr></thead>
     <tbody>
       <tr>
-        <th class="govuk-table__header" scope="row">Developer Experience</th>
-        <td class="govuk-table__cell" data-label="GitHub project"><a class="govuk-link" href="{{ source_url }}">Project #152</a></td>
+        <th id="current-workspace-name" class="govuk-table__header" scope="row">{{ workspace_name }}</th>
+        <td class="govuk-table__cell" data-label="GitHub project"><a class="govuk-link" href="{{ source_url }}">Project #{{ project_number }}</a></td>
         <td class="govuk-table__cell" data-label="Status"><strong class="govuk-tag govuk-tag--blue">Current workspace</strong></td>
         <td class="govuk-table__cell" data-label="Last run">
           <span id="collection-status" role="status">Run status unavailable.</span>
         </td>
-        <td class="govuk-table__cell" data-label="Action"><button id="manage-current-board" class="flow-link-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Manage<span class="govuk-visually-hidden"> Developer Experience</span></button></td>
+        <td class="govuk-table__cell" data-label="Action"><button id="manage-current-board" class="flow-link-button" type="button" aria-haspopup="dialog" aria-controls="admin-dialog">Manage<span class="govuk-visually-hidden"> {{ workspace_name }}</span></button></td>
       </tr>
     </tbody>
   </table>
@@ -37,8 +37,8 @@
   <div class="flow-guide-content">
 <section id="admin-manage" hidden>
   <dl class="govuk-summary-list">
-    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">GitHub project</dt><dd class="govuk-summary-list__value"><a class="govuk-link" href="{{ source_url }}">Project #152</a></dd></div>
-    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Workspace</dt><dd class="govuk-summary-list__value">Developer Experience</dd></div>
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">GitHub project</dt><dd class="govuk-summary-list__value"><a class="govuk-link" href="{{ source_url }}">Project #{{ project_number }}</a></dd></div>
+    <div class="govuk-summary-list__row"><dt class="govuk-summary-list__key">Workspace</dt><dd class="govuk-summary-list__value">{{ workspace_name }}</dd></div>
   </dl>
   <button id="admin-open-workspace" class="govuk-button govuk-button--secondary" type="button">Open workspace</button>
 </section>

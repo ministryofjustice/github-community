@@ -116,10 +116,6 @@ def test_explicit_flow_environment_is_quoted_and_does_not_enter_job(helm):
 
 
 CAPTURE_SETTINGS = (
-    "app.flowMetrics.webhook.enabled=true",
-    "app.flowMetrics.webhook.organisationId=101",
-    "app.flowMetrics.webhook.installationId=202",
-    "app.jobs.flow_metrics_process_deliveries.enabled=true",
     "app.jobs.flow_metrics_reconcile.enabled=true",
 )
 
@@ -166,18 +162,13 @@ def test_default_schedule_is_five_london_weekday_slots_across_dst(helm):
         assert datetime(*date, tzinfo=zone).isoweekday() not in range(1, 6)
 
 
-def test_enabled_receiver_uses_existing_secret_reference_not_a_helm_secret_value(helm):
+def test_receiver_and_processor_have_no_deployment_wiring(helm):
     documents = render(helm, settings=CAPTURE_SETTINGS)
     deployment, = [d for d in documents if d["kind"] == "Deployment"]
     env = {entry["name"]: entry for entry in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
     assert env["FLOW_METRICS_ENABLED"]["value"] == "true"
-    assert env["FLOW_METRICS_WEBHOOK_ENABLED"]["value"] == "true"
-    assert env["FLOW_METRICS_WEBHOOK_ORGANISATION_ID"]["value"] == "101"
-    assert env["FLOW_METRICS_WEBHOOK_INSTALLATION_ID"]["value"] == "202"
-    assert env["FLOW_METRICS_WEBHOOK_SECRET"] == {
-        "name": "FLOW_METRICS_WEBHOOK_SECRET",
-        "valueFrom": {"secretKeyRef": {"name": "flow-metrics-webhook", "key": "secret"}},
-    }
+    assert not any(name.startswith("FLOW_METRICS_WEBHOOK_") for name in env)
+    assert all(job["metadata"]["name"].endswith("-flow-metrics-reconcile") for job in capture_jobs(documents))
     assert not [d for d in documents if d["kind"] == "Secret"]
     for job in capture_jobs(documents) + sample_jobs(documents):
         job_env = job["spec"]["jobTemplate"]["spec"]["template"]["spec"]["containers"][0]["env"] if job["kind"] == "CronJob" else job["spec"]["template"]["spec"]["containers"][0]["env"]
@@ -192,7 +183,7 @@ def test_capture_jobs_have_exact_commands_bounds_security_and_least_credentials(
     )
     documents = render(helm, settings=CAPTURE_SETTINGS + credentials)
     jobs = capture_jobs(documents)
-    assert len(jobs) == 2
+    assert len(jobs) == 1
     for job in jobs:
         collector = job["metadata"]["name"].endswith("-flow-metrics-reconcile")
         spec = job["spec"]
@@ -233,48 +224,36 @@ def test_capture_jobs_have_exact_commands_bounds_security_and_least_credentials(
     assert [d for d in documents if d["kind"] == "CronJob" and d not in jobs] == original_jobs
 
 
-@pytest.mark.parametrize("setting", [
-    "app.flowMetrics.webhook.enabled=true",
-    "app.jobs.flow_metrics_process_deliveries.enabled=true",
-    "app.jobs.flow_metrics_reconcile.enabled=true",
-])
 @pytest.mark.parametrize("environment,namespace", [
     ("prod", "github-community-prod"), ("dev", "github-community-prod"),
     ("prod", "github-community-dev"),
 ])
-def test_capture_activation_fails_outside_dev(helm, setting, environment, namespace):
+def test_capture_activation_fails_outside_dev(helm, environment, namespace):
     with pytest.raises(subprocess.CalledProcessError) as error:
-        render(helm, environment, settings=(setting,), namespace=namespace)
+        render(helm, environment, settings=CAPTURE_SETTINGS, namespace=namespace)
     assert "Flow Metrics capture is DEV only" in error.value.stderr
-
-
-@pytest.mark.parametrize("setting", [
-    "app.flowMetrics.webhook.organisationId=",
-    "app.flowMetrics.webhook.installationId=0",
-    "app.flowMetrics.webhook.organisationId=not-a-number",
-    "app.flowMetrics.webhook.secretName=",
-])
-def test_enabled_receiver_rejects_missing_or_invalid_configuration(helm, setting):
-    with pytest.raises(subprocess.CalledProcessError) as error:
-        render(helm, settings=CAPTURE_SETTINGS + (setting,))
-    assert "Flow Metrics webhook" in error.value.stderr
 
 
 @pytest.mark.parametrize("setting", [
     "app.flowMetrics.webhook.enabled=true",
     "app.jobs.flow_metrics_process_deliveries.enabled=true",
-    "app.jobs.flow_metrics_reconcile.enabled=true",
 ])
-def test_capture_switches_are_independent(helm, setting):
-    settings = ("app.jobs.flow_metrics_reconcile.enabled=false", setting,
-                "app.flowMetrics.webhook.organisationId=101", "app.flowMetrics.webhook.installationId=202")
+@pytest.mark.parametrize("environment", ["dev", "prod"])
+def test_deferred_receiver_and_processor_cannot_be_enabled(helm, setting, environment):
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        render(helm, environment, settings=(setting,))
+    assert "deferred to Phase 3" in error.value.stderr
+
+
+def test_collector_long_name_and_combined_workspace(helm):
+    settings = CAPTURE_SETTINGS
     documents = render(helm, settings=settings, release="generated-long-release-name-for-flow-metrics-test")
     jobs = capture_jobs(documents)
-    assert len(jobs) == (0 if setting.startswith("app.flowMetrics.") else 1)
+    assert len(jobs) == 1
     assert all(len(job["metadata"]["name"]) <= 52 for job in jobs)
     deployment, = [d for d in documents if d["kind"] == "Deployment"]
     env = {entry["name"]: entry for entry in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
-    assert ("FLOW_METRICS_WEBHOOK_ENABLED" in env) == setting.startswith("app.flowMetrics.")
+    assert "FLOW_METRICS_WEBHOOK_ENABLED" not in env
     assert env["FLOW_METRICS_ENABLED"]["value"] == "true"
     assert env["FLOW_METRICS_DATA_MODE"]["value"] == "sample"
 

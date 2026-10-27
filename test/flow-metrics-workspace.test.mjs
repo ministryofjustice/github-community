@@ -5,6 +5,7 @@ import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
 import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, pointTicket, itemCount, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 import { editableRecipe, builderError } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
+import { observationLoader, setRealObservation } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 
 const real = (id, status = "TODO", extra = {}) => ({
   id: `real:${id}`, sourceId: id, datasetId: "ministryofjustice/152", provenance: "real",
@@ -30,6 +31,122 @@ const chart = (metric = "status", query = "", layout = "column") => ({
 });
 const total = result => result.rows.reduce((sum, row) => sum + row.value, 0);
 const ids = result => [...new Set(result.rows.flatMap(row => row.ids))].sort();
+
+test("bounded observations preserve history, source filters, exact rows, CSV and contributors", async () => {
+  const full = dataset();
+  full.realObservations[0].items[0].team = "Historical team";
+  const bounded = {
+    ...structuredClone(full), realObservations: [],
+    realCaptures: full.realObservations.map(({ capturedAt, items }, index) => ({ id: `${index}`, capturedAt, source: "generated" })),
+    realOptions: { team: ["Historical team", "DevX"], status: ["TODO", "In Progress", "Done"], sprint: ["Firebreak"] },
+  };
+  for (const [metric, to] of [["status", "2026-10-19"], ["age", "2026-10-18"], ["cycle", "2026-10-19"], ["flow", "2026-10-19"]]) {
+    for (const source of ["", " source:Fictional", " source:Genuine"]) {
+      const definition = chart(metric, `to:${to}${source}`);
+      configureSampleData(structuredClone(full));
+      const expected = buildResult(definition);
+      const csv = resultCSV(definition, expected);
+      configureSampleData(structuredClone(bounded));
+      const load = observationLoader(bounded.realCaptures, async date =>
+        structuredClone(full.realObservations.filter(entry => entry.capturedAt.slice(0, 10) <= date).at(-1)));
+      setRealObservation(await load(definition.filters));
+      const actual = buildResult(definition);
+      assert.deepEqual(actual, expected);
+      assert.equal(resultCSV(definition, actual), csv);
+      assert.ok(SEARCH_FIELDS.find(([key]) => key === "team")[2].includes("Historical team"));
+      assert.deepEqual(SEARCH_FIELDS.find(([key]) => key === "source")[2], ["Fictional", "Genuine"]);
+      if (metric === "cycle" && source.includes("Genuine")) assert.equal(actual.unavailable, "Not enough history to calculate cycle time yet.");
+    }
+  }
+});
+
+test("observation loader resolves query dates, predecessor, bounded cache and retry", async () => {
+  configureSampleData(dataset());
+  const captures = dataset().realObservations.map(({ capturedAt }, index) => ({ id: `${index}`, capturedAt, source: "generated" }));
+  const calls = [];
+  let fail = false;
+  const load = observationLoader(captures, async to => {
+    calls.push(to);
+    if (fail) throw new Error("Observation unavailable");
+    return { selected: to };
+  });
+  const filters = { ...CUSTOM_DEFAULTS.filters, to: "2026-10-19", query: "to:2026-10-18" };
+  assert.deepEqual(await load(filters), { selected: "2026-10-18" });
+  await load(filters);
+  assert.equal(calls.length, 1, "same selected capture uses one cached request");
+  await load({ ...filters, from: "2026-10-17", query: "to:2026-10-17" });
+  assert.equal(calls.at(-1), "2026-10-17", "predecessor capture before lower date remains usable");
+  assert.equal(await load({ ...filters, to: "2026-10-15", query: "" }), null);
+  assert.equal(calls.length, 2, "no later capture is substituted before first observation");
+  fail = true;
+  await assert.rejects(load(filters), /Observation unavailable/);
+  fail = false;
+  await load(filters);
+  assert.equal(calls.length, 4, "failed requests do not poison the cache");
+  await load({ ...filters, query: "to:2026-10-19" });
+  await load(filters);
+  assert.equal(calls.length, 6, "only one capture request is cached");
+});
+
+test("actual async combined preview discards stale responses and disables stale exports", async () => {
+  configureSampleData(dataset());
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, { hidden: false, disabled: false, replaceChildren() {} });
+    return elements.get(id);
+  };
+  const pending = [];
+  const context = {
+    live: false, previewSequence: 0, pendingPreview: false, chart: null, result: { old: true },
+    draft: chart("status", "to:2026-10-18"), $: element, setRealObservation, buildResult,
+    loadObservation: filters => new Promise((resolve, reject) => pending.push({ filters, resolve, reject })),
+    dirty: () => false, chartIcon: () => ({}), document: { createTextNode: text => text },
+    renderScope() {}, renderDateRanges() {}, renderTable() {}, renderList() {}, updateView() {},
+    message(text) { context.error = text; }, window: { Chart: true }, setTimeout: resolve => resolve(),
+  };
+  runInNewContext(source.slice(source.indexOf("async function renderPreview()"), source.indexOf("\nfunction closeDateRange()")), context);
+  const earlier = context.renderPreview();
+  await Promise.resolve();
+  assert.equal(element("export-csv").disabled, true);
+  assert.equal(element("chart-view").hidden, true);
+  assert.equal(context.result, null);
+  context.draft = chart("status", "to:2026-10-19");
+  const newer = context.renderPreview();
+  await Promise.resolve();
+  pending[1].resolve(dataset().realObservations[2]);
+  await newer;
+  const latest = context.result;
+  assert.ok(latest.tickets.some(item => item.sourceId === "2"));
+  pending[0].resolve(dataset().realObservations[1]);
+  await earlier;
+  assert.equal(context.result, latest);
+  const failed = context.renderPreview();
+  await Promise.resolve();
+  pending[2].reject(new Error("Cannot read observation"));
+  await failed;
+  assert.equal(context.result, null);
+  assert.equal(element("export-csv").disabled, true);
+  assert.equal(element("table-view").hidden, true);
+  assert.equal(context.error, "Cannot read observation");
+});
+
+test("Admin Manage uses the configured rendered workspace identity", () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  let handler;
+  const context = {
+    $: id => id === "manage-current-board"
+      ? { addEventListener(_type, callback) { handler = callback; } }
+      : { textContent: '<b>Team & "Platform"</b>' },
+    openAdminPanel(...args) { context.opened = args; },
+  };
+  const listener = source.split("\n").find(line => line.startsWith('$("manage-current-board").addEventListener'));
+  runInNewContext(listener, context);
+  const trigger = {};
+  handler({ currentTarget: trigger });
+  assert.deepEqual(context.opened, ["admin-manage", trigger, "admin-dialog-title", '<b>Team & "Platform"</b>']);
+  assert.match(source.slice(source.indexOf("function openAdminPanel("), source.indexOf("function openTeamSetup(")), /\$\("admin-dialog-title"\)\.textContent = title/);
+});
 
 test("date shortcuts use available history and preserve one canonical filter system", () => {
   configureSampleData(dataset());
@@ -88,6 +205,57 @@ test("actual chart configuration prefixes only plotted number clashes and preser
   assert.match(config.options.plugins.tooltip.callbacks.title([{ datasetIndex: 0, dataIndex: 0 }]), /synthetic\/developer-experience#115/);
   assert.match(config.options.plugins.tooltip.callbacks.title([{ datasetIndex: 0, dataIndex: 2 }]), /synthetic\/repository#511/);
   assert.equal(ticketChartLabel(real("115"), [real("115")]), "#115", "Repeated same item is not a clash");
+});
+
+test("bundled Chart.js preserves numeric values and orientation across layouts", () => {
+  const vendor = readFileSync(new URL("../app/static/projects/flow_metrics/vendor/chart.umd.js", import.meta.url), "utf8");
+  const Chart = runInNewContext(`${vendor}\nChart`);
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  for (const layout of ["bar", "stacked-bar", "column", "stacked-column", "histogram", "line", "area", "flow", "burnup", "scatter"]) {
+    const horizontal = ["bar", "stacked-bar"].includes(layout);
+    const scatter = layout === "scatter";
+    const values = [1, 100, 1];
+    const config = runInNewContext(`${source.slice(source.indexOf("function chartConfig()"), source.indexOf("\nfunction table("))}\nchartConfig`, {
+      draft: chart("status", "", layout), ticketChartLabel, pointTicket, ticketText,
+      ticketLabel: "items", colours: ["#1d70b8", "#b85900"],
+      result: {
+        unit: "Items", axis: "Status", tickets: [],
+        series: ["First", "Second"].map(name => ({
+          name, points: values.map((value, i) => ({ label: `Status ${i}`, value, x: Date.UTC(2026, 9, 16 + i) })),
+        })),
+      },
+    })();
+    config.options.responsive = false;
+    config.options.events = [];
+    const canvas = { width: 800, height: 400 };
+    const context = new Proxy({
+      canvas,
+      measureText: text => ({ width: String(text).length * 7 }),
+      getLineDash: () => [],
+    }, { get: (target, key) => key in target ? target[key] : () => {} });
+    canvas.getContext = () => context;
+    const rendered = new Chart(canvas, config);
+    try {
+      for (let datasetIndex = 0; datasetIndex < 2; datasetIndex++) {
+        const meta = rendered.getDatasetMeta(datasetIndex);
+        assert.deepEqual(Array.from(meta._parsed, point => point[horizontal ? "x" : "y"]), values, layout);
+        if (horizontal) {
+          assert.equal(rendered.scales.x.min, 0, layout);
+          assert.ok(meta.data[1].width > meta.data[0].width * 50, `${layout}: 100 must render much longer than 1`);
+        }
+        assert.equal(rendered.scales.x.type, horizontal || scatter ? "linear" : "category", layout);
+        assert.equal(rendered.scales.y.type, horizontal ? "category" : "linear", layout);
+        if (scatter) {
+          assert.deepEqual(Array.from(meta._parsed, point => point.x), values.map((_, i) => Date.UTC(2026, 9, 16 + i)));
+        }
+      }
+      assert.equal(rendered.scales.x.options.title.text, horizontal ? "Items" : "Status");
+      assert.equal(rendered.scales.y.options.title.text, horizontal ? "Status" : "Items");
+      assert.equal(rendered.scales.x.options.stacked, ["area", "stacked-bar", "stacked-column", "flow"].includes(layout));
+    } finally {
+      rendered.destroy();
+    }
+  }
 });
 
 test("actual drill-down uses item wording and singular/plural without shortening references", () => {

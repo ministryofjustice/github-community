@@ -11,7 +11,7 @@ import click
 import urllib3
 from github import GithubException
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.projects.flow_metrics.db_models import (
     FlowBoard,
@@ -322,10 +322,26 @@ def collect_payload(client, field_mapping=None):
     }
 
 
-def collect(client=None):
+def initialise_board():
+    """Create the real board once, without replacing concurrently saved charts."""
+    from app.projects.flow_metrics.service import seeds
+
     board = db.session.get(FlowBoard, BOARD_ID)
     if board is None:
-        raise CollectionError("flow_database_not_initialised")
+        try:
+            with db.session.begin_nested():
+                db.session.add(FlowBoard(id=BOARD_ID, chart_revision=0, charts=seeds()))
+                db.session.flush()
+        except IntegrityError:
+            if db.session.get(FlowBoard, BOARD_ID) is None:
+                raise
+        db.session.commit()
+        board = db.session.get(FlowBoard, BOARD_ID)
+    return board
+
+
+def collect(client=None):
+    board = initialise_board()
     run = FlowCollectionRun(
         id=str(uuid4()),
         board_id=BOARD_ID,

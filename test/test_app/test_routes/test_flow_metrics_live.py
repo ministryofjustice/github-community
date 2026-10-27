@@ -50,6 +50,7 @@ from app.projects.flow_metrics.service import (
     seeds,
     validate_chart,
 )
+from app.projects.flow_metrics.workspace import observation_for
 from app.shared.config.jinja_config import configure_jinja
 from app.shared.database import db
 
@@ -192,8 +193,8 @@ def test_archive_bundle_dry_run_and_atomic_rerun_preserve_mixed_workspace(app, t
         assert response.json["dataset"]["realObservations"] == combined["realObservations"]
         assert combined["tickets"] == before["tickets"]
         assert combined["realEventCoverage"]["complete"] is False
-        assert combined["realObservations"][-1]["capturedAt"].startswith("2026-10-20")
-        adapted = next(entry for entry in combined["realObservations"] if entry["source"] == "external-gh-capture")
+        assert combined["realCaptures"][-1]["capturedAt"].startswith("2026-10-20")
+        adapted = observation_for("2026-10-18")
         assert adapted["items"][0]["team"] == "Blueprint"
         assert db.session.get(FlowBoard, SAMPLE_ID).charts == []
         assert db.session.get(FlowBoard, SAMPLE_ID).chart_revision == 6
@@ -210,7 +211,7 @@ def test_archive_bundle_dry_run_and_atomic_rerun_preserve_mixed_workspace(app, t
         stale.mkdir()
         write_import_archive(stale, import_document(16))
         import_archives(stale, date(2026, 10, 16))
-        assert exploratory_dataset()["realObservations"][-1] == combined["realObservations"][-1]
+        assert exploratory_dataset()["realCaptures"][-1] == combined["realCaptures"][-1]
 
 
 @pytest.mark.parametrize("failure", [
@@ -626,7 +627,9 @@ def test_sample_database_contract_shared_saving_and_real_isolation(app, client, 
     assert workspace["provenance"] == "mixed"
     assert workspace["datasetId"] == SAMPLE_ID
     assert workspace["dataset"]["tickets"] == seed["dataset"]["tickets"]
-    assert len(workspace["dataset"]["realObservations"]) == 1
+    assert workspace["dataset"]["realObservations"] == []
+    assert len(workspace["dataset"]["realCaptures"]) == 1
+    assert len(client.get("/flow-metrics/api/observation?to=2026-10-16").json["observation"]["items"]) == 3
     charts = copy.deepcopy(workspace["charts"])
     charts[0]["name"] = "Shared fictional cycle chart"
     assert client.post("/flow-metrics/api/charts", json={"charts": charts, "revision": 0}).status_code == 403
@@ -682,6 +685,121 @@ def test_sample_init_cli_preserves_existing_empty_workspace_and_real_data(app):
         assert db.session.get(FlowSnapshot, "snapshot-test").payload == prior
         assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 0
         assert db.session.scalar(select(func.count()).select_from(FlowCollectionRun)) == 0
+
+
+def test_fresh_collector_initialises_real_board_and_preserves_repeat_edits(app, monkeypatch):
+    from app.projects.flow_metrics.collector import initialise_board
+
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    with app.app_context(), patch(
+        "app.projects.flow_metrics.collector.collect_payload", return_value=payload(),
+    ):
+        initialise_sample(sample_seed())
+        db.session.delete(db.session.get(FlowSnapshot, "snapshot-test"))
+        db.session.delete(db.session.get(FlowBoard, BOARD_ID))
+        db.session.commit()
+        assert collect(object()) == 3
+        board = db.session.get(FlowBoard, BOARD_ID)
+        assert board.charts == seeds()
+        board.charts = []
+        board.chart_revision = 7
+        db.session.commit()
+        assert collect(object()) == 3
+        assert initialise_board().chart_revision == 7
+        assert board.charts == []
+        assert db.session.get(FlowBoard, SAMPLE_ID).charts == sample_seed()["charts"]
+        assert db.session.scalar(select(func.count()).select_from(FlowCollectionRun)) == 2
+        assert app.test_cli_runner().invoke(args=["flow-metrics", "init"]).exit_code == 0
+        assert board.chart_revision == 7
+
+
+def test_bounded_workspace_keeps_history_options_and_fetches_only_cutoff_observation(app, client, monkeypatch):
+    from app.projects.flow_metrics.workspace import observation_contract
+
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    with app.app_context():
+        initialise_sample(sample_seed())
+        for day in (17, 18, 19):
+            for hour in (9, 11, 13, 15, 17):
+                document = import_document(day, hour)
+                if day == 17:
+                    document["payload"]["items"][0]["fields"][1]["name"] = "Historical team"
+                if day == 19:
+                    document["payload"]["items"] = [item("item-4", "Done")]
+                    document["item_count"] = 1
+                retain_evidence(document)
+        db.session.commit()
+    initial = client.get("/flow-metrics/api/workspace").json["dataset"]
+    assert initial["realObservations"] == []
+    assert len(initial["realCaptures"]) == 16
+    assert all(set(capture) == {"id", "source", "capturedAt"} for capture in initial["realCaptures"])
+    assert "Historical team" in initial["realOptions"]["team"]
+    assert initial["tickets"] == sample_seed()["dataset"]["tickets"]
+    with patch("app.projects.flow_metrics.workspace.observation_contract", wraps=observation_contract) as adapt:
+        before = client.get("/flow-metrics/api/observation?to=2026-10-15")
+        assert before.json == {"observation": None}
+        adapt.assert_not_called()
+        earlier = client.get("/flow-metrics/api/observation?to=2026-10-17")
+        assert earlier.headers["Cache-Control"] == "no-store"
+        assert earlier.json["observation"]["capturedAt"].startswith("2026-10-17T17:00")
+        assert len(earlier.json["observation"]["items"]) == 3
+        assert adapt.call_count == 1
+        later = client.get("/flow-metrics/api/observation?to=2026-10-20")
+        assert later.json["observation"]["capturedAt"].startswith("2026-10-19T17:00")
+        assert [item["sourceId"] for item in later.json["observation"]["items"]] == ["item-4"]
+        assert adapt.call_count == 2
+    for invalid in ("", "not-a-date", "2026-02-30", "20261017"):
+        assert client.get(f"/flow-metrics/api/observation?to={invalid}").status_code == 400
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        assert app.test_client().get("/flow-metrics/api/observation?to=2026-10-20").status_code == 302
+    with app.app_context():
+        assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 15
+        assert db.session.scalar(select(func.count()).select_from(FlowCollectionRun)) == 0
+
+
+def test_cutoff_preserves_published_tie_order_and_snapshot_fallback(app, client):
+    from app.projects.flow_metrics.archive import snapshot_document
+
+    with app.app_context():
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        fallback = observation_for("2026-10-16")
+        assert fallback["id"] == snapshot.id
+        document = snapshot_document(snapshot)
+        keys = [retain_evidence(document)]
+        alternate = copy.deepcopy(document)
+        alternate["payload"]["items"][0]["content"]["title"] = "Generated alternate at identical time"
+        keys.append(retain_evidence(alternate))
+        external = external_import_document()
+        external["collection_started_at"] = document["captured_at"]
+        external["snapshot_date"] = document["captured_date"]
+        external["collection_finished_at"] = document["captured_at"]
+        retain_evidence(external)
+        db.session.commit()
+        chosen = observation_for("2026-10-16")
+        assert chosen["source"] == "app-published-observation"
+        assert chosen["id"] == max(keys)
+        assert chosen["items"][0]["provenance"] == "real"
+        assert "status" in chosen["items"][0]["availableFields"]
+        assert chosen["items"][0]["identities"]["status"]["fieldId"] == "status-id"
+
+
+def test_snapshot_replacement_during_read_never_labels_new_payload_with_old_time(app, client):
+    from app.projects.flow_metrics.workspace import read_contract
+
+    def replace_before_read(*identity):
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        snapshot.captured_at = datetime(2026, 10, 16, 13, tzinfo=UTC)
+        snapshot.payload = payload([item("item-4")])
+        db.session.commit()
+        return read_contract(*identity)
+
+    with patch("app.projects.flow_metrics.workspace.read_contract", side_effect=replace_before_read):
+        response = client.get("/flow-metrics/api/observation?to=2026-10-16")
+    assert response.status_code == 400
+    assert "capture changed" in response.json["error"]
+    retried = client.get("/flow-metrics/api/observation?to=2026-10-16").json["observation"]
+    assert retried["capturedAt"].startswith("2026-10-16T13:00")
+    assert retried["items"][0]["sourceId"] == "item-4"
 
 
 def test_versioned_builder_settings_shared_persistence_validation_and_conflicts(app, client, monkeypatch):
@@ -1044,6 +1162,9 @@ def test_health_latest_real_evidence_not_import_time_or_configuration(app, clien
         retain_evidence(import_document(17))
         db.session.commit()
     health = client.get("/flow-metrics/api/collection-health")
+    if enabled == "false":
+        assert health.status_code == 404
+        return
     assert health.status_code == 200
     assert health.json["capturedAt"].startswith("2026-10-20T16:00:00")
     assert health.json["configured"] is (enabled == "true")
@@ -1059,19 +1180,19 @@ def test_health_latest_real_evidence_not_import_time_or_configuration(app, clien
 
 
 def test_health_imported_only_and_empty_never_use_fiction_timestamp(app, client, monkeypatch):
-    monkeypatch.setenv("FLOW_METRICS_ENABLED", "false")
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
     with app.app_context():
         initialise_sample(sample_seed())
         db.session.delete(db.session.get(FlowSnapshot, "snapshot-test"))
         db.session.commit()
     empty = client.get("/flow-metrics/api/collection-health").json
-    assert empty["capturedAt"] is None and empty["status"] == "not_configured" and empty["stale"]
+    assert empty["capturedAt"] is None and empty["status"] == "not_run" and empty["stale"]
     with app.app_context():
         retain_evidence(import_document(20))
         db.session.commit()
     imported = client.get("/flow-metrics/api/collection-health").json
     assert imported["capturedAt"].startswith("2026-10-20T12:00:00")
-    assert imported["status"] == "not_configured"
+    assert imported["status"] == "not_run"
     assert imported["latestRun"] is None
 
 
@@ -1689,9 +1810,9 @@ def test_combined_external_adapter_is_lossless_handles_old_metadata_and_no_daily
         key = retain_evidence(external)
         db.session.commit()
         combined = exploratory_dataset()
-        assert len(combined["realObservations"]) == 3
-        assert len({entry["id"] for entry in combined["realObservations"]}) == 3
-        latest = combined["realObservations"][-1]
+        assert len(combined["realCaptures"]) == 3
+        assert len({entry["id"] for entry in combined["realCaptures"]}) == 3
+        latest = observation_for("2026-10-18")
         assert latest["items"][0]["sourceId"] == "item-1"
         assert "parent-issue" not in latest["items"][0]["availableFields"]
         assert latest["source"] == "external-gh-capture"

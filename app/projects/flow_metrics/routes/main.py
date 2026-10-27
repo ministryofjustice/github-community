@@ -6,14 +6,26 @@ from functools import wraps
 from pathlib import Path
 
 import click
-from flask import Blueprint, current_app, jsonify, render_template, request, session
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    jsonify,
+    render_template,
+    request,
+    session,
+)
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.projects.flow_metrics.archive import export_command
 from app.projects.flow_metrics.archive_import import import_archives_command
-from app.projects.flow_metrics.collector import BOARD_ID, collect_command
-from app.projects.flow_metrics.config import workspace_config
+from app.projects.flow_metrics.collector import (
+    BOARD_ID,
+    collect_command,
+    initialise_board,
+)
+from app.projects.flow_metrics.config import workspace_config, workspace_enabled
 from app.projects.flow_metrics.datasets import (
     SAMPLE_ID,
     import_capture_command,
@@ -23,8 +35,6 @@ from app.projects.flow_metrics.datasets import (
 from app.projects.flow_metrics.db_models import (
     FlowBoard,
     FlowCollectionRun,
-    FlowDelivery,
-    FlowEvent,
     FlowEvidence,
 )
 from app.projects.flow_metrics.reconciliation import reconcile_command
@@ -32,16 +42,19 @@ from app.projects.flow_metrics.service import (
     metadata,
     observation_at,
     result,
-    seeds,
     validate_chart,
 )
-from app.projects.flow_metrics.webhooks import process_command, receive
-from app.projects.flow_metrics.workspace import exploratory_dataset
+from app.projects.flow_metrics.workspace import exploratory_dataset, observation_for
 from app.shared.database import db
 from app.shared.middleware.auth import requires_auth
 
 flow_metrics_main = Blueprint("flow_metrics_main", __name__, cli_group=None)
-flow_metrics_main.add_url_rule("/webhook", "webhook", receive, methods=["POST"])
+
+
+@flow_metrics_main.before_request
+def require_enabled_workspace():
+    if not workspace_enabled():
+        abort(404)
 
 
 @flow_metrics_main.get("/")
@@ -135,30 +148,6 @@ def collection_health():
     return response
 
 
-@flow_metrics_main.get("/api/webhook-health")
-@requires_auth
-def webhook_health():
-    """Aggregate inbox states only; never expose delivery payloads."""
-    try:
-        response = jsonify(
-            enabled=os.getenv("FLOW_METRICS_WEBHOOK_ENABLED") == "true",
-            deliveries=dict(db.session.execute(
-                select(FlowDelivery.status, func.count()).group_by(FlowDelivery.status)
-            ).all()),
-            evidence=dict(db.session.execute(
-                select(FlowEvent.quality, func.count()).group_by(FlowEvent.quality)
-            ).all()),
-            historicalCoverageComplete=False,
-        )
-    except SQLAlchemyError:
-        db.session.rollback()
-        current_app.logger.error("Flow Metrics webhook health database unavailable.")
-        response = jsonify(error="Webhook inbox status is unavailable.")
-        response.status_code = 503
-    response.headers["Cache-Control"] = "no-store"
-    return response
-
-
 def api(function):
     @wraps(function)
     @requires_auth
@@ -218,6 +207,14 @@ def workspace():
     return response
 
 
+@flow_metrics_main.get("/api/observation")
+@api
+def observation():
+    response = jsonify(observation=observation_for(request.args.get("to", "")))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @flow_metrics_main.post("/api/charts")
 @api
 def save_charts():
@@ -270,9 +267,7 @@ def commands():
 @commands.command("init")
 def initialise():
     """Seed the configured board once, after applying migrations."""
-    if db.session.get(FlowBoard, BOARD_ID) is None:
-        db.session.add(FlowBoard(id=BOARD_ID, chart_revision=0, charts=seeds()))
-        db.session.commit()
+    initialise_board()
     click.echo("Flow Metrics board initialised; existing shared charts preserved.")
 
 
@@ -283,4 +278,3 @@ commands.add_command(reconcile_command)
 commands.add_command(init_sample_command)
 commands.add_command(import_capture_command)
 commands.add_command(remove_sample_command)
-commands.add_command(process_command)

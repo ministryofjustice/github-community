@@ -935,7 +935,8 @@ class TestLandingPages(RepositoryStatsTestCase):
         self.assertIn("govuk-breadcrumbs", body)
 
     def test_community_home_has_four_project_cards(self):
-        response, body = self.get("/")
+        with patch.dict(os.environ, {"FLOW_METRICS_ENABLED": "true"}):
+            response, body = self.get("/")
         self.assertEqual(response.status_code, 200)
         cards = re.findall(
             r'<h3 class="govuk-heading-s govuk-!-margin-bottom-1">\s*<a href="([^"]+)"[^>]*>([^<]+)</a>',
@@ -964,6 +965,26 @@ class TestLandingPages(RepositoryStatsTestCase):
         self.assertIn(
             "Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice.",
             body,
+        )
+    def test_community_home_has_three_project_cards_when_flow_metrics_unset(self):
+        with patch.dict(os.environ):
+            os.environ.pop("FLOW_METRICS_ENABLED", None)
+            response, body = self.get("/")
+        self.assertEqual(response.status_code, 200)
+        cards = re.findall(
+            r'<h3 class="govuk-heading-s govuk-!-margin-bottom-1">\s*<a href="([^"]+)"[^>]*>([^<]+)</a>',
+            body,
+        )
+        self.assertEqual(
+            cards,
+            [
+                ("/repository-standards/", "GitHub Repository Standards"),
+                (
+                    "https://github.com/ministryofjustice/github-actions",
+                    "Shared GitHub Actions",
+                ),
+                ("/repository-stats/", "GitHub Repository Stats"),
+            ],
         )
 
 

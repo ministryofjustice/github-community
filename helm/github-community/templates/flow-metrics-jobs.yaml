@@ -1,14 +1,14 @@
-{{- range $definition := list
-      (dict "key" "flow_metrics_process_deliveries" "suffix" "flow-metrics-process" "collect" false "deadline" 120)
-      (dict "key" "flow_metrics_reconcile" "suffix" "flow-metrics-reconcile" "collect" true "deadline" 3600) }}
-{{- $settings := index $.Values.app.jobs $definition.key | default dict }}
+{{- if or (dig "flowMetrics" "webhook" "enabled" false .Values.app) (dig "flow_metrics_process_deliveries" "enabled" false .Values.app.jobs) }}
+{{- fail "Flow Metrics webhook receiver and processor are deferred to Phase 3" }}
+{{- end }}
+{{- $settings := .Values.app.jobs.flow_metrics_reconcile | default dict }}
 {{- if $settings.enabled }}
 {{- include "app.flowMetrics.devOnly" $ }}
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "app.fullname" $ | trunc 29 | trimSuffix "-" }}-{{ $definition.suffix }}
+  name: {{ include "app.fullname" $ | trunc 29 | trimSuffix "-" }}-flow-metrics-reconcile
   labels:
     {{- include "app.labels" $ | nindent 4 }}
 spec:
@@ -21,7 +21,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 0
-      activeDeadlineSeconds: {{ $definition.deadline }}
+      activeDeadlineSeconds: 3600
       template:
         spec:
           serviceAccountName: cd-serviceaccount
@@ -31,15 +31,11 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           containers:
-            - name: {{ $definition.suffix }}
+            - name: flow-metrics-reconcile
               image: "{{ $.Values.app.deployment.image.repository }}:{{ $.Values.app.deployment.image.tag | default $.Chart.AppVersion }}"
               imagePullPolicy: IfNotPresent
               command: ["python3", "-m", "flask"]
-              {{- if $definition.collect }}
               args: ["--app", "app.app", "flow-metrics", "collect"]
-              {{- else }}
-              args: ["--app", "app.app", "flow-metrics", "process-deliveries", "--limit", "100"]
-              {{- end }}
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities:
@@ -60,11 +56,9 @@ spec:
                 - name: {{ $key }}
                   value: {{ index $.Values.app.deployment.env $key | quote }}
                 {{- end }}
-                {{- if $definition.collect }}
                 {{- range $key := list "GITHUB_APP_CLIENT_ID" "GITHUB_APP_PRIVATE_KEY" "GITHUB_APP_INSTALLATION_ID" }}
                 - name: {{ $key }}
                   value: {{ index $.Values.app.deployment.env $key | quote }}
-                {{- end }}
                 {{- end }}
                 - name: SENTRY_ENV
                   value: {{ $.Values.app.deployment.env.SENTRY_ENV | quote }}
@@ -73,5 +67,4 @@ spec:
                   value: {{ . | quote }}
                 {{- end }}
           restartPolicy: Never
-{{- end }}
 {{- end }}

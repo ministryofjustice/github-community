@@ -104,24 +104,6 @@ spec:
             - name: FLOW_METRICS_SOURCE_URL
               value: {{ . | quote }}
             {{- end }}
-            {{- if dig "flowMetrics" "webhook" "enabled" false .Values.app }}
-            {{- include "app.flowMetrics.devOnly" . }}
-            {{- $webhook := .Values.app.flowMetrics.webhook }}
-            {{- if or (not (regexMatch "^[1-9][0-9]*$" (toString $webhook.organisationId))) (not (regexMatch "^[1-9][0-9]*$" (toString $webhook.installationId))) }}
-            {{- fail "Flow Metrics webhook requires verified positive organisationId and installationId" }}
-            {{- end }}
-            - name: FLOW_METRICS_WEBHOOK_ENABLED
-              value: "true"
-            - name: FLOW_METRICS_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ required "Flow Metrics webhook secretName is required" $webhook.secretName | quote }}
-                  key: secret
-            - name: FLOW_METRICS_WEBHOOK_ORGANISATION_ID
-              value: {{ $webhook.organisationId | quote }}
-            - name: FLOW_METRICS_WEBHOOK_INSTALLATION_ID
-              value: {{ $webhook.installationId | quote }}
-            {{- end }}
 
           ports:
             - name: http
