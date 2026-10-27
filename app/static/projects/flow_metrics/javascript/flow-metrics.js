@@ -549,14 +549,14 @@ function chartConfig() {
       interaction: { mode: "nearest", intersect: true },
       scales: {
         x: {
-          type: scatter ? "linear" : "category", stacked, beginAtZero: !scatter && !horizontal,
+          type: scatter || horizontal ? "linear" : "category", stacked, beginAtZero: !scatter,
           title: { display: true, text: horizontal ? result.unit : result.axis },
           ticks: { maxTicksLimit: 9, precision: horizontal ? numericPrecision : 0, ...(scatter ? {
             stepSize: 86400000,
             callback: (value) => new Date(value).toLocaleDateString("en-GB", { timeZone: "UTC" }),
           } : {}) },
         },
-        y: { stacked, beginAtZero: true, title: { display: true, text: horizontal ? result.axis : result.unit }, ticks: { precision: horizontal ? 0 : numericPrecision } },
+        y: { type: horizontal ? "category" : "linear", stacked, beginAtZero: true, title: { display: true, text: horizontal ? result.axis : result.unit }, ticks: { precision: horizontal ? 0 : numericPrecision } },
       },
       plugins: {
         title: { display: true, text: draft.name || "Untitled chart", color: "#0b0c0c", font: { size: 18 }, padding: 12 },
