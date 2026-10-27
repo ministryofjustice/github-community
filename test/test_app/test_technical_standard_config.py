@@ -246,13 +246,12 @@ class TestCheckRecommendations(unittest.TestCase):
             "Set the repository's business-unit custom property."
         ])
 
-    def test_latest_push_advice_does_not_request_more_reviews(self):
+    def test_latest_push_disabled_does_not_produce_recommendations(self):
         check = get_pull_request_review_protection_check(
             make_review_repository(classic_count=1, classic_latest_push=False)
         )
-        self.assertEqual(check.recommendations, [
-            "Enable Require approval of the most recent reviewable push."
-        ])
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.recommendations, [])
 
     def test_ruleset_bypass_advice_does_not_request_enabled_settings(self):
         check = get_pull_request_review_protection_check(
@@ -271,7 +270,7 @@ class TestCheckRecommendations(unittest.TestCase):
 
     def test_unknown_review_setting_is_not_reported_as_disabled(self):
         check = get_pull_request_review_protection_check(
-            make_review_repository(classic_count=1, classic_latest_push=None)
+            make_review_repository(classic_count=None, classic_latest_push=None)
         )
         self.assertEqual(len(check.recommendations), 1)
         self.assertIn("could not be verified", check.recommendations[0])
@@ -847,7 +846,7 @@ class TestMitLicenseCheck(unittest.TestCase):
 
 
 class TestPullRequestReviewProtectionCheck(unittest.TestCase):
-    def test_combines_approval_count_and_latest_push_across_protection_sources(self):
+    def test_approval_count_can_come_from_either_protection_source(self):
         configurations = (
             make_review_repository(
                 classic_count=1,
@@ -884,7 +883,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         self.assertEqual(check.status, PASS)
 
-    def test_fails_classic_protection_without_latest_push_setting(self):
+    def test_passes_classic_protection_without_latest_push_setting(self):
         repository = make_review_repository(
             classic_count=1,
             classic_latest_push=False,
@@ -892,7 +891,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         check = get_pull_request_review_protection_check(repository)
 
-        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.status, PASS)
 
     def test_guidance_link_uses_the_standard_heading_anchor(self):
         repository = make_review_repository(
@@ -909,7 +908,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
             "#2-must-have-pull-request-review-protection",
         )
 
-    def test_passes_active_ruleset_with_both_requirements(self):
+    def test_passes_active_ruleset_with_required_approval(self):
         repository = make_review_repository(
             ruleset_enabled=True,
             ruleset_enforcement="active",
@@ -935,7 +934,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         self.assertEqual(check.status, FAIL)
 
-    def test_ruleset_latest_push_is_none(self):
+    def test_passes_ruleset_when_latest_push_is_none(self):
         repository = make_review_repository(
             ruleset_enabled=True,
             ruleset_enforcement="active",
@@ -946,4 +945,26 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         check = get_pull_request_review_protection_check(repository)
 
-        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.status, PASS)
+
+    def test_latest_push_setting_does_not_affect_classic_or_ruleset_result(self):
+        for source in ("classic", "ruleset"):
+            for latest_push in (True, False, None):
+                for approval_count, expected in ((0, FAIL), (None, FAIL), (1, PASS), (2, PASS)):
+                    with self.subTest(source=source, latest_push=latest_push, count=approval_count):
+                        repository = make_review_repository(
+                            classic_present=source == "classic",
+                            classic_count=approval_count,
+                            classic_latest_push=latest_push,
+                            ruleset_enabled=source == "ruleset",
+                            ruleset_enforcement="active",
+                            ruleset_bypass_actors=0,
+                            ruleset_count=approval_count,
+                            ruleset_latest_push=latest_push,
+                        )
+
+                        check = get_pull_request_review_protection_check(repository)
+
+                        self.assertEqual(check.status, expected)
+                        self.assertNotIn("most recent", check.description)
+                        self.assertTrue(all("most recent" not in advice for advice in check.recommendations))
