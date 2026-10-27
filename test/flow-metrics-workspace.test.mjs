@@ -443,13 +443,22 @@ test("union selects the latest observation, never repeats captured items or back
 
 test("real historical evidence gaps exclude genuine tickets explicitly and preserve scatter/hist totals", () => {
   configureSampleData(dataset());
+  const fictionalCycle = buildResult(chart("cycle", "source:Fictional", "scatter"));
+  assert.equal(fictionalCycle.unavailable, null);
+  assert.ok(fictionalCycle.sampleSize > 0);
+  assert.ok(ids(fictionalCycle).every(id => id.startsWith("SAMPLE-")));
   for (const metric of ["cycle", "churn", "stuck", "throughput", "flow", "progress", "velocity"]) {
     const result = buildResult(chart(metric, "sprint:Firebreak", metric === "cycle" ? "scatter" : "column"));
     assert.equal(result.coverage.genuine, 2);
     assert.equal(result.coverage.excluded, 2);
     assert.match(result.coverageText, /excluded/);
     assert.ok(ids(result).every(id => !id.startsWith("real:")));
-    assert.match(buildResult(chart(metric, "source:Genuine")).unavailable, /Verified event history/);
+    const unavailable = buildResult(chart(metric, "source:Genuine")).unavailable;
+    if (metric === "cycle") {
+      assert.equal(unavailable, "Not enough history to calculate cycle time yet.");
+    } else {
+      assert.match(unavailable, /Verified event history/);
+    }
   }
   const scatter = buildResult(chart("cycle", "", "scatter"));
   const histogram = buildResult(chart("cycle", "", "histogram"));

@@ -1,81 +1,44 @@
-# Running Flow Metrics captures
+# Flow Metrics operations
 
-DEV captures the full project board at **09:30, 11:30, 13:30, 15:30 and 17:30,
-Monday to Friday**, in `Europe/London` time. The schedule follows GMT/BST.
-Each successful capture keeps an observation; it does not reconstruct changes
-between captures.
+DEV uses combined exploration (`FLOW_METRICS_DATA_MODE=sample`): labelled
+fictional events and genuine observations, selectable through the Source filter.
+Keep the sample dataset and charts until a later phase.
 
-## Deploy
+## Collection
 
-Use the normal DEV deployment process. The schedule is enabled in DEV values:
+Automatic DEV capture is enabled by these values **after deployment**. The schedule is
+09:30, 11:30, 13:30, 15:30 and 17:30 on weekdays, in `Europe/London` time.
+Snapshots record observations, not the transitions between them.
 
-```yaml
-app:
-  jobs:
-    flow_metrics_reconcile:
-      enabled: true
-```
-
-The job uses the existing database and GitHub App credentials. It only runs with
-development values in the DEV namespace. Production collection is disabled.
+Use the normal deployment process to change
+`app.jobs.flow_metrics_reconcile.enabled` in DEV values (`true` to enable,
+`false` to disable). Collection records genuine observations regardless of the
+combined workspace display mode.
+Disabling the CronJob does not stop existing Jobs or prevent manual CLI captures.
+Check for running Jobs when disabling; keep all saved data and charts.
 
 ## Check a run
-
-Use your approved DEV context and namespace:
 
 ```sh
 kubectl --context <context> -n <namespace> get cronjobs,jobs
 kubectl --context <context> -n <namespace> logs job/<job-name>
 ```
 
-Check that the Job completed, then reload Flow Metrics. **Last updated** shows
-the latest successful observation; the Admin table's **Last run** column shows
-the latest recorded attempt time and outcome. Attempts include scheduled and
-manual collections; imports do not create attempt records. A handled
-failure keeps the previous data and reports a failed collection. Pod startup
-failures or missed runs also need checking in Kubernetes. A job killed after
-recording its start may remain marked Running; this is not a live pod check.
+**Last updated** is the latest successful observation. Admin's **Last run** is
+the latest recorded collection attempt; imports do not create run records.
+Check Kubernetes for missed, failed-start or killed Jobs that the app cannot
+reliably report.
 
-## Run a capture manually
+## Import saved captures
 
-```sh
-kubectl --context <context> -n <namespace> create job \
-  flow-metrics-manual-$(date -u +%Y%m%d%H%M%S) \
-  --from=cronjob/github-community-flow-metrics-reconcile
-```
-
-Avoid an active capture or a scheduled slot. `Forbid` prevents scheduled Jobs
-overlapping each other, but does not cover manually created Jobs.
-
-## Private local capture and import
-
-Use a separate, initialised local development database and read-only GitHub credentials.
-For an interactive `GH_TOKEN`, the collector accepts `FLOW_METRICS_LOCAL_TOKEN`
-only in the existing auth-disabled local development configuration; do not
-change hosted authentication.
-
-```sh
-FLOW_METRICS_LOCAL_TOKEN="$GH_TOKEN" uv run --locked python -m flask \
-  --app app.app flow-metrics collect
-uv run --locked python -m flask --app app.app flow-metrics export-snapshots \
-  --directory /private/path/outside-the-checkout
-```
-
-Keep archives and credentials outside Git. Transfer the reviewed archive through
-the approved private route, then use the [existing importer](archive_import.py)
-in the target environment:
+Keep private archives and credentials outside Git. Back up the target database,
+review the captures, then run the [existing importer](archive_import.py):
 
 ```sh
 python3 -m flask --app app.app flow-metrics import-archives \
   /private/archive --since YYYY-MM-DD --dry-run
 ```
 
-Check the dry-run result. Import by repeating the command without `--dry-run`
-only after approval. Do not reset existing data or change capture timestamps.
-
-## Disable
-
-Set `app.jobs.flow_metrics_reconcile.enabled=false` and redeploy through the
-normal process. Check for Jobs already running. Keep observations and charts.
-
-Webhooks are Phase 2. The receiver and inbox processor remain disabled.
+Check the result, then repeat without `--dry-run` only after approval.
+Preserve original timestamps, existing charts and both datasets. Do not enable
+collection to import archives.

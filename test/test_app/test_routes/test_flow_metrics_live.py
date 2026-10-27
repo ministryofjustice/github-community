@@ -769,7 +769,7 @@ def test_source_import_is_lossless_idempotent_separate_and_strict(app):
 def test_real_specialised_layouts_never_fall_back_to_aggregate_points(app, layout):
     with app.app_context():
         cycle = {**seeds()[0], "layout": layout}
-        assert "Reliable transition" in result(cycle)["unavailable"]
+        assert result(cycle)["unavailable"] == "Not enough history to calculate cycle time yet."
         incompatible = {**seeds()[3], "layout": layout}
         assert "require Cycle time" in result(incompatible)["unavailable"]
 
@@ -927,6 +927,10 @@ def test_unavailable_history_never_returns_fabricated_values(app):
                 continue
             data = result(chart)
             assert data["unavailable"]
+            if chart["metric"] == "cycle":
+                assert data["unavailable"] == "Not enough history to calculate cycle time yet."
+            else:
+                assert "Reliable transition or sprint-start history" in data["unavailable"]
             assert data["rows"] == []
             assert data["tickets"] == []
         chart = seeds()[3]
@@ -1225,7 +1229,9 @@ def test_api_size_limits_and_cross_session_csrf(client, app):
     )
 
 
-def test_idempotent_collection_retains_removed_item_history(app):
+@pytest.mark.parametrize("mode", ["sample", "real"])
+def test_idempotent_collection_retains_removed_item_history(app, monkeypatch, mode):
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", mode)
     with (
         app.app_context(),
         patch(

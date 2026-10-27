@@ -17,14 +17,14 @@ app:
       # Note: AUTH_ENABLED above is not passed to the pod by templates/deployment.yaml, so the app's default (auth on) applies and this lock is active in dev too.
       GITHUB_STATS_ACCESS_TEAM: "ministryofjustice/repository-stats-viewers"
       FLOW_METRICS_ENABLED: true
-      FLOW_METRICS_DATA_MODE: "real"
+      FLOW_METRICS_DATA_MODE: "sample"
 
   jobs:
     flow_metrics_process_deliveries:
       enabled: false
       schedule: "* * * * *"
     flow_metrics_reconcile:
-      enabled: false
+      enabled: true
       schedule: "30 9,11,13,15,17 * * 1-5"
       timeZone: "Europe/London"
     flow_metrics_init_sample:

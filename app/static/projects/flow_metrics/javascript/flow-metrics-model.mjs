@@ -585,7 +585,9 @@ function buildResultCore(chart, filters = chart.filters || {}) {
   if (requiresEstimation) note += " Unitless numeric Estimation uses genuine items only; fictional Points are separate. Missing estimates are excluded.";
   if (requiresPoints && eventData?.realObservations) note += " Points uses fictional estimates only, not genuine numeric Estimation.";
   const unavailable = needsHistory && !eligible.length && coverage.genuine
-    ? "Verified event history is unavailable for these genuine items."
+    ? chart.metric === "cycle"
+      ? "Not enough history to calculate cycle time yet."
+      : "Verified event history is unavailable for these genuine items."
     : requiresEstimation && !eligible.length
       ? "No matching items have a captured numeric Estimation value from the verified field."
       : requiresPoints && !eligible.length && coverage.genuine

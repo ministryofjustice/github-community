@@ -485,7 +485,11 @@ def result(chart):
         and not chart.get("calculation", {}).get("additional")
     )
     if chart["metric"] == "custom" and not individual_age and (chart["y"] in CALCULATED_MEASURES or chart["x"] in {"reporting", "completionDate", "statusBand", "durationBand", "ticket"}):
-        return {**empty, "unavailable": "This calculated recipe requires the combined event workspace; genuine verified historical coverage is not established."}
+        return {**empty, "unavailable": (
+            "Not enough history to calculate cycle time yet."
+            if chart["y"] == "averageCycle"
+            else "This calculated recipe requires the combined event workspace; genuine verified historical coverage is not established."
+        )}
     if chart["layout"] in {"scatter", "histogram"} and chart["metric"] != "cycle":
         return {
             **empty,
@@ -513,7 +517,13 @@ def result(chart):
     ):
         return {
             **empty,
-            "unavailable": "Reliable transition or sprint-start history is not available. Daily snapshots do not prove exact transition dates. No values have been inferred.",
+            "unavailable": (
+                "Not enough history to calculate cycle time yet."
+                if chart["metric"] == "cycle" or (
+                    chart["metric"] == "custom" and chart["y"] == "averageCycle"
+                )
+                else "Reliable transition or sprint-start history is not available. Daily snapshots do not prove exact transition dates. No values have been inferred."
+            ),
         }
     items = []
     for item in normalise(reporting):

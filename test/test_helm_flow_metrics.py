@@ -84,13 +84,13 @@ def test_hook_name_remains_within_kubernetes_limit(helm):
 
 
 @pytest.mark.parametrize("environment", ["dev", "prod"])
-def test_real_workspace_is_enabled_only_in_dev(helm, environment):
+def test_dev_uses_combined_exploration_with_genuine_collection(helm, environment):
     deployment, = [d for d in render(helm, environment) if d["kind"] == "Deployment"]
     env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
     assert [entry for entry in env if entry["name"].startswith("FLOW_METRICS_")] == (
         [
             {"name": "FLOW_METRICS_ENABLED", "value": "true"},
-            {"name": "FLOW_METRICS_DATA_MODE", "value": "real"},
+            {"name": "FLOW_METRICS_DATA_MODE", "value": "sample"},
         ] if environment == "dev" else []
     )
     assert not [entry for entry in env if entry["name"] == "AUTH_ENABLED"]
@@ -130,10 +130,11 @@ def capture_jobs(documents):
 
 
 @pytest.mark.parametrize("environment", ["dev", "prod"])
-def test_scheduled_capture_is_disabled_by_default(helm, environment):
+def test_scheduled_capture_is_enabled_only_in_dev(helm, environment):
     documents = render(helm, environment)
     jobs = capture_jobs(documents)
-    assert jobs == []
+    assert len(jobs) == (1 if environment == "dev" else 0)
+    assert all(job["metadata"]["name"].endswith("-flow-metrics-reconcile") for job in jobs)
     assert not [d for d in documents if d["kind"] == "Secret"]
 
 
@@ -144,12 +145,12 @@ def test_dev_capture_can_be_disabled_for_rollback(helm):
     env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
     assert {entry["name"]: entry["value"] for entry in env if entry["name"].startswith("FLOW_METRICS_")} == {
         "FLOW_METRICS_ENABLED": "true",
-        "FLOW_METRICS_DATA_MODE": "real",
+        "FLOW_METRICS_DATA_MODE": "sample",
     }
 
 
-def test_enabled_schedule_is_five_london_weekday_slots_across_dst(helm):
-    job, = capture_jobs(render(helm, settings=("app.jobs.flow_metrics_reconcile.enabled=true",)))
+def test_default_schedule_is_five_london_weekday_slots_across_dst(helm):
+    job, = capture_jobs(render(helm))
     minute, hours, day, month, weekdays = job["spec"]["schedule"].split()
     assert (minute, day, month, weekdays) == ("30", "*", "*", "1-5")
     assert hours == "9,11,13,15,17"
@@ -275,7 +276,7 @@ def test_capture_switches_are_independent(helm, setting):
     env = {entry["name"]: entry for entry in deployment["spec"]["template"]["spec"]["containers"][0]["env"]}
     assert ("FLOW_METRICS_WEBHOOK_ENABLED" in env) == setting.startswith("app.flowMetrics.")
     assert env["FLOW_METRICS_ENABLED"]["value"] == "true"
-    assert env["FLOW_METRICS_DATA_MODE"]["value"] == "real"
+    assert env["FLOW_METRICS_DATA_MODE"]["value"] == "sample"
 
 
 @pytest.mark.parametrize("environment,settings", [
