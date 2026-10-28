@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 import requests
 from flask import Flask
 
+from app.projects.flow_metrics.routes.main import flow_metrics_main
 from app.projects.repository_stats.config.visibility_config import (
     VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
@@ -193,6 +194,7 @@ def create_test_app():
     configure_jinja(app)
     app.register_blueprint(main)
     app.register_blueprint(repository_stats_main, url_prefix="/repository-stats/")
+    app.register_blueprint(flow_metrics_main, url_prefix="/flow-metrics/")
     return app
 
 
@@ -932,8 +934,42 @@ class TestLandingPages(RepositoryStatsTestCase):
         self.assertNotIn("govuk-tabs", body)
         self.assertIn("govuk-breadcrumbs", body)
 
-    def test_community_home_has_three_project_cards(self):
-        response, body = self.get("/")
+    def test_community_home_has_four_project_cards(self):
+        with patch.dict(os.environ, {"FLOW_METRICS_ENABLED": "true"}):
+            response, body = self.get("/")
+        self.assertEqual(response.status_code, 200)
+        cards = re.findall(
+            r'<h3 class="govuk-heading-s govuk-!-margin-bottom-1">\s*<a href="([^"]+)"[^>]*>([^<]+)</a>',
+            body,
+        )
+        self.assertEqual(
+            cards,
+            [
+                ("/repository-standards/", "GitHub Repository Standards"),
+                (
+                    "https://github.com/ministryofjustice/github-actions",
+                    "Shared GitHub Actions",
+                ),
+                ("/repository-stats/", "GitHub Repository Stats"),
+                ("/flow-metrics/", "Flow Metrics"),
+            ],
+        )
+        self.assertIn(
+            "View estate-wide statistics and reports across GitHub Enterprise organisations.",
+            body,
+        )
+        self.assertIn(
+            "View insights and compliance information for GitHub repositories in the Ministry of Justice.",
+            body,
+        )
+        self.assertIn(
+            "Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice.",
+            body,
+        )
+    def test_community_home_has_three_project_cards_when_flow_metrics_unset(self):
+        with patch.dict(os.environ):
+            os.environ.pop("FLOW_METRICS_ENABLED", None)
+            response, body = self.get("/")
         self.assertEqual(response.status_code, 200)
         cards = re.findall(
             r'<h3 class="govuk-heading-s govuk-!-margin-bottom-1">\s*<a href="([^"]+)"[^>]*>([^<]+)</a>',
@@ -949,18 +985,6 @@ class TestLandingPages(RepositoryStatsTestCase):
                 ),
                 ("/repository-stats/", "GitHub Repository Stats"),
             ],
-        )
-        self.assertIn(
-            "View estate-wide statistics and reports across GitHub Enterprise organisations.",
-            body,
-        )
-        self.assertIn(
-            "View insights and compliance information for GitHub repositories in the Ministry of Justice.",
-            body,
-        )
-        self.assertIn(
-            "Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice.",
-            body,
         )
 
 

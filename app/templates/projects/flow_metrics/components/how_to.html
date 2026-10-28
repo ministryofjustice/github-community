@@ -1,0 +1,115 @@
+<dialog id="how-to-dialog" class="flow-dialog flow-guide" aria-labelledby="guide-title">
+  <div class="flow-dialog-header">
+    <h2 id="guide-title" class="govuk-heading-m">How-to guide</h2>
+    <button id="close-guide" class="flow-icon-button" type="button" aria-label="Close How-to guide">&times;</button>
+  </div>
+  <div id="guide-content" class="flow-guide-content" tabindex="0" role="region" aria-label="How-to guide content">
+    <nav aria-label="Guide contents">
+      <h3 class="govuk-heading-s">Contents</h3>
+      <ul class="govuk-list">
+        <li><a class="govuk-link" href="#guide-create">Create a chart</a></li>
+        <li><a class="govuk-link" href="#guide-filter">Filter data</a></li>
+        <li><a class="govuk-link" href="#guide-recipes">Custom chart recipes</a></li>
+        <li><a class="govuk-link" href="#guide-save">Save and delete</a></li>
+        <li><a class="govuk-link" href="#guide-table">Data table and item drill-down</a></li>
+        <li><a class="govuk-link" href="#guide-export">Export CSV</a></li>
+      </ul>
+    </nav>
+    <h3 id="guide-create" class="govuk-heading-m" tabindex="-1">Create a chart</h3>
+    <p class="govuk-body">Choose <strong>New chart</strong>, enter a <strong>Chart name</strong> and select a <strong>Layout</strong>. With <strong>Chart data</strong> set to <strong>Custom chart</strong>, choose:</p>
+    <ul class="govuk-list govuk-list--bullet">
+      <li><strong>Category / axis:</strong> what to organise results by, such as Team, Sprint or Status.</li>
+      <li><strong>Measure:</strong> what to calculate, such as Count of items or Sum of Estimation.</li>
+      <li><strong>Group by:</strong> an optional way to split results into separate series.</li>
+    </ul>
+    <p class="govuk-body">Other settings appear when needed. The preview updates as you make changes. Nothing is saved until you select <strong>Save</strong>.</p>
+    <p class="govuk-body">To start from an existing chart, open <strong>Configure</strong> and choose <strong>Edit as Custom recipe</strong>. Your saved chart stays unchanged until you save. If choices cannot be used together, a message explains what to change.</p>
+    <h3 id="guide-filter" class="govuk-heading-m" tabindex="-1">Filter data</h3>
+    <p class="govuk-body">Use <strong>Filter by keyword or field</strong> above the chart. Choose suggestions or type filters, such as <code>team:Blueprint status:"In Progress"</code>. Use quotes around values with spaces. You can also enter a keyword to search item titles.</p>
+    <h4 class="govuk-heading-s">Date filters</h4>
+    <p class="govuk-body">On time-axis charts, open <strong>Filter by keyword or field &rarr; Date range</strong>. Choose <strong>2 weeks</strong>, <strong>1 month</strong>, <strong>3 months</strong>, <strong>Max</strong> or <strong>Custom range</strong> to enter From and To dates. You can also type <code>from:2026-09-14 to:2026-09-27</code>.</p>
+    <p class="govuk-body">Presets end at the latest available date and stay within recorded history. <strong>Max</strong> removes date restrictions.</p>
+    <p class="govuk-body">Filters apply to the active chart and use <strong>Save</strong> and <strong>Discard</strong>. Use dates and values available in your workspace. Remove date filters to show all history, or clear the search box to remove all search filters.</p>
+    <h4 class="govuk-heading-s">Understanding the results</h4>
+    <p class="govuk-body"><strong>Planned and unplanned work</strong> uses the board's Planned field. It does not show what was agreed at the start of a sprint or what changed later. Those are shown by separate calculations, such as <strong>Sprint-start commitment</strong> and <strong>Sprint churn</strong>.</p>
+    <p class="govuk-body"><strong>Estimation</strong> uses the numbers entered on the board, without treating them as hours, days or story points. Sums and averages include zero but leave out missing values.</p>
+    <p class="govuk-body">Some charts need recorded history. If that history is missing, the chart shows that the calculation is unavailable.</p>
+    <h3 id="guide-recipes" class="govuk-heading-m" tabindex="-1">Custom chart recipes</h3>
+    <p class="govuk-body">Set <strong>Chart data</strong> to <strong>Custom chart</strong>. Unless a recipe says otherwise, use <strong>Layout: Column</strong>, <strong>Group by: None</strong> and no filters.</p>
+    {% for heading, introduction, recipes in [
+      ('Item counts and board fields', '', [
+        ('Items by Status', 'Category / axis: Status; Measure: Count of items.'),
+        ('Items by Team', 'Category / axis: Team; Measure: Count of items.'),
+        ('Items by Sprint', 'Category / axis: Sprint; Measure: Count of items. Shows assignment at the reporting end, not sprint-start commitment.'),
+        ('Items by Repository', 'Category / axis: Repository; Measure: Count of items.'),
+        ('Items by Item type', 'Category / axis: Item type; Measure: Count of items.'),
+        ('Status by Team', 'Category / axis: Status; Measure: Count of items; Group by: Team; Layout: Stacked column.'),
+        ('Planned and unplanned work by Sprint', 'Category / axis: Sprint; Measure: Sum of Estimation; Group by: Planned and unplanned work.'),
+        ('Planned and unplanned item counts by Team', 'Category / axis: Planned and unplanned work; Measure: Count of items; Group by: Team.')
+      ]),
+      ('Estimation', '', [
+        ('Sum of Estimation by Team', 'Category / axis: Team; Measure: Sum of Estimation.'),
+        ('Average Estimation by Team', 'Category / axis: Team; Measure: Average Estimation.'),
+        ('Sum of Estimation by Sprint', 'Category / axis: Sprint; Measure: Sum of Estimation.'),
+        ('Average Estimation by Sprint', 'Category / axis: Sprint; Measure: Average Estimation.')
+      ]),
+      ('Age and cycle time', 'Durations use calendar days, including zero for work started and completed on the same day. Cycle time runs from first entering In Progress to the latest completion. Items reopened and still unfinished are excluded.', [
+        ('Average unfinished age by Team', 'Category / axis: Team; Measure: Unfinished work item age; Duration calculation: Average.'),
+        ('Average unfinished age by Status', 'Category / axis: Status; Measure: Unfinished work item age; Duration calculation: Average.'),
+        ('Individual unfinished age', 'Category / axis: Item; Measure: Unfinished work item age; Duration calculation: Individual items; Layout: Bar.'),
+        ('Average cycle time by Team', 'Category / axis: Team; Measure: Cycle time; Duration calculation: Average.'),
+        ('Average cycle time by Sprint', 'Category / axis: Sprint; Measure: Cycle time; Duration calculation: Average.'),
+        ('Cycle-time scatter chart', 'Category / axis: Completion date; Measure: Cycle time; Layout: Scatter. One point per completed item.'),
+        ('Cycle-time histogram', 'Category / axis: Cycle-time band; Measure: Cycle time; Layout: Histogram; Duration band width (days): 3.')
+      ]),
+      ('Throughput and stuck work', 'Stuck work includes items in In Progress, In Review or Blocked / On Hold. A threshold of 7 includes items in that status for seven days or more.', [
+        ('Weekly throughput', 'Category / axis: Completion date; Measure: Completed items; Reporting interval: Weekly.'),
+        ('Daily throughput by Team', 'Category / axis: Completion date; Measure: Completed items; Reporting interval: Daily; Group by: Team.'),
+        ('Stuck items by Team', 'Category / axis: Team; Measure: Days in current status; Duration calculation: Count items; Days in current status at least: 7.'),
+        ('Stuck days by item', 'Category / axis: Item; Measure: Days in current status; Duration calculation: Individual items; Days in current status at least: 7; Layout: Bar.'),
+        ('Days-in-status bands', 'Category / axis: Days-in-status band; Measure: Days in current status; Duration calculation: Count items; Duration band width (days): 3; Days in current status at least: 0.')
+      ]),
+      ('Sprint scope and progress', 'These calculations need recorded sprint history. Add a Sprint filter to focus on one sprint.', [
+        ('Sprint churn changes', 'Category / axis: Sprint; Measure: Added sprint scope; Additional measure: Removed sprint scope; Scope change counting: Count events; Layout: Stacked column. Counts repeat additions and removals.'),
+        ('Sprint churn items', 'Category / axis: Sprint; Measure: Added sprint scope; Additional measure: Removed sprint scope; Scope change counting: Distinct items per sprint; Layout: Stacked column. An item can appear in both series.'),
+        ('Sprint-start commitment', 'Category / axis: Sprint; Measure: Sprint-start commitment; Sprint measure unit: Item count.'),
+        ('Committed, added and removed scope', 'Category / axis: Sprint; Measure: Committed, added and removed scope; Group by: Scope change (Committed / Added / Removed).'),
+        ('Sprint progress', 'Category / axis: Reporting date; Measure: Sprint scope; Additional measure: Completed in sprint; Reporting interval: Daily; Layout: Burn up.'),
+        ('Completed-in-sprint counts', 'Category / axis: Sprint; Measure: Completed in sprint; Sprint measure unit: Item count.')
+      ]),
+      ('Trends over time', '', [
+        ('Cumulative flow', 'Category / axis: Reporting date; Measure: Historical point-in-time count; Group by: Status; Reporting interval: Daily; Layout: Cumulative flow.'),
+        ('Historical counts by Team', 'Category / axis: Reporting date; Measure: Historical point-in-time count; Group by: Team; Reporting interval: Weekly; Layout: Line. Uses the Team at the selected reporting end, not necessarily its Team on each earlier date.')
+      ])
+    ] %}
+    <h4 class="govuk-heading-s">{{ heading }}</h4>
+    {% if introduction %}<p class="govuk-body">{{ introduction }}</p>{% endif %}
+    <div class="flow-table-scroll" tabindex="0" role="region" aria-label="{{ heading }} recipes">
+      <table class="govuk-table">
+        <thead><tr><th class="govuk-table__header" scope="col">Desired chart</th><th class="govuk-table__header" scope="col">Choices</th></tr></thead>
+        <tbody>
+          {% for desired, choices in recipes %}
+          <tr><td class="govuk-table__cell">{{ desired }}</td><td class="govuk-table__cell">{{ choices }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+    <h3 id="guide-save" class="govuk-heading-m" tabindex="-1">Save and delete</h3>
+    <ul class="govuk-list govuk-list--bullet">
+      <li><strong>Save</strong> updates the shared chart for everyone with workspace access.</li>
+      <li><strong>Save as new</strong> creates a separate chart.</li>
+      <li><strong>Discard</strong> removes unsaved changes and restores the saved chart.</li>
+    </ul>
+    <p class="govuk-body"><strong>Save</strong> and <strong>Discard</strong> are disabled when nothing has changed.</p>
+    <p class="govuk-body"><strong>Delete chart</strong> asks for confirmation before removing the shared chart. It does not delete GitHub items or their underlying data.</p>
+    <h3 id="guide-table" class="govuk-heading-m" tabindex="-1">Data table and item drill-down</h3>
+    <p class="govuk-body">Select <strong>Data table</strong> for exact values. Select an item count or chart point to see the items behind it. Changing pages does not change the results.</p>
+    <p class="govuk-body">Item axes use short references such as <code>#511</code>. When numbers clash, those labels include the repository name, such as <code>developer-experience#115</code>. Tooltips, tables, details and CSV keep the full reference.</p>
+    <p class="govuk-body">GitHub links open the issue or pull request. Other references are text only.</p>
+    <p class="govuk-body">Sprint churn may count the same item more than once if it is added or removed several times.</p>
+    <h3 id="guide-export" class="govuk-heading-m" tabindex="-1">Export CSV</h3>
+    <p class="govuk-body">Select <strong>Export CSV</strong> to download every row, not just the page shown. The file includes filters, exact values, item references and data sources.</p>
+    <p class="govuk-body">You cannot export when there are no rows or the calculation is unavailable.</p>
+  </div>
+</dialog>

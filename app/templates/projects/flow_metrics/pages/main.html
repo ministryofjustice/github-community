@@ -1,0 +1,160 @@
+{% extends "shared/components/base.html" %}
+
+{% block pageTitle %}{{ workspace_name }} - Flow Metrics - GitHub Community{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='projects/flow_metrics/stylesheets/flow-metrics.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set admin_selected = request.args.get('view') == 'admin' %}
+<!-- Flow Metrics extends the Hub's GOV.UK/MoJ visual system: a task-led chart
+     workspace, blue/orange series, persistent chart navigation and an inline
+     configuration preview. Dataset provenance remains in API/export metadata. -->
+{{ govukBreadcrumbs({"items": [{"text": "Home", "href": "/"}, {"text": "Flow Metrics"}]}) }}
+<noscript><p class="govuk-body">Flow Metrics needs JavaScript to display charts and tables.</p></noscript>
+<div class="flow-navigation">
+  <div class="flow-tabs" role="tablist" aria-label="Flow Metrics views">
+    <button id="team-tab" class="flow-tab" role="tab" aria-selected="{{ 'false' if admin_selected else 'true' }}" aria-controls="team-panel" tabindex="{{ '-1' if admin_selected else '0' }}">Team</button>
+    <button id="admin-tab" class="flow-tab" role="tab" aria-selected="{{ 'true' if admin_selected else 'false' }}" aria-controls="admin-panel" tabindex="{{ '0' if admin_selected else '-1' }}">Admin</button>
+  </div>
+  <button id="open-guide" class="flow-link-button" type="button" aria-haspopup="dialog"{% if admin_selected %} hidden{% endif %}>How-to guide</button>
+</div>
+<section id="team-panel" role="tabpanel" aria-labelledby="team-tab" data-live="{{ 'true' if live else 'false' }}"{% if admin_selected %} hidden{% endif %}>
+  <h1 class="govuk-heading-l"><a id="data-source" class="govuk-link" href="{{ source_url }}">{{ workspace_name }} board</a></h1>
+  <p id="live-freshness" class="govuk-body-s flow-status-message" role="status">Last updated unavailable.</p>
+  <div class="flow-workspace">
+    <div class="flow-sidebar-toolbar flow-sidebar-heading">
+      <h2 class="govuk-heading-m">Charts</h2>
+      <button id="toggle-charts" class="flow-collapse-button" type="button" aria-expanded="true" aria-controls="chart-sidebar" aria-label="Hide charts">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2"/></svg>
+        <span id="toggle-charts-label">Hide</span>
+      </button>
+    </div>
+    <aside id="chart-sidebar" class="flow-sidebar" aria-label="Charts">
+      <nav id="chart-list" aria-label="Saved charts"></nav>
+      <button id="new-chart" class="govuk-button govuk-!-margin-top-4" type="button">New chart</button>
+      <button id="import-browser-charts" class="flow-link-button" type="button" hidden>Import browser charts</button>
+    </aside>
+    <div class="flow-main">
+      <section id="empty-state" hidden>
+        <h2 class="govuk-heading-l">No charts yet</h2>
+        <p class="govuk-body">Create a chart to explore {{ 'captured board observations' if live else 'the combined workspace' }}. Your team workspace starts here.</p>
+      </section>
+      <section id="chart-workspace" aria-labelledby="chart-title" hidden>
+        <div class="flow-chart-heading">
+          <div><h2 id="chart-title" class="govuk-heading-l" tabindex="-1"></h2><p id="save-state" class="govuk-body-s flow-status-message"></p></div>
+          <button id="configure-toggle" class="govuk-button govuk-button--secondary" type="button" aria-expanded="false" aria-controls="configuration">Configure</button>
+        </div>
+        <div class="flow-search-row">
+          <div class="flow-search">
+            <label class="govuk-visually-hidden" for="filter-query">Filter by keyword or field</label>
+            <svg class="flow-search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="m12 12 5 5" stroke="currentColor" stroke-width="1.5"/></svg>
+            <input id="filter-query" type="text" class="flow-search-input" placeholder="Filter by keyword or field" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="filter-suggestions" aria-describedby="search-error">
+            <div id="filter-suggestions" class="flow-search-suggestions" role="listbox" aria-label="Filter fields" hidden></div>
+            <div id="filter-date-panel" class="flow-search-suggestions flow-date-panel" role="group" aria-labelledby="filter-date-label" hidden>
+              <label id="filter-date-label" class="govuk-label" for="filter-date">From date</label>
+              <input id="filter-date" class="govuk-input" type="date">
+              <div class="flow-actions">
+                <button id="filter-date-apply" class="govuk-button" type="button">Apply date</button>
+                <button id="filter-date-cancel" class="flow-link-button" type="button">Cancel</button>
+              </div>
+            </div>
+            <div id="date-range-panel" class="flow-search-suggestions flow-date-panel" role="group" aria-labelledby="date-range-title" hidden>
+              <h3 id="date-range-title" class="govuk-heading-s">Custom date range</h3>
+              <form id="custom-date-fields">
+                <div><label class="govuk-label" for="range-from">From date</label><input id="range-from" class="govuk-input" type="date" required></div>
+                <div><label class="govuk-label" for="range-to">To date</label><input id="range-to" class="govuk-input" type="date" required></div>
+                <div class="flow-actions">
+                  <button class="govuk-button" type="submit">Apply range</button>
+                  <button id="cancel-date-range" class="flow-link-button" type="button">Cancel</button>
+                </div>
+                <p id="date-range-error" class="govuk-error-message" role="alert" hidden></p>
+              </form>
+            </div>
+          </div>
+          <button id="search-discard" class="govuk-button govuk-button--secondary" type="button" disabled>Discard</button>
+          <button id="search-save" class="govuk-button" type="button" disabled>Save</button>
+        </div>
+        <p id="search-error" class="govuk-error-message" role="alert" hidden></p>
+        <p id="flow-message" class="govuk-body-s flow-message" role="status" aria-live="polite" aria-atomic="true"></p>
+        <form id="configuration" class="flow-config" hidden>
+          <div class="flow-chart-heading">
+            <h3 class="govuk-heading-m">Configure chart</h3>
+            <button id="close-configuration" class="flow-icon-button" type="button" aria-label="Close Configure chart">&times;</button>
+          </div>
+          <div class="flow-config-grid">
+            <div><label class="govuk-label" for="chart-name">Chart name</label><input id="chart-name" class="govuk-input" maxlength="80" required></div>
+            <div><label class="govuk-label" for="layout">Layout</label><select id="layout" class="govuk-select"></select></div>
+            <div class="flow-config-wide"><label class="govuk-label" for="metric">Chart data</label><select id="metric" class="govuk-select"></select></div>
+          </div>
+          <button id="edit-recipe" class="flow-link-button govuk-!-margin-bottom-4" type="button">Edit as Custom recipe</button>
+          <fieldset id="custom-fields" class="govuk-fieldset">
+            <legend class="govuk-fieldset__legend govuk-fieldset__legend--s">Axes and grouping</legend>
+            <div class="flow-config-grid">
+              <div><label id="x-label" class="govuk-label" for="x-axis">Category / axis</label><select id="x-axis" class="govuk-select"></select></div>
+              <div><label class="govuk-label" for="group-by">Group by (optional)</label><select id="group-by" class="govuk-select"><option value="">None</option></select></div>
+              <div class="flow-config-wide"><label id="y-label" class="govuk-label" for="y-axis">Measure</label><select id="y-axis" class="govuk-select"></select></div>
+            </div>
+            <div id="calculation-fields" class="flow-config-grid">
+              <div id="interval-field"><label class="govuk-label" for="reporting-interval">Reporting interval</label><select id="reporting-interval" class="govuk-select"><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+              <div id="aggregation-field"><label class="govuk-label" for="aggregation">Duration calculation</label><select id="aggregation" class="govuk-select"><option value="individual">Individual items</option><option value="count">Count items</option><option value="sum">Sum</option><option value="average">Average</option></select></div>
+              <div id="min-days-field"><label class="govuk-label" for="min-days">Days in current status at least</label><input id="min-days" class="govuk-input govuk-input--width-4" type="number" min="0" max="365" value="0"></div>
+              <div id="bands-field"><label class="govuk-label" for="band-width">Duration band width (days)</label><input id="band-width" class="govuk-input govuk-input--width-4" type="number" min="1" max="365" value="3"></div>
+              <div id="counting-field"><label class="govuk-label" for="counting">Scope change counting</label><select id="counting" class="govuk-select"><option value="events">Count events</option><option value="tickets">Distinct items per sprint</option></select></div>
+              <div id="value-field"><label class="govuk-label" for="calculation-value">Sprint measure unit</label><select id="calculation-value" class="govuk-select"><option value="count">Item count</option><option value="points">Fictional Points</option></select></div>
+              <div id="additional-field"><label class="govuk-label" for="additional-measure">Additional measure</label><select id="additional-measure" class="govuk-select"><option value="">None</option></select></div>
+            </div>
+          </fieldset>
+          <div class="flow-config-grid">
+            <div id="threshold-field"><label class="govuk-label" for="threshold">Stuck threshold (calendar days)</label><input id="threshold" class="govuk-input govuk-input--width-4" type="number" min="1" max="365" value="7" required></div>
+          </div>
+          <p id="config-error" class="govuk-error-message" role="alert" tabindex="-1" hidden></p>
+          <div class="flow-actions">
+            <button id="save-chart" class="govuk-button" type="submit" disabled>Save</button>
+            <button id="discard-chart" class="govuk-button govuk-button--secondary" type="button" disabled>Discard</button>
+            <button id="copy-chart" class="flow-link-button" type="button">Save as new</button>
+            <button id="delete-chart" class="flow-link-button" type="button">Delete chart</button>
+          </div>
+        </form>
+        <div class="flow-chart-toolbar">
+          <div class="flow-view-buttons" role="group" aria-label="Result view">
+            <button id="show-chart" class="flow-view-button" type="button" aria-pressed="true">Chart</button>
+            <button id="show-table" class="flow-view-button" type="button" aria-pressed="false">Data table</button>
+          </div>
+          <div class="flow-actions"><button id="export-csv" class="flow-link-button" type="button">Export CSV</button></div>
+        </div>
+        <p id="result-summary" class="govuk-body-s flow-status-message" role="status"></p>
+        <div id="chart-view">
+          <div class="flow-canvas"><canvas id="chart" role="img" aria-label="Chart. Use Data table for exact values and keyboard-accessible item drill-down."></canvas></div>
+        </div>
+        <div id="table-view" class="flow-table-scroll" role="region" aria-label="Exact chart values" tabindex="0" hidden></div>
+        <p id="chart-scope" class="govuk-body-s flow-scope" aria-live="polite" aria-atomic="true"></p>
+        <section id="drill-down" class="flow-drill" aria-labelledby="drill-title" hidden>
+          <div class="flow-chart-heading"><h3 id="drill-title" class="govuk-heading-m" tabindex="-1">Sample items</h3><button id="close-drill" class="flow-link-button" type="button">Close items</button></div>
+          <div id="ticket-table" class="flow-table-scroll" role="region" aria-label="Item details" tabindex="0"></div>
+        </section>
+      </section>
+    </div>
+  </div>
+</section>
+<section id="admin-panel" role="tabpanel" aria-labelledby="admin-tab"{% if not admin_selected %} hidden{% endif %}>
+  {% include "projects/flow_metrics/components/admin.html" %}
+</section>
+<dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description" class="flow-dialog">
+  <div class="flow-dialog-header">
+    <h2 id="delete-title" class="govuk-heading-m">Delete chart?</h2>
+    <button id="close-delete" class="flow-icon-button" type="button" aria-label="Close delete confirmation">&times;</button>
+  </div>
+  <p id="delete-description" class="govuk-body govuk-!-margin-4">This will delete the chart for everyone in this workspace. This cannot be undone.</p>
+  <div class="flow-dialog-actions"><button id="cancel-delete" class="govuk-button govuk-button--secondary" type="button" autofocus>Cancel</button><button id="confirm-delete" class="govuk-button govuk-button--warning" type="button">Delete</button></div>
+</dialog>
+{% include "projects/flow_metrics/components/how_to.html" %}
+{% endblock %}
+
+{% block bodyEnd %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='projects/flow_metrics/vendor/chart.umd.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='projects/flow_metrics/javascript/flow-metrics.js') }}"></script>
+{% endblock %}

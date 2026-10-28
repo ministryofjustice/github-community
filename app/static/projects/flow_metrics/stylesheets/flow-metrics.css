@@ -1,0 +1,173 @@
+.flow-heading, .flow-chart-heading, .flow-sidebar-heading, .flow-chart-toolbar,
+.flow-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.flow-heading h1 { margin-bottom: 12px; }
+#team-panel > .govuk-heading-l { margin-bottom: 10px; }
+@media (min-width: 40.0625em) {
+  #team-panel > .govuk-heading-l { margin-bottom: 15px; }
+}
+.flow-navigation { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 2px solid #1d70b8; margin: 0 0 24px; }
+.flow-navigation #open-guide { margin-left: auto; font-size: 16px; text-align: right; }
+.flow-heading .govuk-tag { margin-bottom: 12px; }
+.flow-notice { padding: 16px 20px; background: #e8f1f8; border: 1px solid #b1b4b6; line-height: 1.5; }
+.flow-message { margin: -8px 0 16px; color: #505a5f; text-align: left; }
+.flow-message:empty { margin: 0; }
+.flow-status-message:empty { display: none; }
+.flow-message[data-error="true"] { padding: 12px; border: 2px solid #0b0c0c; color: #0b0c0c; }
+.flow-tabs { display: flex; gap: 6px; flex-shrink: 0; }
+.flow-tab { font: bold 19px "GDS Transport", arial, sans-serif; background: #f3f2f1; color: #0b0c0c; border: 0; padding: 14px 20px; cursor: pointer; }
+.flow-tab[aria-selected="true"] { background: #1d70b8; color: #fff; }
+.flow-tab span { font-size: 14px; font-weight: normal; display: block; margin-top: 4px; }
+.flow-workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 12px 24px; align-items: start; }
+.flow-sidebar-toolbar { grid-column: 1; grid-row: 1; padding-right: 16px; }
+.flow-sidebar { grid-column: 1; grid-row: 2; }
+.flow-main { grid-column: 2; grid-row: 1 / span 2; }
+.flow-workspace--collapsed { grid-template-columns: minmax(0, 1fr); }
+.flow-workspace--collapsed .flow-sidebar-toolbar { justify-content: flex-start; padding-right: 0; }
+.flow-workspace--collapsed .flow-sidebar-toolbar h2 { display: none; }
+.flow-workspace--collapsed .flow-main { grid-column: 1; grid-row: 2; }
+.flow-sidebar { border-right: 1px solid #b1b4b6; padding-right: 16px; }
+.flow-sidebar-heading h2 { margin: 0; }
+.flow-collapse-button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 0; border: 0; background: none; color: #1d70b8; font: 16px "GDS Transport", arial, sans-serif; cursor: pointer; }
+.flow-collapse-button span { text-decoration: underline; text-underline-offset: 3px; }
+.flow-collapse-button:hover span { text-decoration-thickness: 3px; }
+.flow-collapse-button[aria-expanded="false"] svg { transform: rotate(180deg); }
+.flow-chart-row { display: flex; align-items: stretch; position: relative; border-bottom: 1px solid #b1b4b6; }
+.flow-chart-link { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; text-align: left; padding: 12px 10px; color: #1d70b8; background: #fff; border: 0; font: 16px/1.4 "GDS Transport", arial, sans-serif; cursor: pointer; }
+.flow-chart-label { min-width: 0; overflow-wrap: anywhere; }
+.flow-symbol { width: 18px; height: 18px; flex: 0 0 18px; color: #505a5f; }
+#chart-title { display: flex; align-items: center; gap: 12px; }
+#chart-title .flow-symbol { width: 26px; height: 26px; flex-basis: 26px; }
+.flow-icon-button { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; padding: 4px; background: #fff; color: #505a5f; border: 1px solid #b1b4b6; border-radius: 0; cursor: pointer; font: bold 22px arial, sans-serif; list-style: none; }
+.flow-icon-button::-webkit-details-marker { display: none; }
+.flow-chart-menu { align-self: center; }
+.flow-chart-menu > summary { border: 0; }
+.flow-chart-menu[open] { z-index: 4; }
+.flow-menu-panel { position: fixed; width: 224px; box-sizing: border-box; max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); overflow-y: auto; background: #fff; border: 1px solid #b1b4b6; padding: 4px; box-shadow: 0 4px 8px rgb(11 12 12 / 20%); z-index: 6; }
+.flow-menu-action { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; background: #fff; border: 0; color: #1d70b8; text-align: left; font: 16px "GDS Transport", arial, sans-serif; cursor: pointer; }
+.flow-menu-delete { color: #942514; }
+.flow-menu-delete .flow-symbol { color: currentColor; }
+.flow-menu-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 6px 8px; margin-top: 4px; border-top: 1px solid #b1b4b6; }
+.flow-menu-footer .govuk-button { width: auto; margin: 0; padding: 7px 10px; font-size: 16px; }
+.flow-ticket-identity { display: grid; gap: 6px; min-width: 180px; }
+.flow-menu-action:hover { background: #e8f1f8; }
+.flow-menu-action:disabled { color: #505a5f; cursor: not-allowed; }
+.flow-pagination { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.flow-page-button { background: #fff; color: #1d70b8; border: 0; min-width: 36px; min-height: 36px; padding: 8px; font: 19px "GDS Transport", arial, sans-serif; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.flow-page-button[aria-current="page"] { background: #1d70b8; color: #fff; font-weight: bold; text-decoration: none; }
+.flow-page-direction { display: inline-flex; align-items: center; gap: 12px; font-weight: bold; }
+.flow-page-arrow { color: #505a5f; }
+.flow-chart-link[aria-current="true"] { background: #e8f1f8; color: #0b0c0c; font-weight: bold; box-shadow: inset 4px 0 #1d70b8; }
+.flow-chart-link:hover, .flow-link-button:hover { color: #003078; text-decoration-thickness: 3px; }
+.flow-chart-heading { align-items: start; }
+.flow-chart-heading h2 { margin-bottom: 8px; overflow-wrap: anywhere; }
+.flow-chart-heading .govuk-button { margin-bottom: 16px; }
+.flow-config { background: #f3f2f1; padding: 20px; margin-bottom: 24px; border: 1px solid #b1b4b6; }
+.flow-config h3 { margin-bottom: 8px; }
+.flow-select { position: relative; }
+.flow-select-button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px; border: 2px solid #0b0c0c; background: #fff; color: #0b0c0c; text-align: left; font: 19px "GDS Transport", arial, sans-serif; cursor: pointer; }
+.flow-select-button::after { content: ""; margin-left: auto; border: solid currentColor; border-width: 0 2px 2px 0; padding: 3px; transform: rotate(45deg); }
+.flow-select-options { position: relative; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid #b1b4b6; margin-top: 4px; padding: 4px; }
+.flow-select-options [role="option"] { min-height: 40px; }
+.flow-select-options [role="option"]:focus-visible, .flow-select-button:focus-visible { outline: 3px solid #ffdd00; outline-offset: -3px; box-shadow: inset 0 -3px #0b0c0c; }
+.flow-select-options [aria-selected="true"] { background: #e8f1f8; font-weight: bold; }
+.flow-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-bottom: 24px; }
+.flow-config-wide { grid-column: 1 / -1; }
+.flow-config .govuk-select { max-width: 100%; width: 100%; }
+.flow-config .govuk-hint { margin-bottom: 0; font-size: 16px; }
+.flow-chart-filters { border-top: 1px solid #b1b4b6; padding-top: 16px; margin-bottom: 24px; }
+.flow-config .govuk-input[type="date"] { min-width: 0; }
+.flow-scope { color: #0b0c0c; font-weight: normal; line-height: 1.5; margin: 16px 0 20px; overflow-wrap: anywhere; }
+.flow-actions { justify-content: flex-start; }
+.flow-actions .govuk-button { margin-bottom: 0; }
+.flow-link-button { color: #1d70b8; background: none; border: 0; padding: 8px 0; font: 16px "GDS Transport", arial, sans-serif; text-decoration: underline; cursor: pointer; }
+.flow-link-button:disabled { color: #505a5f; cursor: not-allowed; text-decoration: none; }
+.flow-evidence { color: #505a5f; line-height: 1.5; }
+.flow-chart-toolbar { border-bottom: 1px solid #b1b4b6; padding-bottom: 12px; margin-top: 24px; }
+.flow-view-buttons { display: flex; }
+.flow-view-button { border: 1px solid #1d70b8; padding: 10px 14px; background: #fff; color: #1d70b8; font: 16px "GDS Transport", arial, sans-serif; cursor: pointer; }
+.flow-view-button[aria-pressed="true"] { background: #1d70b8; color: #fff; }
+.flow-canvas { position: relative; height: 390px; }
+.flow-table-scroll { position: relative; overflow-x: auto; }
+.flow-table-scroll .govuk-table { font-size: 16px; }
+.flow-table-scroll caption { text-align: left; margin-bottom: 12px; }
+.flow-drill { margin-top: 28px; padding-top: 20px; border-top: 2px solid #0b0c0c; }
+.flow-dialog { box-sizing: border-box; width: 440px; max-width: calc(100% - 32px); max-height: calc(100% - 32px); padding: 0; border: 1px solid #b1b4b6; background: #fff; color: #0b0c0c; }
+.flow-dialog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; padding: 20px; border-bottom: 1px solid #b1b4b6; }
+.flow-dialog-header .govuk-heading-m { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.flow-dialog-header .flow-icon-button { flex-shrink: 0; font-size: 28px; }
+.flow-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 15px; padding: 0 20px 20px; }
+.flow-dialog-actions .govuk-button { width: auto; margin: 0; }
+.flow-dialog::backdrop { background: rgb(11 12 12 / 55%); }
+.flow-guide { width: 900px; height: min(85vh, 900px); }
+.flow-guide[open] { display: flex; flex-direction: column; }
+.flow-guide > .flow-dialog-header { flex-shrink: 0; }
+.flow-guide-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.flow-guide-content .govuk-heading-m { scroll-margin-top: 20px; }
+.flow-guide-content .govuk-heading-m:not(:first-child) { margin-top: 30px; }
+.flow-guide-content .govuk-table__cell:first-child { width: 30%; font-weight: 700; }
+@media (max-width: 640px) {
+  .flow-guide { width: calc(100% - 16px); max-width: calc(100% - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
+  .flow-guide-content { padding: 15px; }
+}
+.flow-tab:focus-visible, .flow-chart-link:focus-visible, .flow-link-button:focus-visible,
+.flow-view-button:focus-visible, .flow-icon-button:focus-visible, .flow-menu-action:focus-visible,
+.flow-page-button:focus-visible, .flow-collapse-button:focus-visible { outline: 3px solid #ffdd00; outline-offset: 0; background: #ffdd00; color: #0b0c0c; box-shadow: 0 3px #0b0c0c; }
+.flow-main { min-width: 0; }
+.flow-search-row { display: flex; gap: 8px; align-items: start; margin: 0 0 20px; }
+.flow-search-row > .govuk-button { margin: 0; padding: 8px 12px; font-size: 16px; width: auto; }
+.flow-search { position: relative; flex: 1; min-width: 0; }
+.flow-search-icon { position: absolute; top: 8px; left: 10px; color: #505a5f; pointer-events: none; }
+.flow-search-input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 7px 10px 7px 32px; border: 1px solid #b1b4b6; border-radius: 5px; color: #0b0c0c; font: 16px "GDS Transport", arial, sans-serif; background: #fff; }
+.flow-search-input:focus { outline: 2px solid #1d70b8; outline-offset: -1px; }
+.flow-search-suggestions { position: absolute; top: calc(100% + 6px); left: 0; z-index: 5; width: 340px; box-sizing: border-box; max-width: calc(100vw - 64px); max-height: 290px; overflow-y: auto; background: #fff; border: 1px solid #b1b4b6; border-radius: 5px; padding: 4px; box-shadow: 0 4px 12px rgb(11 12 12 / 20%); }
+.flow-search-option { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 4px 10px; box-sizing: border-box; cursor: pointer; color: #0b0c0c; font: 16px "GDS Transport", arial, sans-serif; }
+.flow-option-label { min-width: 0; overflow-wrap: anywhere; }
+.flow-search-option small { margin-left: auto; flex-shrink: 0; padding-left: 8px; font-size: 12px; color: #505a5f; }
+.flow-search-option[aria-disabled="true"] { cursor: not-allowed; }
+.flow-search-option[aria-selected="true"], .flow-search-option[aria-disabled="false"]:hover { background: #e8f1f8; outline: 1px solid #1d70b8; border-radius: 3px; }
+.flow-date-panel { padding: 16px; box-sizing: border-box; }
+.flow-date-panel .govuk-input { width: 100%; min-width: 0; margin: 8px 0 16px; }
+.flow-date-panel .govuk-button { font-size: 16px; width: auto; }
+#search-error { grid-column: 1; }
+.flow-admin-table .govuk-table__cell, .flow-admin-table .govuk-table__header { vertical-align: middle; }
+.flow-admin-table { min-width: 640px; }
+.flow-admin-table .flow-link-button { white-space: nowrap; text-align: left; }
+.flow-admin-dialog { width: 640px; }
+.flow-admin-dialog[open] { display: flex; flex-direction: column; }
+.flow-admin-dialog > .flow-dialog-header { flex-shrink: 0; }
+.flow-admin-dialog .govuk-summary-list__value { overflow-wrap: anywhere; }
+.flow-admin-request { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 15px 20px; padding: 20px 0; border-block: 1px solid #b1b4b6; }
+.flow-admin-request .govuk-heading-s { margin: 0; }
+.flow-admin-actions { display: flex; align-items: baseline; flex-wrap: wrap; gap: 20px; }
+@media (max-width: 640px) {
+  .flow-admin-table { min-width: 0; width: 100%; }
+  .flow-admin-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .flow-admin-table tbody, .flow-admin-table tr { display: block; }
+  .flow-admin-table tr { border-bottom: 1px solid #b1b4b6; padding: 15px 0; }
+  .flow-admin-table .govuk-table__header { display: block; border: 0; padding: 0 0 10px; }
+  .flow-admin-table .govuk-table__cell { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; border: 0; padding: 5px 0; }
+  .flow-admin-table .govuk-table__cell::before { content: attr(data-label); font-weight: bold; flex-shrink: 0; }
+}
+[hidden] { display: none !important; }
+@media (min-width: 1100px) {
+  .govuk-width-container:has(.flow-workspace) { max-width: 1280px; }
+  body:has(.flow-workspace) .moj-header__container { max-width: 1280px; }
+  #chart-workspace:has(#configuration:not([hidden])) { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 0 24px; align-items: start; }
+  #chart-workspace > :not(#configuration) { grid-column: 1; }
+  #chart-workspace #configuration { grid-column: 2; grid-row: 1 / span 14; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+  .flow-config-grid { grid-template-columns: 1fr; gap: 16px; }
+}
+@media (max-width: 760px) {
+  .flow-workspace { grid-template-columns: 1fr; gap: 20px; }
+  .flow-sidebar-toolbar { padding-right: 0; }
+  .flow-main { grid-column: 1; grid-row: 3; }
+  .flow-sidebar { border-right: 0; border-bottom: 1px solid #b1b4b6; padding: 0 0 16px; }
+  #chart-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .flow-chart-link { font-size: 16px; }
+  .flow-config-grid { grid-template-columns: 1fr; }
+  .flow-config .govuk-select, .flow-config .govuk-input { width: 100%; max-width: none; min-width: 0; }
+  .flow-tab { padding: 12px; }
+  .flow-canvas { height: 330px; }
+  .flow-search-row { flex-wrap: wrap; }
+  .flow-search { flex-basis: 100%; }
+}
