@@ -48,7 +48,17 @@ def get_all_technical_standard_checks(
     ]
 
 
+def _unverified_feedback(subject: str) -> str:
+    return (
+        f"{subject} could not be verified by GitHub Community. "
+        "Check back after the next scheduled data collection. "
+        "If this persists, contact #ask-developer-experience."
+    )
+
+
 def _review_recommendations(protection, rulesets, settings) -> list[str]:
+    if protection.present is None or rulesets.enabled is None:
+        return [_unverified_feedback("The required review protection")]
     if protection.present is True:
         source = protection
         prefix = "classic"
@@ -58,13 +68,14 @@ def _review_recommendations(protection, rulesets, settings) -> list[str]:
         prefix = "ruleset"
         recommendations = []
         if rulesets.pull_request_enforcement != "active":
-            recommendations.append(
-                "Verify that the pull request ruleset is active and applies to the default branch."
-            )
+            if rulesets.pull_request_enforcement is None:
+                recommendations.append(_unverified_feedback("Pull request ruleset enforcement"))
+            else:
+                recommendations.append("Verify that the pull request ruleset is active and applies to the default branch.")
         bypass_count = rulesets.pull_request_bypass_actors_length
         if bypass_count is None:
             recommendations.append(
-                "The ruleset bypass list could not be verified. Check access and refresh the report."
+                _unverified_feedback("The ruleset bypass settings")
             )
         elif bypass_count > 0:
             recommendations.append("Remove bypass actors from the pull request ruleset.")
@@ -78,10 +89,25 @@ def _review_recommendations(protection, rulesets, settings) -> list[str]:
         value = getattr(source, classic if prefix == "classic" else ruleset, None)
         if value is None:
             recommendations.append(
-                f"The setting could not be verified. Check access and refresh the report: {action}"
+                _unverified_feedback("The required review setting")
             )
         elif value is False or value == 0:
-            recommendations.append(action)
+            if (
+                prefix == "classic"
+                and rulesets.enabled is True
+                and (
+                    rulesets.pull_request_enforcement is None
+                    or rulesets.pull_request_bypass_actors_length is None
+                    or (
+                        rulesets.pull_request_enforcement == "active"
+                        and rulesets.pull_request_bypass_actors_length == 0
+                        and getattr(rulesets, ruleset, None) is None
+                    )
+                )
+            ):
+                recommendations.append(_unverified_feedback("The required review protection across branch protection and rulesets"))
+            else:
+                recommendations.append(action)
     return recommendations
 
 
@@ -95,7 +121,7 @@ def get_authoritative_owner_check(
         (repository.data.basic.business_unit or "").strip()
     )
     has_admin_team_with_two_maintainers = any(
-        repository.data.access.team_admin_maintainer_counts.get(team, 0) >= 2
+        (repository.data.access.team_admin_maintainer_counts.get(team, 0) or 0) >= 2
         for team in repository.data.access.teams_with_admin
     )
 
@@ -108,16 +134,17 @@ def get_authoritative_owner_check(
     recommendations = []
     if custom_properties_available is False:
         recommendations.append(
-            "The business-unit custom property could not be verified. "
-            "Check GitHub App repository access and refresh the report."
+            _unverified_feedback("The business-unit custom property")
         )
     elif not property_is_set:
         recommendations.append("Set the repository's business-unit custom property.")
     if not has_admin_team_with_two_maintainers:
-        recommendations.append(
-            "Ensure a team has Admin access and at least two team maintainers; "
-            "verify team membership access if maintainer data is unavailable."
-        )
+        counts = repository.data.access.team_admin_maintainer_counts
+        admin_teams = repository.data.access.teams_with_admin
+        if any(team not in counts or counts[team] is None for team in admin_teams):
+            recommendations.append(_unverified_feedback("Admin-team maintainer counts"))
+        else:
+            recommendations.append("Ensure a team has Admin access and at least two team maintainers.")
 
     return _check(
         1,
@@ -156,18 +183,24 @@ def get_branch_protection_enforced_for_admins_check(
     if protection.present is False and repository_rulesets_enabled is False:
         recommendations.append("Protect the default branch using branch protection or an active ruleset.")
     if protection.present is None:
-        recommendations.append("Classic branch protection data is unavailable. Check access and refresh the report.")
+        recommendations.append(_unverified_feedback("Classic branch protection"))
     elif protection.present is True and not classic_safe:
-        recommendations.append(
-            "Verify that classic branch protection applies to administrators "
-            "by enabling Do not allow bypassing the above settings."
-        )
+        if protection.enforce_admins_enabled is None:
+            recommendations.append(_unverified_feedback("Administrator enforcement for classic branch protection"))
+        else:
+            recommendations.append(
+                "Verify that classic branch protection applies to administrators "
+                "by enabling Do not allow bypassing the above settings."
+            )
     if repository_rulesets_enabled is None:
-        recommendations.append("Repository branch ruleset data is unavailable. Refresh the report data to verify its scope.")
+        recommendations.append(_unverified_feedback("Repository branch rulesets"))
     elif repository_rulesets_enabled is True and not rulesets_safe:
-        recommendations.append(
-            "Verify that all applicable repository branch rulesets are active and their bypass lists are empty."
-        )
+        if rulesets.repository_branch_rulesets_enforced_without_bypass is None:
+            recommendations.append(_unverified_feedback("Repository ruleset enforcement and bypass settings"))
+        else:
+            recommendations.append(
+                "Verify that all applicable repository branch rulesets are active and their bypass lists are empty."
+            )
 
     return _check(
         3,
@@ -194,6 +227,11 @@ def get_signed_commits_check(repository: RepositoryView) -> TechnicalStandardChe
         if classic_signing_enforced or ruleset_signing_enforced
         else FAIL
     )
+    signing_unknown = (
+        protection.present is None
+        or (protection.present is True and protection.required_signatures is None)
+        or rulesets.required_signatures_ruleset_enforced_without_bypass is None
+    )
 
     return _check(
         4,
@@ -202,7 +240,8 @@ def get_signed_commits_check(repository: RepositoryView) -> TechnicalStandardChe
         status,
         "Only commits with a valid verified signature are permitted on the default branch.",
         [
-            "Signed-commit enforcement was not confirmed. Enable Require signed commits "
+            _unverified_feedback("Signed-commit enforcement") if signing_unknown else
+            "Enable Require signed commits "
             "on the default branch using classic protection or an active ruleset with no bypass actors."
         ],
     )
@@ -281,13 +320,13 @@ def get_no_high_critical_security_alerts_check(
     ):
         if overdue is None:
             recommendations.append(
-                f"{source} SLA data is unavailable or incomplete. Check that {setting} and refresh the report data."
+                f"{source} SLA data is unavailable or incomplete. Check that {setting}."
             )
         elif overdue:
             recommendations.append(action)
     if secret_count is None:
         recommendations.append(
-            "Secret Scanning data is unavailable. Check that Secret Scanning is enabled and refresh the report data."
+            "Secret Scanning data is unavailable. Check that Secret Scanning is enabled."
         )
     elif secret_count > 0:
         recommendations.append("Resolve open Secret Scanning alerts.")
@@ -334,12 +373,16 @@ def get_code_owner_reviews_check(
         else FAIL
     )
     recommendations = []
-    if repository.data.codeowners_file_present is not True:
+    if repository.data.codeowners_file_present is None:
+        recommendations.append(_unverified_feedback("The presence of a CODEOWNERS file"))
+    elif repository.data.codeowners_file_present is False:
         recommendations.append(
-            "A CODEOWNERS file was not confirmed. Add one on the default branch "
+            "Add a CODEOWNERS file on the default branch "
             "in .github/CODEOWNERS, CODEOWNERS or docs/CODEOWNERS."
         )
-    elif repository.data.codeowners_file_valid is not True:
+    elif repository.data.codeowners_file_valid is None:
+        recommendations.append(_unverified_feedback("CODEOWNERS validation"))
+    elif repository.data.codeowners_file_valid is False:
         recommendations.append(
             "Verify that CODEOWNERS contains ownership entries and has no GitHub validation errors."
         )
@@ -440,14 +483,6 @@ def get_pull_request_review_protection_check(
         if protection.present is False
         else None
     )
-    classic_latest_push = (
-        protection.require_last_push_approval
-        if protection.present is True
-        else False
-        if protection.present is False
-        else None
-    )
-
     ruleset_state_unknown = (
         ruleset.enabled is None
         or (
@@ -467,22 +502,16 @@ def get_pull_request_review_protection_check(
         ruleset.enabled is True and not ruleset_state_unknown and not ruleset_is_effective
     ):
         ruleset_approval_count = 0
-        ruleset_latest_push = False
     elif ruleset_is_effective:
         ruleset_approval_count = ruleset.pull_request_required_approving_review_count
-        ruleset_latest_push = ruleset.pull_request_require_last_push_approval
     else:
         ruleset_approval_count = None
-        ruleset_latest_push = None
 
     approval_count_passes = (
         (classic_approval_count or 0) >= 1
         or (ruleset_approval_count or 0) >= 1
     )
-    latest_push_passes = (
-        classic_latest_push is True or ruleset_latest_push is True
-    )
-    status = PASS if approval_count_passes and latest_push_passes else FAIL
+    status = PASS if approval_count_passes else FAIL
 
     recommendations = []
     if status == FAIL:
@@ -491,11 +520,6 @@ def get_pull_request_review_protection_check(
             and ruleset.pull_request_enforcement == "active"
             and (ruleset.pull_request_bypass_actors_length or 0) > 0
             and (ruleset.pull_request_required_approving_review_count or 0) >= 1
-            and ruleset.pull_request_require_last_push_approval is True
-            and not (
-                (classic_approval_count or 0) >= 1
-                and classic_latest_push is True
-            )
         )
         if ruleset_bypass_blocks_configured_requirement:
             recommendations.append(
@@ -506,20 +530,11 @@ def get_pull_request_review_protection_check(
                 (classic_approval_count is None)
                 or (ruleset_approval_count is None)
             )
-            latest_push_unknown = (
-                (classic_latest_push is None) or (ruleset_latest_push is None)
-            )
             if not approval_count_passes:
                 recommendations.append(
-                    "The required approval count could not be verified. Check branch protection and ruleset access, then refresh the report."
+                    _unverified_feedback("The required approval count")
                     if approval_count_unknown
                     else "Require at least one approving pull request review."
-                )
-            if not latest_push_passes:
-                recommendations.append(
-                    "Approval of the most recent reviewable push could not be verified. Check branch protection and ruleset access, then refresh the report."
-                    if latest_push_unknown
-                    else "Enable Require approval of the most recent reviewable push."
                 )
 
     return _check(
@@ -527,6 +542,6 @@ def get_pull_request_review_protection_check(
         "Must have pull request review protection",
         "2-must-have-pull-request-review-protection",
         status,
-        "The default branch requires at least one approval, including approval of the most recent reviewable push.",
+        "Pull requests targeting the default branch require at least one approving review before merge.",
         recommendations,
     )
