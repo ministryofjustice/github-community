@@ -226,6 +226,32 @@ class TestSecurityAlertDeadlines(unittest.TestCase):
 
 
 class TestCheckRecommendations(unittest.TestCase):
+    def test_unknown_data_feedback_signposts_support_without_configuration_claims(self):
+        repository = SimpleNamespace(data=RepositoryInfo(
+            basic=BasicRepositoryInfo("repo", "public", True, "main"),
+            access=RepositoryAccess([], [], [], []),
+        ))
+        for check in get_all_technical_standard_checks(repository):
+            if check.number not in {2, 3, 4, 6, 8}:
+                continue
+            with self.subTest(check=check.number):
+                self.assertEqual(check.status, FAIL)
+                self.assertTrue(check.recommendations)
+                for advice in check.recommendations:
+                    self.assertIn("#ask-developer-experience", advice)
+                    self.assertIn("next scheduled data collection", advice)
+                    self.assertNotIn("Check access", advice)
+                    self.assertNotIn("Enable ", advice)
+                    self.assertNotIn("Add one", advice)
+
+    def test_unknown_maintainer_count_does_not_claim_team_needs_more_maintainers(self):
+        repository = make_repository("OCTO", ["team"], {})
+        check = get_authoritative_owner_check(repository)
+        self.assertEqual(check.status, FAIL)
+        self.assertEqual(len(check.recommendations), 1)
+        self.assertIn("#ask-developer-experience", check.recommendations[0])
+        self.assertNotIn("Ensure a team", check.recommendations[0])
+
     def test_all_failed_requirements_have_recommendations(self):
         repository = SimpleNamespace(data=RepositoryInfo(
             basic=BasicRepositoryInfo("repo", "public", True, "master"),
@@ -246,13 +272,12 @@ class TestCheckRecommendations(unittest.TestCase):
             "Set the repository's business-unit custom property."
         ])
 
-    def test_latest_push_advice_does_not_request_more_reviews(self):
+    def test_latest_push_disabled_does_not_produce_recommendations(self):
         check = get_pull_request_review_protection_check(
             make_review_repository(classic_count=1, classic_latest_push=False)
         )
-        self.assertEqual(check.recommendations, [
-            "Enable Require approval of the most recent reviewable push."
-        ])
+        self.assertEqual(check.status, PASS)
+        self.assertEqual(check.recommendations, [])
 
     def test_ruleset_bypass_advice_does_not_request_enabled_settings(self):
         check = get_pull_request_review_protection_check(
@@ -271,7 +296,7 @@ class TestCheckRecommendations(unittest.TestCase):
 
     def test_unknown_review_setting_is_not_reported_as_disabled(self):
         check = get_pull_request_review_protection_check(
-            make_review_repository(classic_count=1, classic_latest_push=None)
+            make_review_repository(classic_count=None, classic_latest_push=None)
         )
         self.assertEqual(len(check.recommendations), 1)
         self.assertIn("could not be verified", check.recommendations[0])
@@ -294,7 +319,7 @@ class TestCheckRecommendations(unittest.TestCase):
             make_admin_enforcement_repository()
         )
         self.assertEqual(len(check.recommendations), 2)
-        self.assertTrue(all("unavailable" in item for item in check.recommendations))
+        self.assertTrue(all("could not be verified" in item for item in check.recommendations))
 
     def test_codeowners_advice_only_requests_missing_file(self):
         check = get_code_owner_reviews_check(
@@ -305,7 +330,7 @@ class TestCheckRecommendations(unittest.TestCase):
             )
         )
         self.assertEqual(len(check.recommendations), 1)
-        self.assertIn("Add one on the default branch", check.recommendations[0])
+        self.assertIn("Add a CODEOWNERS file on the default branch", check.recommendations[0])
 
     def test_stale_review_advice_is_separate_from_latest_push(self):
         check = get_stale_reviews_check(
@@ -329,7 +354,7 @@ class TestCheckRecommendations(unittest.TestCase):
             make_security_alerts_repository(None, 0)
         )
         self.assertEqual(check.recommendations, [
-            "Code Scanning SLA data is unavailable or incomplete. Check that Code Scanning is enabled and refresh the report data."
+            "Code Scanning SLA data is unavailable or incomplete. Check that Code Scanning is enabled."
         ])
 
     def test_passing_security_check_has_no_recommendations(self):
@@ -359,8 +384,22 @@ class TestCheckRecommendations(unittest.TestCase):
         )
         self.assertEqual(check.recommendations, [
             "Resolve open High and Critical Code Scanning alerts older than 14 days.",
-            "Dependabot SLA data is unavailable or incomplete. Check that Dependabot alerts are enabled and refresh the report data.",
+            "Dependabot SLA data is unavailable or incomplete. Check that Dependabot alerts are enabled.",
         ])
+
+    def test_unavailable_scanning_feedback_does_not_request_report_refresh(self):
+        repository = make_security_alerts_repository(None, None)
+        repository.data.security_alerts.open_secret_scanning_count = None
+
+        check = get_no_high_critical_security_alerts_check(repository)
+
+        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.recommendations, [
+            "Code Scanning SLA data is unavailable or incomplete. Check that Code Scanning is enabled.",
+            "Dependabot SLA data is unavailable or incomplete. Check that Dependabot alerts are enabled.",
+            "Secret Scanning data is unavailable. Check that Secret Scanning is enabled.",
+        ])
+        self.assertTrue(all("refresh" not in advice.lower() for advice in check.recommendations))
 
 
 class TestAuthoritativeOwnerCheck(unittest.TestCase):
@@ -491,7 +530,7 @@ class TestBranchProtectionEnforcedForAdminsCheck(unittest.TestCase):
         repository.data.default_branch_ruleset.repository_branch_rulesets_enforced_without_bypass = None
         check = get_branch_protection_enforced_for_admins_check(repository)
         self.assertEqual(check.status, FAIL)
-        self.assertIn("Refresh the report data", check.recommendations[0])
+        self.assertIn("Check back after the next scheduled data collection", check.recommendations[0])
 
     def test_passes_when_classic_protection_enforces_for_admins(self):
         repository = make_admin_enforcement_repository(
@@ -847,7 +886,7 @@ class TestMitLicenseCheck(unittest.TestCase):
 
 
 class TestPullRequestReviewProtectionCheck(unittest.TestCase):
-    def test_combines_approval_count_and_latest_push_across_protection_sources(self):
+    def test_approval_count_can_come_from_either_protection_source(self):
         configurations = (
             make_review_repository(
                 classic_count=1,
@@ -884,7 +923,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         self.assertEqual(check.status, PASS)
 
-    def test_fails_classic_protection_without_latest_push_setting(self):
+    def test_passes_classic_protection_without_latest_push_setting(self):
         repository = make_review_repository(
             classic_count=1,
             classic_latest_push=False,
@@ -892,7 +931,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         check = get_pull_request_review_protection_check(repository)
 
-        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.status, PASS)
 
     def test_guidance_link_uses_the_standard_heading_anchor(self):
         repository = make_review_repository(
@@ -909,7 +948,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
             "#2-must-have-pull-request-review-protection",
         )
 
-    def test_passes_active_ruleset_with_both_requirements(self):
+    def test_passes_active_ruleset_with_required_approval(self):
         repository = make_review_repository(
             ruleset_enabled=True,
             ruleset_enforcement="active",
@@ -935,7 +974,7 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         self.assertEqual(check.status, FAIL)
 
-    def test_ruleset_latest_push_is_none(self):
+    def test_passes_ruleset_when_latest_push_is_none(self):
         repository = make_review_repository(
             ruleset_enabled=True,
             ruleset_enforcement="active",
@@ -946,4 +985,26 @@ class TestPullRequestReviewProtectionCheck(unittest.TestCase):
 
         check = get_pull_request_review_protection_check(repository)
 
-        self.assertEqual(check.status, FAIL)
+        self.assertEqual(check.status, PASS)
+
+    def test_latest_push_setting_does_not_affect_classic_or_ruleset_result(self):
+        for source in ("classic", "ruleset"):
+            for latest_push in (True, False, None):
+                for approval_count, expected in ((0, FAIL), (None, FAIL), (1, PASS), (2, PASS)):
+                    with self.subTest(source=source, latest_push=latest_push, count=approval_count):
+                        repository = make_review_repository(
+                            classic_present=source == "classic",
+                            classic_count=approval_count,
+                            classic_latest_push=latest_push,
+                            ruleset_enabled=source == "ruleset",
+                            ruleset_enforcement="active",
+                            ruleset_bypass_actors=0,
+                            ruleset_count=approval_count,
+                            ruleset_latest_push=latest_push,
+                        )
+
+                        check = get_pull_request_review_protection_check(repository)
+
+                        self.assertEqual(check.status, expected)
+                        self.assertNotIn("most recent", check.description)
+                        self.assertTrue(all("most recent" not in advice for advice in check.recommendations))
