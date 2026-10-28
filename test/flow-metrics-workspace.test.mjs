@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
 import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, pointTicket, itemCount, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 import { editableRecipe, builderError } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
-import { observationLoader, setRealObservation } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
+import { observationLoader, setRealObservation, usesObservedHistory, setObservedResult, resultTicket, mergeObservedResult, SEEDS } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 
 const real = (id, status = "TODO", extra = {}) => ({
   id: `real:${id}`, sourceId: id, datasetId: "ministryofjustice/152", provenance: "real",
@@ -31,6 +31,85 @@ const chart = (metric = "status", query = "", layout = "column") => ({
 });
 const total = result => result.rows.reduce((sum, row) => sum + row.value, 0);
 const ids = result => [...new Set(result.rows.flatMap(row => row.ids))].sort();
+
+const projection = (series = [], extra = {}) => ({
+  series, rows: series.flatMap(group => group.points.map(row => ({ ...row, series: group.name }))),
+  tickets: [], itemStates: {}, captures: ["2026-10-28T12:00:00Z"], unit: "Items",
+  baselineComplete: false, unavailable: "Captured history is insufficient for this calculation.", note: "Observed between captures.",
+  ...extra,
+});
+
+test("all default built-ins and editable charts keep sample history when genuine history is insufficient", () => {
+  const data = dataset();
+  data.fictionalHistory = { ...SAMPLE_DATA.history };
+  data.history.to = "2026-10-28";
+  configureSampleData(data);
+  for (const definition of SEEDS) {
+    setObservedResult(null);
+    const sample = buildResult(definition);
+    assert.equal(sample.unavailable, null, definition.metric);
+    assert.ok(sample.sampleSize > 0, definition.metric);
+    setObservedResult(projection());
+    const combined = buildResult(definition);
+    assert.equal(combined.unavailable, null, definition.metric);
+    assert.deepEqual(combined.rows, sample.rows);
+    assert.deepEqual(buildResult(editableRecipe(definition)).rows, combined.rows, `${definition.metric} editable`);
+  }
+  for (const metric of ["flow", "progress", "throughput", "churn", "velocity"]) {
+    setObservedResult(null);
+    const filtered = chart(metric, "source:Fictional from:2026-10-20 to:2026-10-28");
+    const result = buildResult(filtered);
+    assert.equal(result.rows.length, 0, `${metric}: no sample continuation after its last date`);
+  }
+  for (const measure of ["count", "averageCycle", "points"]) {
+    const custom = { ...chart("custom", "source:Fictional from:2026-10-20 to:2026-10-28"), x: "completed", y: measure };
+    assert.equal(buildResult(custom).rows.length, 0, `${measure}: no invented sample-only week`);
+  }
+});
+
+test("observed projections preserve mixed series, null baselines, exact row states, CSV and real links", () => {
+  const data = dataset();
+  data.fictionalHistory = { ...SAMPLE_DATA.history };
+  data.history.to = "2026-10-28";
+  configureSampleData(data);
+  const original = real("1", "TODO", { observedAt: "2026-10-18T12:00:00Z" });
+  const latest = real("1", "Done", { observedAt: "2026-10-28T12:00:00Z" });
+  const point = {
+    key: "2026-10-18", label: "18 Oct", value: 1, ids: ["real:1"],
+    stateIds: { "real:1": "real:1@earlier" }, observedAt: original.observedAt, timeBasis: "observation",
+  };
+  setObservedResult(projection([{ name: "TODO", points: [point] }], {
+    tickets: [latest], itemStates: { "real:1@earlier": original }, unavailable: null,
+  }));
+  const definition = chart("flow");
+  const result = buildResult(definition);
+  assert.ok(ids(result).some(id => id.startsWith("SAMPLE-")));
+  const row = result.rows.find(row => row.stateIds?.["real:1"]);
+  assert.equal(resultTicket(result, row, "real:1"), original);
+  assert.equal(resultTicket(result, row, "real:1").status, "TODO", "Not the final capture's status");
+  assert.equal(resultTicket(result, row, "real:1").url, latest.url);
+  assert.ok(resultCSV(definition, result).includes(original.observedAt));
+  assert.deepEqual(buildResult(editableRecipe(definition)).rows, result.rows);
+  const genuineOnly = buildResult(chart("flow", "source:Genuine"));
+  assert.deepEqual(ids(genuineOnly), ["real:1"], "An explicit Genuine source never injects samples");
+  setObservedResult(projection([], { captures: [], baselineComplete: null, unavailable: null }));
+  const fictionalOnly = buildResult(chart("flow", "source:Fictional"));
+  assert.ok(ids(fictionalOnly).every(id => id.startsWith("SAMPLE-")));
+  assert.ok(fictionalOnly.rows.every(row => row.key <= SAMPLE_DATA.history.to));
+  const sample = { ...result, series: [], rows: [], tickets: [], unavailable: "Missing baseline" };
+  const observed = projection([
+    { name: "Committed", points: [{ ...point, ids: [], stateIds: {}, value: null }] },
+    { name: "Completed", points: [{ ...point, value: 1 }] },
+  ], { tickets: [latest], unavailable: null });
+  const merged = mergeObservedResult(sample, observed);
+  assert.equal(merged.rows[0].value, null);
+  assert.equal(merged.rows[1].value, 1);
+  assert.equal(merged.unavailable, null, "Missing baseline doesn't suppress supported completed scope");
+  const compressed = { ...merged, itemStates: { stable: { ...original, observedAt: undefined } } };
+  const historicalRow = { ...point, stateIds: { "real:1": "stable" }, stateObservedAt: { "real:1": original.observedAt } };
+  assert.equal(resultTicket(compressed, historicalRow, "real:1").observedAt, original.observedAt);
+  setObservedResult(null);
+});
 
 test("bounded observations preserve history, source filters, exact rows, CSV and contributors", async () => {
   const full = dataset();
@@ -88,7 +167,7 @@ test("observation loader resolves query dates, predecessor, bounded cache and re
   assert.equal(calls.length, 6, "only one capture request is cached");
 });
 
-test("actual async combined preview discards stale responses and disables stale exports", async () => {
+for (const metric of ["status", "flow"]) test(`actual async ${metric} preview discards stale responses and disables stale exports`, async () => {
   configureSampleData(dataset());
   const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
   const elements = new Map();
@@ -97,9 +176,15 @@ test("actual async combined preview discards stale responses and disables stale 
     return elements.get(id);
   };
   const pending = [];
+  const projections = [];
   const context = {
     live: false, previewSequence: 0, pendingPreview: false, chart: null, result: { old: true },
-    draft: chart("status", "to:2026-10-18"), $: element, setRealObservation, buildResult,
+    draft: chart(metric, "to:2026-10-18"), $: element, setRealObservation, buildResult,
+    usesObservedHistory, resolveFilters, HISTORY, setObservedResult,
+    apiRequest: (route, definition) => new Promise((resolve, reject) => {
+      assert.equal(route, "observed-result");
+      projections.push({ definition, resolve, reject });
+    }),
     loadObservation: filters => new Promise((resolve, reject) => pending.push({ filters, resolve, reject })),
     dirty: () => false, chartIcon: () => ({}), document: { createTextNode: text => text },
     renderScope() {}, renderDateRanges() {}, renderTable() {}, renderList() {}, updateView() {},
@@ -111,19 +196,28 @@ test("actual async combined preview discards stale responses and disables stale 
   assert.equal(element("export-csv").disabled, true);
   assert.equal(element("chart-view").hidden, true);
   assert.equal(context.result, null);
-  context.draft = chart("status", "to:2026-10-19");
+  context.draft = chart(metric, "to:2026-10-19");
   const newer = context.renderPreview();
   await Promise.resolve();
   pending[1].resolve(dataset().realObservations[2]);
+  if (metric === "flow") {
+    assert.equal(projections.length, 2, context.error || JSON.stringify(context.draft));
+    assert.equal(projections[1].definition.filters.to, "2026-10-19");
+    projections[1].resolve(projection());
+  }
   await newer;
   const latest = context.result;
   assert.ok(latest.tickets.some(item => item.sourceId === "2"));
   pending[0].resolve(dataset().realObservations[1]);
+  if (metric === "flow") projections[0].resolve(projection());
   await earlier;
   assert.equal(context.result, latest);
   const failed = context.renderPreview();
   await Promise.resolve();
-  pending[2].reject(new Error("Cannot read observation"));
+  if (metric === "flow") {
+    pending[2].resolve(dataset().realObservations[2]);
+    projections[2].reject(new Error("Cannot read observation"));
+  } else pending[2].reject(new Error("Cannot read observation"));
   await failed;
   assert.equal(context.result, null);
   assert.equal(element("export-csv").disabled, true);
@@ -269,7 +363,7 @@ test("actual drill-down uses item wording and singular/plural without shortening
   };
   const tickets = [real("511"), real("512")];
   const context = {
-    $: id => elements[id], result: { tickets, to: 0 },
+    $: id => elements[id], result: { tickets, to: 0 }, resultTicket,
     drillPoint: { label: ticketText(tickets[0]), ids: [tickets[0].id] },
     ticketPage: 1, PAGE_SIZE: 10, live: false, ticketReference, itemCount,
     document: { createElement: () => ({}) },

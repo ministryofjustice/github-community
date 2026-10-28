@@ -221,6 +221,7 @@ def exploratory_dataset():
                         values.update(value if isinstance(value, list) else [value])
     dataset.update(
         provenance="mixed",
+        fictionalHistory=dict(dataset["history"]),
         fictionalDatasetId=dataset["id"],
         realDatasetId=BOARD_ID,
         realObservations=[],

@@ -31,12 +31,14 @@ from app.projects.flow_metrics.datasets import (
     import_capture_command,
     init_sample_command,
     remove_sample_command,
+    sample_dataset,
 )
 from app.projects.flow_metrics.db_models import (
     FlowBoard,
     FlowCollectionRun,
     FlowEvidence,
 )
+from app.projects.flow_metrics.observed import captured_history, history_result
 from app.projects.flow_metrics.reconciliation import reconcile_command
 from app.projects.flow_metrics.service import (
     metadata,
@@ -44,7 +46,10 @@ from app.projects.flow_metrics.service import (
     result,
     validate_chart,
 )
-from app.projects.flow_metrics.workspace import exploratory_dataset, observation_for
+from app.projects.flow_metrics.workspace import (
+    exploratory_dataset,
+    observation_for,
+)
 from app.shared.database import db
 from app.shared.middleware.auth import requires_auth
 
@@ -211,6 +216,21 @@ def workspace():
 @api
 def observation():
     response = jsonify(observation=observation_for(request.args.get("to", "")))
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@flow_metrics_main.post("/api/observed-result")
+@api
+def observed_result():
+    captured = captured_history()
+    if workspace_config()["live"]:
+        history = captured or metadata()["history"]
+    else:
+        history = dict(sample_dataset().payload["history"])
+        if captured:
+            history = {"from": min(history["from"], captured["from"]), "to": max(history["to"], captured["to"])}
+    response = jsonify(history_result(request.get_json(), history))
     response.headers["Cache-Control"] = "no-store"
     return response
 

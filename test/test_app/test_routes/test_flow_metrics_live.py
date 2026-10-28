@@ -802,6 +802,239 @@ def test_snapshot_replacement_during_read_never_labels_new_payload_with_old_time
     assert retried["items"][0]["sourceId"] == "item-4"
 
 
+def observed_chart(metric="flow", query="", **changes):
+    template = copy.deepcopy(next(chart for chart in seeds() if chart["metric"] == "status"))
+    return {
+        **template, "metric": metric, "layout": "column",
+        "filters": {**template["filters"], "query": query}, **changes,
+    }
+
+
+def observed_item(identity, status="TODO", sprint="a", archived=False, team="Blueprint"):
+    value = item(f"item-{identity}", status, archived=archived)
+    value["fields"][1]["name"] = team
+    value["fields"][2].update(
+        title=f"Sprint {sprint.upper()}", iterationId=f"sprint-{sprint}",
+        startDate="2026-10-16" if sprint == "a" else "2026-10-19",
+        duration=3 if sprint == "a" else 7,
+    )
+    return value
+
+
+def seed_observed_history():
+    db.session.delete(db.session.get(FlowSnapshot, "snapshot-test"))
+    documents = [
+        (16, 9, [observed_item(1), observed_item(2, "Done")]),
+        (17, 9, [observed_item(1, "Done"), observed_item(2, "Done", archived=True), observed_item(3, sprint="b")]),
+        (17, 15, [observed_item(1, "In Progress"), observed_item(3, sprint="b")]),
+        (19, 9, [observed_item(1, "Done", sprint="b"), observed_item(4, "Done", sprint="b"), observed_item(5, sprint="b")]),
+    ]
+    for day, hour, items in documents:
+        document = import_document(day, hour)
+        document["payload"] = payload(items)
+        document["item_count"] = len(items)
+        retain_evidence(document)
+    db.session.commit()
+
+
+def test_observed_state_history_no_backfill_no_gap_interpolation_and_exact_contributors(app):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        seed_observed_history()
+        history = {"from": "2026-10-12", "to": "2026-10-19"}
+        result = history_result(observed_chart(), history)
+        sums = {}
+        for row in result["rows"]:
+            sums[row["key"]] = sums.get(row["key"], 0) + (row["value"] or 0)
+            assert row["value"] is None or row["value"] == len(row["ids"])
+            for identity, state_id in row["stateIds"].items():
+                assert result["itemStates"][state_id]["id"] == identity
+        assert sums == {"2026-10-16": 2, "2026-10-17": 2, "2026-10-19": 3}
+        assert next(row for row in result["rows"] if row["key"] == "2026-10-17" and row["series"] == "In Progress")["ids"] == ["real:item-1"]
+        assert all("real:item-2" not in row["ids"] for row in result["rows"] if row["key"] != "2026-10-16")
+        assert all("real:item-3" not in row["ids"] for row in result["rows"] if row["key"] == "2026-10-19")
+        assert result["timeBasis"] == "observation"
+        assert result["note"] == "Observed at captures."
+        assert len(result["tickets"]) == 5
+
+
+def test_observed_comparisons_count_recompletion_and_scope_membership_not_first_seen_done(app):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        seed_observed_history()
+        history = {"from": "2026-10-12", "to": "2026-10-19"}
+        completed = history_result(observed_chart("throughput"), history)
+        assert sum(row["value"] for row in completed["rows"]) == 2
+        assert {identity for row in completed["rows"] for identity in row["ids"]} == {"real:item-1"}
+        assert all("real:item-4" not in row["ids"] for row in completed["rows"]), "First-seen Done is not an observed completion"
+        distinct = history_result(observed_chart("custom", x="completionDate", y="completions",
+                                  calculation={"counting": "tickets"}), history)
+        assert sum(row["value"] for row in distinct["rows"]) == 2, "One observed completion in each reporting bucket"
+        churn = history_result(observed_chart("churn"), history)
+        added_b = next(row for row in churn["rows"] if row["series"] == "Added" and row["label"] == "Sprint B")
+        assert set(added_b["ids"]) == {"real:item-1", "real:item-4", "real:item-5"}
+        # The B assignment first observed before B starts is not an in-sprint addition.
+        assert "real:item-3" not in added_b["ids"]
+        removed_a = next(row for row in churn["rows"] if row["series"] == "Removed" and row["label"] == "Sprint A")
+        assert removed_a["ids"] == ["real:item-2"]
+        removed_b = next(row for row in churn["rows"] if row["series"] == "Removed" and row["label"] == "Sprint B")
+        assert removed_b["ids"] == ["real:item-3"]
+        assert churn["itemStates"][removed_b["stateIds"]["real:item-3"]]["actualSprint"] == "Sprint B"
+
+
+def test_observed_sprint_progress_completed_scope_baselines_points_and_recipe_groups(app):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        seed_observed_history()
+        history = {"from": "2026-10-12", "to": "2026-10-19"}
+        progress = history_result(observed_chart("progress", 'sprint:"Sprint B"'), history)
+        assert [row["value"] for row in progress["rows"] if row["series"] == "Scope"] == [0, 1, 3]
+        assert [row["value"] for row in progress["rows"] if row["series"] == "Completed"] == [0, 0, 2]
+        counts = history_result(observed_chart("velocity", calculation={"value": "count"}), history)
+        assert counts["baselineComplete"] is False
+        assert all(row["value"] is None for row in counts["rows"] if row["series"] == "Committed")
+        assert [row["value"] for row in counts["rows"] if row["series"] == "Completed"] == [0, 2]
+        points = history_result(observed_chart("velocity"), history)
+        assert all(row["value"] is None for row in points["rows"]), "Never substitute Estimation for Points"
+        custom = history_result(observed_chart("custom", x="reporting", y="historicalCount", group="status",
+                                calculation={"interval": "daily"}), history)
+        built = history_result(observed_chart("flow"), history)
+        assert custom["series"] == built["series"]
+        grouped = history_result(observed_chart("custom", x="reporting", y="historicalCount", group="team",
+                                 calculation={"interval": "daily"}), history)
+        assert [row["value"] for row in grouped["rows"]] == [2, 2, 3]
+
+
+def test_observed_endpoint_resolves_dates_loads_only_requested_history_and_updates_automatically(app, client, monkeypatch):
+    from app.projects.flow_metrics.workspace import read_contract
+
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    with app.app_context():
+        initialise_sample(sample_seed())
+        seed_observed_history()
+    headers = csrf(client)
+    definition = observed_chart("throughput", "source:Genuine from:2026-10-17 to:2026-10-17")
+    assert client.post("/flow-metrics/api/observed-result", json=definition).status_code == 403
+    with patch("app.projects.flow_metrics.observed.read_contract", wraps=read_contract) as read:
+        response = client.post("/flow-metrics/api/observed-result", json=definition, headers=headers)
+        assert response.status_code == 200
+        assert len(response.json["captures"]) == 3, "Predecessor plus both intraday captures; no future document"
+        assert read.call_count == 3
+        assert sum(row["value"] for row in response.json["rows"]) == 1
+        assert "no-store" in response.headers["Cache-Control"]
+    definition["filters"]["query"] = "source:Fictional"
+    with patch("app.projects.flow_metrics.observed.read_contract") as read:
+        assert client.post("/flow-metrics/api/observed-result", json=definition, headers=headers).json["rows"] == []
+        read.assert_not_called()
+    definition["filters"]["query"] = "source:Genuine"
+    prior = client.post("/flow-metrics/api/observed-result", json=definition, headers=headers).json
+    with app.app_context():
+        document = import_document(20, 9)
+        document["payload"] = payload([observed_item(1, "Done", sprint="b"), observed_item(5, "Done", sprint="b")])
+        document["item_count"] = 2
+        retain_evidence(document)
+        db.session.commit()
+    updated = client.post("/flow-metrics/api/observed-result", json=definition, headers=headers).json
+    assert sum(row["value"] for row in updated["rows"]) == sum(row["value"] for row in prior["rows"]) + 1
+    with patch("app.shared.middleware.auth.app_config.auth_enabled", True):
+        assert app.test_client().post("/flow-metrics/api/observed-result", json=definition).status_code == 302
+
+
+def test_observed_tie_preference_missing_fields_and_deduplicated_drill_states(app):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        seed_observed_history()
+        # A lower-priority source at the same instant must not invent a transition.
+        original = import_document(17, 15)
+        document = {
+            "schema_version": 1, "source": "GitHub GraphQL API via local gh sign-in",
+            "collection_started_at": original["captured_at"],
+            "collection_finished_at": original["captured_at"],
+            "snapshot_date": "2026-10-17", "snapshot_timezone": "Europe/London", "item_count": 0,
+            "project": {"url": "https://github.com/orgs/ministryofjustice/projects/152", "fields": {"nodes": []}},
+            "items": [],
+        }
+        retain_evidence(document)
+        result = history_result(observed_chart("throughput"), {"from": "2026-10-12", "to": "2026-10-19"})
+        assert len(result["captures"]) == 4
+        assert sum(row["value"] for row in result["rows"]) == 2
+        # Repeated unchanged contributors share a state, while their timestamps stay exact.
+        for day in (20, 21, 22):
+            repeated = import_document(day, 9)
+            repeated["payload"] = payload([observed_item(5, sprint="b")])
+            repeated["item_count"] = 1
+            retain_evidence(repeated)
+        db.session.commit()
+        result = history_result(observed_chart(), {"from": "2026-10-19", "to": "2026-10-22"})
+        rows = [row for row in result["rows"] if "real:item-5" in row["ids"]]
+        assert len(rows) == 4
+        assert len({row["stateIds"]["real:item-5"] for row in rows}) == 1
+        assert len({row["stateObservedAt"]["real:item-5"] for row in rows}) == 4
+        assert len(result["itemStates"]) < sum(len(row["ids"]) for row in result["rows"])
+        # An absent field binding is unknown, not an observed sprint removal.
+        missing = import_document(23, 9)
+        missing["payload"] = payload([observed_item(5, sprint="b")])
+        del missing["payload"]["mapping"]["sprint"]
+        missing["item_count"] = 1
+        retain_evidence(missing)
+        db.session.commit()
+        churn = history_result(observed_chart("churn", "from:2026-10-23"), {"from": "2026-10-12", "to": "2026-10-23"})
+        assert all(row["value"] is None for row in churn["rows"])
+
+
+def test_observed_baseline_requires_exact_evidence_and_live_result_uses_shared_projection(app, client):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        seed_observed_history()
+        document = import_document(16, 0)
+        document["payload"] = payload([observed_item(1), observed_item(2, "Done")])
+        document["item_count"] = 2
+        retain_evidence(document)
+        db.session.commit()
+        definition = observed_chart("velocity", 'sprint:"Sprint A"', calculation={"value": "count"})
+        history = {"from": "2026-10-16", "to": "2026-10-19"}
+        projection = history_result(definition, history)
+        assert projection["baselineComplete"] is True
+        assert next(row for row in projection["rows"] if row["series"] == "Committed")["value"] == 2
+        assert next(row for row in projection["rows"] if row["series"] == "Completed")["value"] == 0
+        live_result = result(definition)
+        assert live_result["rows"] == projection["rows"]
+        assert live_result["itemStates"] == projection["itemStates"]
+    response = client.post("/flow-metrics/api/result", json=definition, headers=csrf(client))
+    assert response.status_code == 200
+    assert response.json["rows"] == projection["rows"]
+
+
+def test_observed_filters_and_categories_use_each_capture_not_the_latest_item(app):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        db.session.delete(db.session.get(FlowSnapshot, "snapshot-test"))
+        for day, team, status in [(16, "Blueprint", "TODO"), (17, "DevX", "Done")]:
+            document = import_document(day, 9)
+            document["payload"] = payload([observed_item(1, status, team=team)])
+            document["item_count"] = 1
+            retain_evidence(document)
+        db.session.commit()
+        history = {"from": "2026-10-16", "to": "2026-10-17"}
+        filtered = history_result(observed_chart("flow", "team:Blueprint status:TODO"), history)
+        assert sum(row["value"] or 0 for row in filtered["rows"]) == 1
+        contributor = next(row for row in filtered["rows"] if row["ids"])
+        state = filtered["itemStates"][contributor["stateIds"]["real:item-1"]]
+        assert state["team"] == "Blueprint"
+        assert state["status"] == "TODO"
+        grouped = history_result(observed_chart("custom", x="reporting", y="historicalCount", group="team",
+                                 calculation={"interval": "daily"}), history)
+        assert {group["name"]: [point["value"] for point in group["points"]] for group in grouped["series"]} == {
+            "Blueprint": [1, 0], "DevX": [0, 1],
+        }
+
+
 def test_versioned_builder_settings_shared_persistence_validation_and_conflicts(app, client, monkeypatch):
     monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
     with app.app_context():
@@ -1044,18 +1277,24 @@ def test_unavailable_history_never_returns_fabricated_values(app):
             if chart["metric"] in {"age", "status"}:
                 continue
             data = result(chart)
+            if chart["metric"] in {"flow", "progress"}:
+                assert data["unavailable"] is None
+                assert data["timeBasis"] == "observation"
+                continue
             assert data["unavailable"]
             if chart["metric"] == "cycle":
                 assert data["unavailable"] == "Not enough history to calculate cycle time yet."
+            elif chart["metric"] != "stuck":
+                assert data["unavailable"] == "Captured history is insufficient for this calculation."
             else:
                 assert "Reliable transition or sprint-start history" in data["unavailable"]
-            assert data["rows"] == []
+            assert all(row["value"] is None for row in data["rows"])
             assert data["tickets"] == []
         chart = seeds()[3]
         chart["metric"] = "velocity"
         data = result(chart)
         assert data["unavailable"]
-        assert data["rows"] == []
+        assert all(row["value"] is None for row in data["rows"])
 
 
 def test_devx_is_an_exact_team_not_an_all_team_alias(app):

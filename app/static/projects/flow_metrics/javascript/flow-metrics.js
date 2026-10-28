@@ -5,6 +5,7 @@ import {
   ticketReference, ticketChartLabel, ticketText, pointTicket, itemCount,
   chartHasDateAxis, datePresetRange, withDateRange, resolveFilters,
   observationLoader, setRealObservation,
+  usesObservedHistory, setObservedResult, resultTicket,
 } from "./flow-metrics-model.mjs";
 import { CALCULATIONS, CALCULATION_DEFAULTS, calculationSettings, builderError, editableRecipe } from "./flow-metrics-builder.mjs";
 import { REQUEST_VERSION, REQUEST_LIMIT, requestDetails, requestKey, parseRequests } from "./flow-metrics-admin.mjs";
@@ -725,11 +726,19 @@ async function renderPreview() {
     await new Promise((resolve) => setTimeout(resolve, 350));
     if (sequence !== previewSequence) return;
     try {
-      const response = live ? await apiRequest("result", draft) : await loadObservation(draft.filters);
+      const historical = usesObservedHistory(draft);
+      const { resolved } = resolveFilters(draft.filters);
+      const observedChart = { ...draft, filters: { ...draft.filters,
+        from: resolved.from || HISTORY.from, to: resolved.to || HISTORY.to } };
+      const [response, observed] = await Promise.all([
+        live ? apiRequest("result", draft) : loadObservation(draft.filters),
+        historical && !live ? apiRequest("observed-result", observedChart) : null,
+      ]);
       if (sequence !== previewSequence) return;
       if (live) result = response;
       else {
         setRealObservation(response);
+        setObservedResult(observed);
         result = buildResult(draft);
       }
       pendingPreview = false;
@@ -875,10 +884,11 @@ function showDrill(point, trigger) {
 }
 
 function renderTickets() {
-  const tickets = result.tickets.filter((ticket) => drillPoint.ids.includes(ticket.id));
+  const tickets = result.tickets.filter((ticket) => drillPoint.ids.includes(ticket.id))
+    .map(ticket => resultTicket(result, drillPoint, ticket.id));
   $("drill-title").textContent = `${drillPoint.label}: ${itemCount(tickets.length)}`;
   $("ticket-table").replaceChildren(table(
-    ["Reference", "Title", "Repository", "Team", "Sprint", "Status at reporting end", "Observed at"],
+    ["Reference", "Title", "Repository", "Team", "Sprint", drillPoint.timeBasis === "observation" ? "Observed status" : "Status at reporting end", "Observed at"],
     tickets.slice((ticketPage - 1) * PAGE_SIZE, ticketPage * PAGE_SIZE).map((t) => {
       let reference = ticketReference(t);
       if ((live || t.provenance === "real") && t.url) {

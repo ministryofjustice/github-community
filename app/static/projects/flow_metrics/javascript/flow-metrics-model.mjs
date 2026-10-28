@@ -5,6 +5,7 @@ export const HISTORY = { from: "2026-07-01", to: "2026-08-25" };
 let liveData = false;
 let liveOptions = {};
 let eventData = null;
+let observedResult = null;
 const SAMPLE_METADATA_FIELDS = [
   "assignee", "label", "milestone", "reviewers", "priority", "refined",
   "blocked-by", "blocking", "relates-to", "parent-issue", "sub-issues-progress",
@@ -12,6 +13,7 @@ const SAMPLE_METADATA_FIELDS = [
 export function configureSampleData(dataset) {
   liveData = false;
   eventData = dataset;
+  observedResult = null;
   Object.assign(HISTORY, dataset.history);
   const realItems = (dataset.realObservations || []).flatMap((observation) => observation.items);
   const realOptions = dataset.realOptions || {};
@@ -39,6 +41,21 @@ export function configureSampleData(dataset) {
 }
 export function setRealObservation(observation) {
   eventData.realObservations = observation ? [observation] : [];
+}
+
+export function setObservedResult(value) {
+  observedResult = value;
+}
+
+export function usesObservedHistory(chart) {
+  const metric = compileRecipe(chart)?.metric || chart.metric;
+  return ["flow", "progress", "throughput", "churn", "velocity"].includes(metric);
+}
+
+export function resultTicket(result, row, id) {
+  const state = result.itemStates?.[row.stateIds?.[id]];
+  return state ? row.stateObservedAt?.[id] ? { ...state, observedAt: row.stateObservedAt[id] } : state
+    : result.tickets.find(ticket => ticket.id === id);
 }
 
 export function observationLoader(captures, load) {
@@ -247,6 +264,7 @@ export const TICKETS = Array.from({ length: 72 }, (_, i) => {
 });
 
 export function stateAt(ticket, day) {
+  day = Math.min(day, ticket.reportingDay ?? day);
   if (ticket.provenance === "real") return { status: ticket.observedStatus, since: null };
   if (liveData) return { status: ticket.observedStatus, since: null };
   if (ticket.events) {
@@ -367,14 +385,19 @@ function customSeries(chart, tickets, from, to, population = tickets) {
   else if (chart.x === "team") categories = TEAMS;
   else if (timeAxis) {
     categories = [];
-    for (let day = Math.floor(from / 7) * 7; day <= to; day += 7) categories.push(day);
+    const fictional = eventData?.fictionalHistory || eventData?.history;
+    const genuineDates = chart.x === "created" && chart.y !== "averageCycle"
+      && population.some(ticket => ticket.provenance === "real");
+    const lower = fictional && !genuineDates ? Math.max(from, dayNumber(fictional.from)) : from;
+    const upper = fictional && !genuineDates ? Math.min(to, dayNumber(fictional.to)) : to;
+    for (let day = Math.floor(lower / 7) * 7; lower <= upper && day <= upper; day += 7) categories.push(day);
   } else categories.sort((a, b) => String(a).localeCompare(String(b), "en-GB", { numeric: true }));
   const groups = chart.group ? [...new Set(items.map((t) => fieldValue(t, chart.group, to)))].sort() : [""];
   const measure = (matches, candidates) => {
     if (chart.y === "count") return matches.length;
     if (!matches.length) return ["points", "estimation"].includes(chart.y) && !candidates.length ? 0 : null;
     const values = matches.map((t) => chart.y === "averageCycle" ? t.done - t.start
-      : chart.y === "averageAge" ? to - t.created
+      : chart.y === "averageAge" ? Math.min(to, t.reportingDay ?? to) - t.created
         : ["estimation", "averageEstimation"].includes(chart.y) ? t.estimate : t.points);
     const sum = values.reduce((a, b) => a + b, 0);
     return ["points", "estimation"].includes(chart.y) ? sum : Number((sum / matches.length).toFixed(2));
@@ -384,7 +407,10 @@ function customSeries(chart, tickets, from, to, population = tickets) {
     points: categories.map((category) => {
       const matches = items.filter((t) => fieldValue(t, chart.x, to) === category
         && (!chart.group || fieldValue(t, chart.group, to) === group));
-      const label = timeAxis ? `${shortDate(Math.max(category, from))} to ${shortDate(Math.min(category + 6, to))}` : String(category);
+      const sampleOnly = !population.some(ticket => ticket.provenance === "real") || chart.x === "completed" || chart.y === "averageCycle";
+      const history = eventData?.fictionalHistory || eventData?.history;
+      const limit = sampleOnly && history ? Math.min(to, dayNumber(history.to)) : to;
+      const label = timeAxis ? `${shortDate(Math.max(category, from))} to ${shortDate(Math.min(category + 6, limit))}` : String(category);
       const candidates = population.filter((t) => fieldValue(t, chart.x, to) === category
         && (!chart.group || fieldValue(t, chart.group, to) === group));
       return point(label, measure(matches, candidates), matches);
@@ -406,7 +432,7 @@ export function scopeLabels(filters = {}) {
   ];
 }
 
-export function buildResult(chart, filters = chart.filters || {}) {
+function sampleResult(chart, filters = chart.filters || {}) {
   const recipe = compileRecipe(chart);
   if (recipe) {
     const error = builderError(chart);
@@ -423,12 +449,59 @@ export function buildResult(chart, filters = chart.filters || {}) {
   return buildResultCore(chart, filters);
 }
 
+export function buildResult(chart, filters = chart.filters || {}) {
+  const sample = sampleResult(chart, filters);
+  if (!observedResult || !usesObservedHistory(chart)) return sample;
+  return mergeObservedResult(sample, observedResult);
+}
+
+export function mergeObservedResult(sample, observed) {
+  const seriesByName = new Map();
+  for (const group of [...sample.series, ...observed.series]) {
+    if (!seriesByName.has(group.name)) seriesByName.set(group.name, new Map());
+    const points = seriesByName.get(group.name);
+    for (const row of group.points) {
+      const key = row.key || row.label;
+      const previous = points.get(key);
+      points.set(key, previous ? {
+        ...previous, ...row,
+        value: previous.value === null && row.value === null ? null : (previous.value || 0) + (row.value || 0),
+        ids: [...new Set([...previous.ids, ...row.ids])],
+        stateIds: { ...previous.stateIds, ...row.stateIds },
+        stateObservedAt: { ...previous.stateObservedAt, ...row.stateObservedAt },
+      } : row);
+    }
+  }
+  const labels = new Map([...seriesByName.values()].flatMap(points => [...points].map(([key, row]) => [key, row.label])));
+  const keys = [...labels.keys()].sort();
+  const series = [...seriesByName].map(([name, points]) => ({
+    name, points: keys.map(key => points.get(key) || { key, label: labels.get(key), value: null, ids: [] }),
+  }));
+  const rows = series.flatMap(group => group.points.map(row => ({ ...row, series: group.name })));
+  const tickets = [...new Map([...sample.tickets, ...observed.tickets].map(ticket => [ticket.id, ticket])).values()];
+  const hasObserved = observed.rows.some(row => row.value !== null);
+  return {
+    ...sample, series, rows, tickets, itemStates: observed.itemStates,
+    unit: sample.unavailable ? observed.unit : sample.unit,
+    unavailable: hasObserved || sample.rows.some(row => row.value !== null) ? null : observed.unavailable || sample.unavailable,
+    sampleSize: new Set(rows.flatMap(row => row.ids)).size,
+    note: observed.captures.length ? observed.note : sample.note,
+    timeBasis: "mixed", coverageText: observed.captures.length ? "" : sample.coverageText,
+    coverage: { ...sample.coverage, realObservation: observed.captures.at(-1) || sample.coverage.realObservation },
+  };
+}
+
 function buildResultCore(chart, filters = chart.filters || {}) {
   validateFilters(filters);
   const { resolved, clauses } = resolveFilters(filters);
   filters = resolved;
   const from = dayNumber(filters.from || HISTORY.from);
   const to = dayNumber(filters.to || HISTORY.to);
+  const fictionalHistory = eventData?.fictionalHistory || eventData?.history;
+  const sampleFrom = fictionalHistory ? Math.max(from, dayNumber(fictionalHistory.from)) : from;
+  const sampleTo = fictionalHistory ? Math.min(to, dayNumber(fictionalHistory.to)) : to;
+  const retrospective = ["cycle", "churn", "throughput", "flow", "progress", "velocity"].includes(chart.metric)
+    || (chart.metric === "custom" && ["averageCycle", "created", "completed"].some(key => [chart.y, chart.x].includes(key)));
   if (["scatter", "histogram"].includes(chart.layout) && chart.metric !== "cycle") {
     return {
       series: [], rows: [], tickets: [], from, to, sampleSize: 0, unit: "Items", axis: "",
@@ -436,13 +509,15 @@ function buildResultCore(chart, filters = chart.filters || {}) {
       unavailable: "Scatter and histogram require Cycle time chart data. Choose Cycle time or another layout.",
     };
   }
-  const source = eventData ? TICKETS.filter((ticket) => ticket.provenance !== "real").map((ticket) => {
-    const date = dateAt(to);
+  const source = eventData ? TICKETS.filter((ticket) => ticket.provenance !== "real"
+    && (sampleTo >= sampleFrom || retrospective && chart.metric === "cycle")
+    && (retrospective || !filters.to || to <= sampleTo)).map((ticket) => {
+    const date = dateAt(sampleTo);
     const statuses = ticket.events.filter((event) => event.type === "status" && event.date <= date);
     const completion = statuses.at(-1)?.value === "Done" ? statuses.at(-1) : null;
     const start = statuses.find((event) => event.value === "In Progress");
     const sprintId = eventValueAt(ticket, "scope", date);
-    return { ...ticket, start: start ? dayNumber(start.date) : null,
+    return { ...ticket, reportingDay: sampleTo, start: start ? dayNumber(start.date) : null,
       done: completion ? dayNumber(completion.date) : null,
       points: eventValueAt(ticket, "points", date),
       sprint: eventData.sprints.find((sprint) => sprint.id === sprintId)?.name || "Not set" };
@@ -490,7 +565,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
     });
   });
   const needsHistory = ["cycle", "churn", "stuck", "throughput", "flow", "progress", "velocity"].includes(chart.metric)
-    || (chart.metric === "custom" && (chart.y === "averageCycle" || ["created", "completed"].includes(chart.x)));
+    || (chart.metric === "custom" && (chart.y === "averageCycle" || chart.x === "completed"));
   const requiresPoints = chart.metric === "custom" && ["points", "averagePoints"].includes(chart.y);
   const requiresEstimation = chart.metric === "custom" && ["estimation", "averageEstimation"].includes(chart.y);
   const categoryFields = chart.recipeFields || (chart.metric === "custom" ? [chart.x, chart.group].filter(Boolean) : chart.metric === "status" ? ["status"] : []);
@@ -523,7 +598,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
   if (eventData && ["velocity", "churn", "flow", "progress"].includes(chart.metric)) {
     const scopedChart = { ...chart, filters };
     const context = { sprints: eventData.sprints, statuses: STATUSES, dateAt, dayNumber, point, shortDate };
-    series.push(...eventSeries(scopedChart, included, from, to, context));
+    if (sampleFrom <= sampleTo) series.push(...eventSeries(scopedChart, included, sampleFrom, sampleTo, context));
     if (chart.metric === "velocity") note = chart.calculation?.value === "count"
       ? "Committed items use sprint-start membership. Completed items use sprint-end or reporting-cutoff scope and latest Done state, excluding reopened unfinished work. In-progress sprints are partial."
       : "Committed points use sprint-start estimates. Completed points include added work and exclude reopened unfinished work. Missing point estimates are excluded; a populated baseline with no estimates is a gap. In-progress sprints are partial.";
@@ -549,10 +624,10 @@ function buildResultCore(chart, filters = chart.filters || {}) {
     const active = included.filter((t) => {
       const state = stateAt(t, to);
       return state && (chart.metric === "age" ? state.status !== "Done"
-        && !(t.provenance === "real" && ["CLOSED", "MERGED"].includes(t.state)) : wip(state.status) && to - state.since >= chart.threshold);
+        && !(t.provenance === "real" && ["CLOSED", "MERGED"].includes(t.state)) : wip(state.status) && Math.min(to, t.reportingDay ?? to) - state.since >= chart.threshold);
     });
     add(METRICS[chart.metric].name, active.map((t) => ({
-      ...point(ticketText(t), to - (chart.metric === "age" ? t.created : stateAt(t, to).since), [t]), ticketId: t.id,
+      ...point(ticketText(t), Math.min(to, t.reportingDay ?? to) - (chart.metric === "age" ? t.created : stateAt(t, to).since), [t]), ticketId: t.id,
     })));
   } else if (chart.metric === "status") {
     add("Status", STATUSES.map((status) => point(status, included.filter((t) => stateAt(t, to)?.status === status).length, included.filter((t) => stateAt(t, to)?.status === status))));
@@ -560,10 +635,11 @@ function buildResultCore(chart, filters = chart.filters || {}) {
   } else if (chart.metric === "throughput") {
     const points = [];
     const interval = chart.calculation?.interval === "daily" ? 1 : 7;
-    for (let day = from; day <= to; day += interval) {
-      const end = Math.min(to, day + interval - 1);
+    for (let day = from; day <= sampleTo && sampleFrom <= sampleTo; day += interval) {
+      const end = Math.min(sampleTo, day + interval - 1);
+      if (end < sampleFrom) continue;
       const completed = included.filter((t) => t.done !== null && t.done >= day && t.done <= end);
-      points.push(point(`${shortDate(day)} to ${shortDate(end)}`, completed.length, completed));
+      points.push({ ...point(`${shortDate(day)} to ${shortDate(end)}`, completed.length, completed), key: dateAt(day) });
     }
     add("Completed", points);
   } else if (chart.metric === "churn") {
@@ -648,12 +724,13 @@ export function resultCSV(chart, result, filters = chart.filters || {}) {
     ...result.rows.map((row) => [context, row.series, row.label,
       ...(chart.layout === "scatter" ? [displayDate(row.completedDate)] : []),
       row.value ?? "", row.ids.map((id) => {
-        const ticket = result.tickets.find((ticket) => ticket.id === id);
+        const ticket = resultTicket(result, row, id);
         return ticket ? ticketReference(ticket) : "Unavailable item reference";
       }).join("; "),
       ...(mixed ? [row.ids.map((id) => {
-        const ticket = result.tickets.find((ticket) => ticket.id === id);
+        const ticket = resultTicket(result, row, id);
         return `${ticket ? ticketReference(ticket) : "Unavailable item reference"}:${ticket?.provenance || "synthetic"}`;
-      }).join("; "), result.coverage.realObservation || ""] : [])]),
+      }).join("; "), row.ids.some(id => resultTicket(result, row, id)?.provenance === "real")
+        ? row.observedAt || result.coverage.realObservation || "" : ""] : [])]),
   ].map((row) => row.map(csvCell).join(",")).join("\r\n");
 }

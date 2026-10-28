@@ -144,7 +144,7 @@ export function projectRecipe(chart, result, { fieldValue, point }) {
         points: labels.map((label, index) => {
           const ids = new Set(result.series.flatMap(s => s.points[index]?.ids || []));
           const matches = result.tickets.filter(t => ids.has(t.id) && (!chart.group || byField(t, chart.group) === group));
-          return point(label, matches.length, matches);
+          return { ...result.series[0]?.points[index], ...point(label, matches.length, matches) };
         }),
       }));
     } else if (chart.y !== "historicalCount" && chart.group && chart.group !== "scopeChange") {
@@ -156,7 +156,7 @@ export function projectRecipe(chart, result, { fieldValue, point }) {
             const matches = row.ids.map(id => ticketById.get(id)).filter(t => byField(t, chart.group) === group);
             const count = settings.counting === "events" && row.occurrences
               ? row.occurrences.filter(id => matches.some(t => t.id === id)).length : matches.length;
-            return point(row.label, count, matches);
+            return { ...row, ...point(row.label, count, matches) };
           }),
         }));
       });

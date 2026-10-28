@@ -3,7 +3,7 @@
 import math
 import re
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -444,6 +444,29 @@ def metadata():
 
 def result(chart):
     validate_chart(chart)
+    from app.projects.flow_metrics.observed import (
+        captured_history,
+        historical_metric,
+        history_result,
+        resolved_filters,
+    )
+
+    if historical_metric(chart) and chart["layout"] not in {"scatter", "histogram"}:
+        history = captured_history()
+        if history:
+            if any(field == "source" and value != "Genuine" for field, value in parse_query(chart["filters"]["query"])):
+                raise ValueError("Real mode supports only source:Genuine.")
+            projection = history_result(chart, history)
+            filters, _ = resolved_filters(chart)
+            start = date.fromisoformat(history["from"])
+            return {
+                **projection,
+                "from": (date.fromisoformat(filters["from"] or history["from"]) - start).days,
+                "to": (date.fromisoformat(filters["to"] or history["to"]) - start).days,
+                "axis": "Reporting point", "provenance": "observed", "definitionVersion": 2,
+                "coverage": {"realObservation": projection["captures"][-1] if projection["captures"] else None},
+                "coverageText": "",
+            }
     first = first_observation()
     latest = observation_at()
     filters = {**chart["filters"]}
@@ -513,7 +536,7 @@ def result(chart):
         "velocity",
     } or (
         chart["metric"] == "custom"
-        and (chart["x"] in {"created", "completed"} or chart["y"] == "averageCycle")
+        and (chart["x"] == "completed" or chart["y"] == "averageCycle")
     ):
         return {
             **empty,
@@ -556,6 +579,10 @@ def result(chart):
         ):
             continue
         item["created"] = (date.fromisoformat(item["createdDate"]) - start).days
+        if chart["metric"] == "custom" and chart["x"] == "created":
+            if not from_date <= date.fromisoformat(item["createdDate"]) <= to_date:
+                continue
+            item["created"] = item["created"] // 7 * 7
         item["observedStatus"] = item["status"]
         items.append(item)
     if chart["metric"] == "age" or individual_age or (
@@ -664,7 +691,12 @@ def result(chart):
                         if matches
                         else None
                     )
-                points.append(point(category, value, matches))
+                label = category
+                if x == "created":
+                    lower = max(from_date, start + timedelta(days=category))
+                    upper = min(to_date, start + timedelta(days=category + 6))
+                    label = f"{lower.day} {lower.strftime('%b')} to {upper.day} {upper.strftime('%b')}"
+                points.append(point(label, value, matches))
             series.append(
                 {
                     "name": str(name)

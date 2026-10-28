@@ -194,6 +194,32 @@ def isolated_postgres():
         engine.dispose()
 
 
+def test_streamed_observed_projection_uses_predecessor_and_deduplicates_states(isolated_postgres):
+    from app.projects.flow_metrics.observed import history_result
+    from app.projects.flow_metrics.service import seeds
+    from test.test_app.test_routes.test_flow_metrics_live import (
+        import_document,
+        observed_item,
+        payload,
+    )
+
+    _, _, _, app = isolated_postgres
+    with app.app_context():
+        for day, status in [(16, "TODO"), (17, "Done"), (18, "In Progress"), (19, "Done")]:
+            document = import_document(day, 9)
+            document["payload"] = payload([observed_item(1, status)])
+            document["item_count"] = 1
+            retain_evidence(document)
+        db.session.commit()
+        definition = next(chart for chart in seeds() if chart["metric"] == "throughput")
+        definition["filters"]["query"] = "from:2026-10-17 to:2026-10-19 source:Genuine"
+        result = history_result(definition, {"from": "2026-10-16", "to": "2026-10-19"})
+        assert len(result["captures"]) == 4
+        assert sum(row["value"] for row in result["rows"]) == 2
+        assert {identity for row in result["rows"] for identity in row["ids"]} == {"real:item-1"}
+        assert len(result["itemStates"]) == 1
+
+
 @pytest.mark.parametrize("first_fails", ["", "collection", "publication"])
 def test_processes_serialize_collection_and_recover_after_failure(isolated_postgres, first_fails):
     uri, schema, engine, app = isolated_postgres

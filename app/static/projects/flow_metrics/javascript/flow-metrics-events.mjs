@@ -24,7 +24,7 @@ export function eventSeries(chart, tickets, from, to, { sprints, statuses, dateA
           chart.calculation?.value === "count" ? matches.length
             : candidates.length && !matches.length ? null
               : matches.reduce((sum, ticket) => sum + eventValueAt(ticket, "points", date), 0), matches),
-          missingEstimateCount: candidates.length - matches.length };
+          key: `${sprint.start}:${sprint.id}`, missingEstimateCount: candidates.length - matches.length };
       }));
     }
   } else if (chart.metric === "churn") {
@@ -49,7 +49,7 @@ export function eventSeries(chart, tickets, from, to, { sprints, statuses, dateA
           }
           return contributes;
         });
-        return { ...point(sprint.name, chart.calculation?.counting === "tickets" ? matches.length : count, matches), occurrences };
+        return { ...point(sprint.name, chart.calculation?.counting === "tickets" ? matches.length : count, matches), key: `${sprint.start}:${sprint.id}`, occurrences };
       }));
     }
   } else {
@@ -64,7 +64,7 @@ export function eventSeries(chart, tickets, from, to, { sprints, statuses, dateA
           && (chart.metric !== "progress" || inScope(ticket, date))
           && (chart.metric === "flow" ? eventValueAt(ticket, "status", date) === name
             : name === "Scope" || eventValueAt(ticket, "status", date) === "Done"));
-        return point(shortDate(day), matches.length, matches);
+        return { ...point(shortDate(day), matches.length, matches), key: dateAt(day) };
       }));
     }
   }
