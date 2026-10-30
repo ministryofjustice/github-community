@@ -61,6 +61,9 @@ app_config = SimpleNamespace(
     ),
     github=SimpleNamespace(
         collection_workers=int(__get_env_var("GITHUB_COLLECTION_WORKERS") or "1"),
+        repository_stats_team_access_workers=int(
+            __get_env_var("REPOSITORY_STATS_TEAM_ACCESS_WORKERS") or "1"
+        ),
         repository_visibility=__get_env_var("GITHUB_REPOSITORY_VISIBILITY") or "public",
         repository_limit=int(__get_env_var("GITHUB_REPOSITORY_LIMIT") or "1500"),
         repository_standards_orgs=__get_env_var("GITHUB_REPOSITORY_STANDARDS_ORGS"),

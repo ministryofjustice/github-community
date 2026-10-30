@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Protocol
 
 PER_PAGE = 100
@@ -128,10 +129,42 @@ def fetch_org_profile(client: GitHubGetter, org: str) -> OrganisationProfile:
 class CountingGetter:
     """Wraps a GitHub client and counts its API calls, for the job log."""
 
-    def __init__(self, client: GitHubGetter):
+    def __init__(
+        self, client: GitHubGetter, shared_counter: "RequestCounter | None" = None
+    ):
         self.client = client
-        self.calls = 0
+        self.counter = shared_counter or RequestCounter()
+
+    @property
+    def calls(self) -> int:
+        return self.counter.calls
+
+    @property
+    def request_coordinator(self):
+        return getattr(self.client, "request_coordinator", None)
 
     def get(self, path: str):
-        self.calls += 1
+        self.counter.increment()
         return self.client.get(path)
+
+    def close(self):
+        close = getattr(self.client, "close", None)
+        if close:
+            close()
+
+
+class RequestCounter:
+    """Thread-safe counter shared by request wrappers used in parallel."""
+
+    def __init__(self):
+        self._calls = 0
+        self._lock = Lock()
+
+    @property
+    def calls(self) -> int:
+        with self._lock:
+            return self._calls
+
+    def increment(self):
+        with self._lock:
+            self._calls += 1

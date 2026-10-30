@@ -3,8 +3,9 @@
 Each organisation needs its own GitHub App installation id, because installation tokens
 are per installation. Set REPOSITORY_STATS_ORGS to scan more organisations, e.g.
 "ministryofjustice:12345,moj-analytical-services:67890". When it's unset, the job scans
-ministryofjustice with the app's existing GITHUB_APP_INSTALLATION_ID. The app is private,
-so it can't be installed on other organisations yet; adding them later is config only.
+ministryofjustice with the app's existing GITHUB_APP_INSTALLATION_ID. The deploy
+workflows set it to the same organisations as GITHUB_REPOSITORY_STANDARDS_ORGS. A new
+organisation's first scan is a baseline only, so its history starts from that day.
 """
 
 import os

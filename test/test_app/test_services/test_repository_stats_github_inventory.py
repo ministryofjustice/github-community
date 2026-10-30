@@ -23,6 +23,7 @@ from app.projects.repository_stats.services.uk_time import (
     format_last_updated,
     london_date,
 )
+from app.shared.services.github_app_client import GitHubRequestCoordinator
 
 FIRST_PAGE = "/orgs/ministryofjustice/repos?type=all&per_page=100"
 
@@ -260,6 +261,17 @@ class TestGitHubAppClientUrls(unittest.TestCase):
                 with self.subTest(url=url), self.assertRaises(ValueError):
                     self.client.get(url)
         get.assert_not_called()
+
+    def test_worker_clients_have_separate_sessions_and_share_the_coordinator(self):
+        coordinator = GitHubRequestCoordinator()
+        first = GitHubAppClient("app", "key", 1, request_coordinator=coordinator)
+        second = GitHubAppClient("app", "key", 1, request_coordinator=coordinator)
+        self.addCleanup(first.close)
+        self.addCleanup(second.close)
+
+        self.assertIsNot(first.session, second.session)
+        self.assertIs(first.session.adapters["https://"].coordinator, coordinator)
+        self.assertIs(second.session.adapters["https://"].coordinator, coordinator)
 
 
 class TestOrgInstallations(unittest.TestCase):

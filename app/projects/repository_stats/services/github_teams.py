@@ -11,7 +11,9 @@ one slow call doesn't lose the team data for the whole run.
 import logging
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from threading import Lock, local
 from urllib.parse import quote
 
 import requests
@@ -28,6 +30,7 @@ _PERMISSIONS = ("admin", "maintain", "push", "triage", "pull")
 _ROLE_NAMES = {"push": "write", "pull": "read"}
 
 MAX_ATTEMPTS = 3
+MAX_TEAM_ACCESS_WORKERS = 3
 # Seconds to wait before the 2nd and 3rd attempts.
 RETRY_BACKOFF_SECONDS = (2, 5)
 
@@ -51,6 +54,10 @@ class RetryingGetter:
         self.attempts = max(1, attempts)
         self.backoff = backoff
         self.sleep = sleep or time.sleep
+        # The coordinated transport already retries connection failures and 5xxs.
+        self.transport_retries_failures = (
+            getattr(client, "request_coordinator", None) is not None
+        )
 
     def get(self, path: str):
         for attempt in range(1, self.attempts + 1):
@@ -58,11 +65,15 @@ class RetryingGetter:
             try:
                 response = self.client.get(path)
             except (requests.Timeout, requests.ConnectionError) as error:
-                if last:
+                if last or self.transport_retries_failures:
                     raise
                 reason = type(error).__name__
             else:
-                if response.status_code < 500 or last:
+                if (
+                    response.status_code < 500
+                    or last
+                    or self.transport_retries_failures
+                ):
                     return response
                 reason = f"status {response.status_code}"
             delay = (
@@ -105,6 +116,8 @@ def fetch_org_team_access(
     client: GitHubGetter,
     org: str,
     sleep: Callable[[float], None] | None = None,
+    workers: int = 1,
+    client_for_worker: Callable[[], GitHubGetter] | None = None,
 ) -> list[TeamAccessRecord]:
     """One record per team per repository it can access.
 
@@ -114,17 +127,28 @@ def fetch_org_team_access(
     network error, so the caller can keep the previous data rather than store a partial
     set.
     """
+    if not 1 <= workers <= MAX_TEAM_ACCESS_WORKERS:
+        raise ValueError(
+            f"Team access workers must be between 1 and {MAX_TEAM_ACCESS_WORKERS}"
+        )
     client = RetryingGetter(client, sleep=sleep)
     records: dict[tuple[int, str], TeamAccessRecord] = {}
     teams = get_all_pages(client, f"/orgs/{org}/teams?per_page={PER_PAGE}", "team")
     for team in teams:
-        slug = team.get("slug")
-        if not slug:
+        if not team.get("slug"):
             raise GitHubInventoryError("GitHub API returned a team without a slug")
+
+    def fetch_team(team: dict, team_client: GitHubGetter) -> list[TeamAccessRecord]:
+        slug = team.get("slug")
         parent = (team.get("parent") or {}).get("slug")
         path = f"/orgs/{org}/teams/{quote(slug, safe='')}/repos?per_page={PER_PAGE}"
         try:
-            repositories = get_all_pages(client, path, "team repository")
+            getter = (
+                team_client
+                if isinstance(team_client, RetryingGetter)
+                else RetryingGetter(team_client, sleep=sleep)
+            )
+            repositories = get_all_pages(getter, path, "team repository")
         except GitHubInventoryError as error:
             if error.status_code != 404:
                 raise
@@ -134,7 +158,8 @@ def fetch_org_team_access(
                 slug,
                 org,
             )
-            continue
+            return []
+        team_records = []
         for repository in repositories:
             record = TeamAccessRecord(
                 org=org,
@@ -144,5 +169,48 @@ def fetch_org_team_access(
                 parent_team_slug=parent,
                 permission=team_permission(repository),
             )
-            records[(record.github_id, slug)] = record
+            team_records.append(record)
+        return team_records
+
+    if workers == 1 or client_for_worker is None or len(teams) < 2:
+        for team in teams:
+            for record in fetch_team(team, client):
+                records[(record.github_id, record.team_slug)] = record
+        return list(records.values())
+
+    worker_state = local()
+    worker_clients = []
+    registry_lock = Lock()
+
+    def fetch_with_worker(team: dict) -> list[TeamAccessRecord]:
+        if not hasattr(worker_state, "client"):
+            worker_state.client = client_for_worker()
+            with registry_lock:
+                worker_clients.append(worker_state.client)
+        return fetch_team(team, worker_state.client)
+
+    try:
+        with ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="repo-stats-teams"
+        ) as executor:
+            futures = {
+                executor.submit(fetch_with_worker, team): index
+                for index, team in enumerate(teams)
+            }
+            by_index = {}
+            try:
+                for future in as_completed(futures):
+                    by_index[futures[future]] = future.result()
+            except Exception:
+                for future in futures:
+                    future.cancel()
+                raise
+        for index in range(len(teams)):
+            for record in by_index[index]:
+                records[(record.github_id, record.team_slug)] = record
+    finally:
+        for worker_client in worker_clients:
+            close = getattr(worker_client, "close", None)
+            if close:
+                close()
     return list(records.values())

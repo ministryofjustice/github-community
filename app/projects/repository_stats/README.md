@@ -23,7 +23,12 @@ events. If there is no earlier snapshot, that first snapshot is the baseline and
 no comparison events. The historical baseline is 17 August 2026.
 
 The job runs in Dev and Prod at 04:00 and 13:00 UTC. Each environment has a separate
-database.
+database. Repository inventory is fetched before team access; only team access requests
+are parallelised. `REPOSITORY_STATS_TEAM_ACCESS_WORKERS` controls that pool from 1 to 3
+workers (default 1). Dev configures 3 workers to measure the effect; Prod remains at the
+serial default. Each worker uses a separate GitHub session and shares the installation's
+rate-limit cooldown. The job logs elapsed time and API-call counts for both collection
+phases. Database writes remain serial and occur only after collection.
 
 ## One-off import of the old visibility audit reports
 
