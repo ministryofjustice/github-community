@@ -82,7 +82,7 @@ class FakeGitHub:
         self.slow_paths = {}
         self.calls = []
 
-    def client_for(self, installation_id):
+    def client_for(self, installation_id, request_coordinator=None):
         org = {1: MOJ, 2: MAS}[installation_id]
         github = self
 
@@ -162,6 +162,7 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
         display_names=None,
         failing_profile_orgs=(),
         slow_paths=None,
+        workers=1,
     ):
         github = FakeGitHub(
             repositories if isinstance(repositories, dict) else {MOJ: repositories},
@@ -179,6 +180,7 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
             orgs or self.orgs,
             github.client_for,
             now=lambda: next(times),
+            workers=workers,
         )
 
     def snapshots(self, captured_on=None):
@@ -487,6 +489,31 @@ class TestRecordTeamAccess(RecordRepositoryVisibilityTestCase):
             "ministryofjustice (5 GitHub API calls)",
             "\n".join(logs.output),
         )
+
+    def test_parallel_team_collection_logs_phase_timings_and_call_counts(self):
+        teams = [
+            team("team-a", {1: "read"}),
+            team("team-b", {1: "write"}),
+            team("team-c", {1: "admin"}),
+        ]
+        with self.assertLogs(
+            "app.projects.repository_stats.jobs.record_repository_visibility", "INFO"
+        ) as logs:
+            results = self.run_job([repo(1, "one")], DAY_1, teams=teams, workers=3)
+        self.assertEqual(results[0].api_calls, 6)
+        self.assertIn(
+            "repository inventory ",
+            "\n".join(logs.output),
+        )
+        self.assertIn(
+            "team access ",
+            "\n".join(logs.output),
+        )
+        self.assertIn("(4 API calls, 3 workers)", "\n".join(logs.output))
+
+    def test_team_access_worker_count_is_bounded(self):
+        with self.assertRaisesRegex(ValueError, "between 1 and 3"):
+            self.run_job([repo(1, "one")], DAY_1, workers=4)
 
     def test_each_run_replaces_the_set(self):
         self.run_job([repo(1, "one")], DAY_1, teams=self.TEAMS)

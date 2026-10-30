@@ -10,6 +10,11 @@ from time import time
 import jwt
 import requests
 
+from app.shared.services.github_app_client import (
+    CoordinatedGitHubAdapter,
+    GitHubRequestCoordinator,
+)
+
 GITHUB_API_URL = "https://api.github.com"
 REQUEST_TIMEOUT_SECONDS = 10
 
@@ -37,11 +42,22 @@ def create_installation_token(
 
 class GitHubAppClient:
     def __init__(
-        self, app_client_id: str, app_private_key: str, app_installation_id: int
+        self,
+        app_client_id: str,
+        app_private_key: str,
+        app_installation_id: int,
+        request_coordinator: GitHubRequestCoordinator | None = None,
     ):
         self.app_client_id = app_client_id
         self.app_private_key = app_private_key
         self.app_installation_id = app_installation_id
+        self.request_coordinator = request_coordinator
+        self.session = None
+        if request_coordinator is not None:
+            self.session = requests.Session()
+            self.session.mount(
+                "https://", CoordinatedGitHubAdapter(request_coordinator)
+            )
         self.__token: str | None = None
         self.__token_expires_at = datetime.fromtimestamp(0, tz=UTC)
 
@@ -67,7 +83,8 @@ class GitHubAppClient:
             url = path
         else:
             url = f"{GITHUB_API_URL}{path}"
-        return requests.get(
+        get = self.session.get if self.session is not None else requests.get
+        return get(
             url,
             headers={
                 "Authorization": f"Bearer {self.__get_token()}",
@@ -76,3 +93,7 @@ class GitHubAppClient:
             },
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
+
+    def close(self):
+        if self.session is not None:
+            self.session.close()

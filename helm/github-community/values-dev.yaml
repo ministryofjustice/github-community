@@ -27,3 +27,4 @@ app:
     # Repository Stats visibility snapshot (UTC)
     record_repository_visibility:
       schedule: "0 4,13 * * *"
+      workers: 3
