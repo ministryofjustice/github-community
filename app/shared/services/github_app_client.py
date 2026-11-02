@@ -15,15 +15,18 @@ from requests.adapters import HTTPAdapter
 from urllib3.exceptions import MaxRetryError
 from urllib3.response import HTTPResponse
 
-
 logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT = (10, 60)
 
 
 class GitHubApiError(ValueError):
     def __init__(
-        self, status_code: int, message: str, *,
-        request_id: str | None = None, accepted_permissions: str | None = None,
+        self,
+        status_code: int,
+        message: str,
+        *,
+        request_id: str | None = None,
+        accepted_permissions: str | None = None,
     ):
         self.status_code = status_code
         self.message = message
@@ -144,7 +147,11 @@ class CoordinatedGitHubAdapter(HTTPAdapter):
 
 
 def create_installation_token(
-    app_id: str, private_key: str, installation_id: int
+    app_id: str,
+    private_key: str,
+    installation_id: int,
+    *,
+    timeout: float | tuple[float, float] = REQUEST_TIMEOUT,
 ) -> dict:
     now_ts = int(time())
     encoded_jwt = jwt.encode(
@@ -158,7 +165,7 @@ def create_installation_token(
             "Authorization": f"Bearer {encoded_jwt}",
             "Accept": "application/vnd.github+json",
         },
-        timeout=REQUEST_TIMEOUT,
+        timeout=timeout,
     )
     response.raise_for_status()
     data = response.json()
@@ -180,7 +187,10 @@ class GitHubAppClient:
         app_installation_id: int,
         base_url: str = "https://api.github.com",
         request_coordinator: GitHubRequestCoordinator | None = None,
+        *,
+        timeout: float | tuple[float, float] = REQUEST_TIMEOUT,
     ):
+        self.timeout = timeout
         self.base_url = base_url.rstrip("/")
         self.app_client_id = app_client_id
         self.app_private_key = app_private_key
@@ -198,7 +208,10 @@ class GitHubAppClient:
         now = datetime.now(timezone.utc)
         if not self.__token or now >= self.__token_expires_at:
             token_data = create_installation_token(
-                self.app_client_id, self.app_private_key, self.app_installation_id
+                self.app_client_id,
+                self.app_private_key,
+                self.app_installation_id,
+                timeout=self.timeout,
             )
             self.__token = token_data["token"]
             self.__token_expires_at = min(
@@ -219,7 +232,7 @@ class GitHubAppClient:
         else:
             url = f"{self.base_url}/{path.lstrip('/')}"
         self.session.headers.update({"Authorization": f"Bearer {self.get_token()}"})
-        kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+        kwargs.setdefault("timeout", self.timeout)
         return self.session.request(method, url, **kwargs)
 
     def get(self, path: str, **kwargs) -> requests.Response:
@@ -233,9 +246,12 @@ class GitHubAppClient:
             except ValueError:
                 error_message = response.text
             raise GitHubApiError(
-                response.status_code, str(error_message),
+                response.status_code,
+                str(error_message),
                 request_id=response.headers.get("X-GitHub-Request-Id"),
-                accepted_permissions=response.headers.get("X-Accepted-GitHub-Permissions"),
+                accepted_permissions=response.headers.get(
+                    "X-Accepted-GitHub-Permissions"
+                ),
             )
         return response.json()
 

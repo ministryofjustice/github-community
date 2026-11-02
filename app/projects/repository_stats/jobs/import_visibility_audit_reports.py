@@ -148,12 +148,16 @@ def import_visibility_audit_reports(
         # Everything that can fail (GitHub, the data) happens before any write.
         summaries, writes = [], []
         for org in file_orgs:
-            inventory = {
-                full_name_key(record.org, record.name): record
-                for record in fetch_org_repositories(
-                    client_for(installations[org]), org
-                )
-            }
+            client = client_for(installations[org])
+            try:
+                inventory = {
+                    full_name_key(record.org, record.name): record
+                    for record in fetch_org_repositories(client, org)
+                }
+            finally:
+                close = getattr(client, "close", None)
+                if close:
+                    close()
             plan = build_plan(org, usable, inventory)
             bridge = _bridge_events(repository, org, plan, first_scan_date)
             summaries.append(

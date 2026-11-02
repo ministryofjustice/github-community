@@ -1,6 +1,7 @@
 import logging
 import unittest
 from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 from app.projects.repository_stats.services.visibility_access import (
     ACCESS_RECHECK_SECONDS,
@@ -71,6 +72,25 @@ class TestParseTeam(unittest.TestCase):
 
 
 class TestIsTeamMember(unittest.TestCase):
+    def test_falsey_supplied_client_is_used_and_not_closed(self):
+        class FalseyGitHub(FakeGitHub):
+            def __bool__(self):
+                return False
+
+        supplied = FalseyGitHub({MEMBERSHIP_PATH: response(200, {"state": "active"})})
+        supplied.close = Mock()
+        with patch(
+            "app.projects.repository_stats.services.visibility_access.get_github_client"
+        ) as create:
+            self.assertTrue(
+                is_team_member(
+                    "octocat", "ministryofjustice", "repository-stats-viewers", supplied
+                )
+            )
+        self.assertEqual(supplied.calls, [MEMBERSHIP_PATH])
+        create.assert_not_called()
+        supplied.close.assert_not_called()
+
     def test_member(self):
         github = FakeGitHub(
             {MEMBERSHIP_PATH: response(200, {"state": "active", "role": "member"})}
@@ -124,6 +144,23 @@ class TestIsTeamMember(unittest.TestCase):
             )
         self.assertNotIn("octocat", str(raised.exception))
         self.assertNotIn("repository-stats-viewers", str(raised.exception))
+
+    def test_closes_only_the_client_it_creates(self):
+        created = Mock()
+        created.get.side_effect = [response(404), RuntimeError("down")]
+        with patch(
+            "app.projects.repository_stats.services.visibility_access.get_github_client",
+            return_value=created,
+        ):
+            self.assertFalse(is_team_member("octocat", "ministryofjustice", "viewers"))
+            with self.assertRaises(RuntimeError):
+                is_team_member("octocat", "ministryofjustice", "viewers")
+        self.assertEqual(created.close.call_count, 2)
+
+        supplied = Mock()
+        supplied.get.return_value = response(404)
+        is_team_member("octocat", "ministryofjustice", "viewers", supplied)
+        supplied.close.assert_not_called()
 
 
 class TestGitHubLoginInSession(unittest.TestCase):

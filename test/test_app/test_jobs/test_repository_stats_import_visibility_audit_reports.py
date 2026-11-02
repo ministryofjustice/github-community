@@ -4,7 +4,7 @@ directory; GitHub is faked and never called."""
 import tempfile
 from datetime import UTC, date, datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from app.projects.repository_stats.config.collection_config import OrgInstallation
 from app.projects.repository_stats.db_models import (
@@ -87,6 +87,46 @@ class ImportTestCase(RecordRepositoryVisibilityTestCase):
 
 
 class TestImport(ImportTestCase):
+    def test_closes_inventory_clients_after_success(self):
+        self.orgs = (*self.orgs, OrgInstallation(MAS, 2))
+        github = FakeGitHub({MOJ: self.github_repos, MAS: []})
+        write_daily(self.dir, SEP_20, [("other", "public")], org=MAS)
+        clients = {}
+        original_factory = github.client_for
+
+        def client_for(installation_id):
+            client = original_factory(installation_id)
+            client.close = Mock()
+            clients[installation_id] = client
+            return client
+
+        with patch.object(github, "client_for", side_effect=client_for):
+            self.run_import(github=github)
+        self.assertEqual(set(clients), {1, 2})
+        for client in clients.values():
+            client.close.assert_called_once_with()
+        self.assertEqual(self.runs(), [("success", IMPORT_JOB_NAME, None)])
+
+    def test_closes_inventory_client_on_failure_and_preserves_data(self):
+        self.run_import()
+        before = (self.snapshots(), self.events(), self.runs())
+        github = FakeGitHub({}, failing_orgs=[MOJ])
+        client = github.client_for(1)
+        client.close = Mock()
+        with (
+            patch.object(github, "client_for", return_value=client),
+            patch.object(
+                self.repository.db_session,
+                "rollback",
+                wraps=self.repository.db_session.rollback,
+            ) as rollback,
+            self.assertRaises(GitHubInventoryError),
+        ):
+            self.run_import(github=github)
+        client.close.assert_called_once_with()
+        rollback.assert_called_once_with()
+        self.assertEqual((self.snapshots(), self.events(), self.runs()), before)
+
     def test_writes_snapshots_events_and_a_job_run(self):
         summary = self.run_import()
         self.assertEqual(

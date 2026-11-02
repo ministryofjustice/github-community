@@ -1,46 +1,21 @@
-"""Minimal GitHub App REST client for Repository Stats.
+"""GitHub App REST client for Repository Stats.
 
-A small local copy of the installation-token pattern in Repository Standards'
-github_client.py, so this project doesn't import Repository Standards code.
+Token creation, caching and the GitHub-only URL check come from the shared client
+used by Repository Standards. Each installation gets its own client, token and session.
+Stats keeps its 10-second timeout for token creation and API requests.
 """
 
-from datetime import UTC, datetime, timedelta
-from time import time
-
-import jwt
-import requests
-
 from app.shared.services.github_app_client import (
-    CoordinatedGitHubAdapter,
+    GitHubAppClient as SharedGitHubAppClient,
+)
+from app.shared.services.github_app_client import (
     GitHubRequestCoordinator,
 )
 
-GITHUB_API_URL = "https://api.github.com"
-REQUEST_TIMEOUT_SECONDS = 10
+GITHUB_API_VERSION = "2022-11-28"
 
 
-def create_installation_token(
-    app_id: str, private_key: str, installation_id: int
-) -> str:
-    now_ts = int(time())
-    encoded_jwt = jwt.encode(
-        {"iat": now_ts, "exp": now_ts + 600, "iss": app_id},
-        private_key,
-        algorithm="RS256",
-    )
-    response = requests.post(
-        f"{GITHUB_API_URL}/app/installations/{installation_id}/access_tokens",
-        headers={
-            "Authorization": f"Bearer {encoded_jwt}",
-            "Accept": "application/vnd.github+json",
-        },
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    return response.json()["token"]
-
-
-class GitHubAppClient:
+class GitHubAppClient(SharedGitHubAppClient):
     def __init__(
         self,
         app_client_id: str,
@@ -48,52 +23,14 @@ class GitHubAppClient:
         app_installation_id: int,
         request_coordinator: GitHubRequestCoordinator | None = None,
     ):
-        self.app_client_id = app_client_id
-        self.app_private_key = app_private_key
-        self.app_installation_id = app_installation_id
-        self.request_coordinator = request_coordinator
-        self.session = None
-        if request_coordinator is not None:
-            self.session = requests.Session()
-            self.session.mount(
-                "https://", CoordinatedGitHubAdapter(request_coordinator)
-            )
-        self.__token: str | None = None
-        self.__token_expires_at = datetime.fromtimestamp(0, tz=UTC)
-
-    def __get_token(self) -> str:
-        now = datetime.now(UTC)
-        if not self.__token or now >= self.__token_expires_at:
-            self.__token = create_installation_token(
-                self.app_client_id, self.app_private_key, self.app_installation_id
-            )
-            self.__token_expires_at = now + timedelta(minutes=55)
-        return self.__token
-
-    def get(self, path: str) -> requests.Response:
-        """GET a REST API path, or a full api.github.com URL such as a pagination "next" link.
-
-        Returns the response whatever its status.
-        """
-        if path.startswith(("http://", "https://")):
-            if not path.startswith(f"{GITHUB_API_URL}/"):
-                raise ValueError(
-                    "Refusing to send the GitHub token to a non-GitHub URL"
-                )
-            url = path
-        else:
-            url = f"{GITHUB_API_URL}{path}"
-        get = self.session.get if self.session is not None else requests.get
-        return get(
-            url,
-            headers={
-                "Authorization": f"Bearer {self.__get_token()}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-            timeout=REQUEST_TIMEOUT_SECONDS,
+        super().__init__(
+            app_client_id,
+            app_private_key,
+            app_installation_id,
+            request_coordinator=request_coordinator,
+            timeout=10,
         )
-
-    def close(self):
-        if self.session is not None:
-            self.session.close()
+        # Read by the Repository Stats getters to avoid retrying what the coordinated
+        # transport already retried.
+        self.request_coordinator = request_coordinator
+        self.session.headers["X-GitHub-Api-Version"] = GITHUB_API_VERSION
