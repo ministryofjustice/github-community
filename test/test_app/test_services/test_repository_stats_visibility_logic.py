@@ -726,7 +726,7 @@ class TestChangesHeading(unittest.TestCase):
 
 
 class TestParseArchivedQuery(unittest.TestCase):
-    def test_keeps_only_estate_filters_and_checkbox(self):
+    def test_keeps_archived_filters_checkbox_and_page(self):
         query = parse_archived_query(
             {
                 "org": ORG,
@@ -743,12 +743,20 @@ class TestParseArchivedQuery(unittest.TestCase):
         self.assertEqual(
             query,
             VisibilityQuery(
-                filters=VisibilityFilters(ORG, "HMPPS", "case"), only_public=False
+                filters=VisibilityFilters(ORG, "HMPPS", "case"),
+                page=3,
+                only_public=False,
             ),
         )
         self.assertEqual(
             query.to_params(),
-            {"org": ORG, "business_unit": "HMPPS", "q": "case", "only_public": "0"},
+            {
+                "org": ORG,
+                "business_unit": "HMPPS",
+                "q": "case",
+                "page": "3",
+                "only_public": "0",
+            },
         )
         self.assertTrue(query.filter_applied)
         self.assertTrue(query.estate_filter_applied)

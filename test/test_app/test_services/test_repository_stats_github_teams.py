@@ -3,6 +3,7 @@ from threading import Barrier
 from types import SimpleNamespace
 
 import requests
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.projects.repository_stats.services.github_inventory import (
     CountingGetter,
@@ -313,6 +314,35 @@ class TestRetryingGetter(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual((client.calls, self.sleeps), (1, []))
+
+    def test_coordinated_transport_body_read_failures_are_retried(self):
+        # Requests raises these while reading the body, after the transport's retries.
+        for error in (
+            requests.ConnectionError(ReadTimeoutError(None, "/x", "slow")),
+            requests.exceptions.ChunkedEncodingError("cut off"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                sleeps = []
+                client = self.coordinated(error, error, page({}))
+                with self.assertLogs(
+                    "app.projects.repository_stats.services.github_teams"
+                ):
+                    response = RetryingGetter(client, sleep=sleeps.append).get("/x")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual((client.calls, sleeps), (3, [2, 5]))
+
+    def test_coordinated_transport_exhausted_retries_are_not_repeated(self):
+        exhausted = requests.ConnectionError(MaxRetryError(None, "/x", "gone"))
+        client = self.coordinated(exhausted)
+        with self.assertRaises(requests.ConnectionError):
+            RetryingGetter(client, sleep=self.sleeps.append).get("/x")
+        self.assertEqual((client.calls, self.sleeps), (1, []))
+
+    @staticmethod
+    def coordinated(*results):
+        client = Flaky(*results)
+        client.request_coordinator = object()
+        return client
 
     def test_4xx_is_not_retried(self):
         forbidden = page({}, status_code=403)

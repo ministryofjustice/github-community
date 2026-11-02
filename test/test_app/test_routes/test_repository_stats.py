@@ -31,6 +31,7 @@ from app.projects.repository_stats.services.visibility_access import (
 from app.projects.repository_stats.services.visibility_logic import (
     OrganisationScanState,
     VisibilityEvent,
+    VisibilityQuery,
     VisibilitySnapshot,
 )
 from app.projects.repository_stats.services.visibility_service import (
@@ -1827,6 +1828,44 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
         _, recovered = self.get(OVERVIEW_URL)
         self.assertNotIn("(last updated ", recovered)
 
+    def test_all_organisations_counts_use_each_organisations_latest_snapshot(self):
+        # MOJAS's latest snapshot (29 Oct) is older than MOJ's (30 Oct), as after a
+        # failed MOJAS scan; it must still count towards All organisations.
+        _, body = self.get(f"{CHANGES_URL}?org=all")
+        self.assertIn(estate_line(4, 2, 1, 1), body)
+        _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}")
+        self.assertIn(estate_line(3, 2, 0, 1), body)
+
+    def test_transferred_repository_is_counted_once_in_its_newest_organisation(self):
+        # Repository 300 moved to MOJ on 30 Oct while MOJAS still holds its 29 Oct copy.
+        self.repository.snapshots[OCT_30].append(
+            snap(300, "mas-archived", "public", OCT_30, archived=True)
+        )
+        self.repository.events += [
+            change(300, "mas-archived", None, "public", OCT_30, "created"),
+            change(300, "mas-archived", None, None, OCT_30, "archived"),
+        ]
+        service = VisibilityService(self.repository, FakeOwnership(), today=self.today)
+        overview = service.get_overview_page()
+        self.assertEqual(
+            [(org.key, org.totals.total) for org in overview.overview.organisations],
+            [(ORG, 2), (OTHER_ORG, 2)],
+        )
+        _, body = self.get(f"{CHANGES_URL}?org=all")
+        self.assertIn(estate_line(4, 2, 1, 1), body)
+
+        archived = service.get_archived_page(
+            VisibilityQuery(all_organisations=True)
+        ).archived
+        self.assertEqual([r.org for r in archived.tracked if r.github_id == 300], [ORG])
+        self.assertEqual(
+            (
+                archived.progress_by_organisation[OTHER_ORG].total,
+                archived.progress.total,
+            ),
+            (0, 2),
+        )
+
     def test_selected_organisation_controls_history_date_and_date_limits(self):
         for org, baseline, label, activity_count in (
             (ORG, MOJ_BASELINE, "17 August 2026", 1),
@@ -2262,6 +2301,61 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                     self.assertIn(no_match, body)
                     self.assertIn('id="archived-table" hidden', body)
                     self.assertIn('id="archived-table-region" hidden', body)
+
+    def test_archived_repositories_are_paginated_after_filtering(self):
+        extra_ids = range(1000, 1030)
+        first_archived_dates = {200: AUG_1, 201: AUG_1}
+        for github_id in extra_ids:
+            name = f"archived-page-{github_id - 1000:02d}"
+            first_archived_dates[github_id] = AUG_1
+            self.repository.snapshots[AUG_1].append(
+                snap(github_id, name, "public", AUG_1, archived=True)
+            )
+            self.repository.snapshots[SEP_25].append(
+                snap(github_id, name, "public", SEP_25, archived=True)
+            )
+
+        with patch.object(
+            self.repository,
+            "find_first_archived_dates",
+            return_value=first_archived_dates,
+        ):
+            _, first_page = self.get(ARCHIVED_URL)
+            self.assertIn("Showing 1 to 25 of 31", first_page)
+            self.assertIn(
+                'Repositories (<span id="archived-count">31</span>)', first_page
+            )
+            self.assertIn(
+                'href="/repository-stats/archived?org=ministryofjustice&amp;page=2#archived-table"',
+                first_page,
+            )
+            first_names = self.visible_archived(first_page)
+            self.assertEqual(len(first_names), 25)
+            self.assertIn("archived-page-00", first_names)
+            self.assertNotIn("archived-page-29", first_names)
+
+            _, second_page = self.get(f"{ARCHIVED_URL}?org={ORG}&page=2")
+            self.assertIn("Showing 26 to 31 of 31", second_page)
+            second_names = self.visible_archived(second_page)
+            expected_names = {
+                "asset-alpha",
+                *(f"archived-page-{number:02d}" for number in range(30)),
+            }
+            self.assertEqual(len(second_names), 6)
+            self.assertFalse(set(first_names) & set(second_names))
+            self.assertEqual(set(first_names + second_names), expected_names)
+            self.assertIn(
+                '<input type="hidden" name="only_public" value="0">',
+                self.filters(second_page),
+            )
+            self.assertNotIn('type="hidden" name="page"', self.filters(second_page))
+
+            _, filtered = self.get(
+                f"{ARCHIVED_URL}?org={ORG}&q=archived-page-29&page=2"
+            )
+            self.assertIn("Showing 1 to 1 of 1", filtered)
+            self.assertEqual(self.visible_archived(filtered), ["archived-page-29"])
+            self.assertNotIn("page=2", filtered.split("</form>", 1)[0])
 
     def test_checkbox_is_inside_the_filter_form(self):
         _, body = self.get(f"{ARCHIVED_URL}?business_unit=HMPPS&q=repo&org={ORG}")

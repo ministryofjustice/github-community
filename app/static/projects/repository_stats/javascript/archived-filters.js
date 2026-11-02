@@ -4,6 +4,7 @@
   "use strict";
 
   var DEBOUNCE_MS = 200;
+  var PAGE_SIZE = 25;
   var FILTER_PARAMS = ["org", "business_unit", "q", "only_public"];
   var ALL_ORGANISATIONS = "all";
 
@@ -16,6 +17,8 @@
     var count = document.getElementById("archived-count");
     var status = document.getElementById("archived-filter-status");
     var clear = document.getElementById("clear-filters");
+    var showing = document.getElementById("archived-showing");
+    var pagination = document.getElementById("archived-pagination");
     var freshnessElement = document.getElementById("archived-freshness");
     var lastUpdated = document.getElementById("archived-last-updated");
     if (!form || !noMatch || !allInternal || !status) return;
@@ -35,6 +38,9 @@
       ? JSON.parse(progressElement.getAttribute("data-progress") || "{}")
       : {};
     var progressOrg = null;
+    var currentPage = pagination
+      ? parseInt(pagination.getAttribute("data-page"), 10) || 1
+      : 1;
     var rows = table ? Array.prototype.slice.call(table.tBodies[0].rows) : [];
     rows.forEach(function (row) {
       try {
@@ -59,20 +65,134 @@
       return !s.q || (row.getAttribute("data-name") || "").indexOf(s.q) !== -1;
     }
 
-    function updateUrl() {
+    function updateUrl(pushHistory, hash) {
       if (!window.history || !window.history.replaceState) return;
       var params = new URLSearchParams(window.location.search);
       FILTER_PARAMS.forEach(function (key) { params.delete(key); });
+      params.delete("page");
       if (org.value) params.set("org", org.value);
       if (businessUnit.value) params.set("business_unit", businessUnit.value);
       if (name.value.trim()) params.set("q", name.value.trim());
       if (!onlyPublic.checked) params.set("only_public", "0");
+      if (currentPage > 1) params.set("page", String(currentPage));
       var search = params.toString();
-      window.history.replaceState(
+      var url =
+        window.location.pathname +
+        (search ? "?" + search : "") +
+        (hash === undefined ? window.location.hash : hash);
+      var method = pushHistory ? "pushState" : "replaceState";
+      window.history[method](
         window.history.state,
         "",
-        window.location.pathname + (search ? "?" + search : "") + window.location.hash
+        url
       );
+    }
+
+    function pageNumbers(totalPages) {
+      var shown = [1, totalPages];
+      for (var number = currentPage - 2; number <= currentPage + 2; number += 1) {
+        if (number >= 1 && number <= totalPages) shown.push(number);
+      }
+      shown.sort(function (a, b) { return a - b; });
+      var unique = shown.filter(function (number, index) {
+        return index === 0 || number !== shown[index - 1];
+      });
+      var result = [];
+      var previous = 0;
+      unique.forEach(function (number) {
+        if (number - previous > 1) result.push(null);
+        result.push(number);
+        previous = number;
+      });
+      return result;
+    }
+
+    function pageHref(page) {
+      var params = new URLSearchParams(window.location.search);
+      if (page > 1) params.set("page", String(page));
+      else params.delete("page");
+      var search = params.toString();
+      return window.location.pathname + (search ? "?" + search : "") + "#archived-table";
+    }
+
+    function addPageLink(parent, page, label, options) {
+      var wrapper = document.createElement(options.wrapperTag || "li");
+      wrapper.className = options.wrapperClass;
+      var link = document.createElement("a");
+      link.className = "govuk-link govuk-pagination__link";
+      link.href = pageHref(page);
+      link.setAttribute("data-page", String(page));
+      if (options.rel) link.setAttribute("rel", options.rel);
+      if (options.current) {
+        link.setAttribute("aria-current", "page");
+        link.setAttribute("aria-label", "Page " + page);
+      } else if (options.ariaLabel) {
+        link.setAttribute("aria-label", options.ariaLabel);
+      }
+      link.textContent = label;
+      wrapper.appendChild(link);
+      parent.appendChild(wrapper);
+    }
+
+    function renderPagination(totalItems) {
+      if (showing) {
+        showing.hidden = totalItems === 0;
+        if (totalItems) {
+          var first = (currentPage - 1) * PAGE_SIZE + 1;
+          var last = Math.min(currentPage * PAGE_SIZE, totalItems);
+          showing.textContent = "Showing " + first + " to " + last + " of " + totalItems;
+        }
+      }
+      if (!pagination) return;
+
+      while (pagination.firstChild) pagination.removeChild(pagination.firstChild);
+      var totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+      pagination.setAttribute("data-page", String(currentPage));
+      pagination.hidden = totalPages <= 1;
+      if (totalPages <= 1) return;
+
+      var navigation = document.createElement("nav");
+      navigation.className = "govuk-pagination";
+      navigation.setAttribute("aria-label", "Archived repository pages");
+      pagination.appendChild(navigation);
+
+      if (currentPage > 1) {
+        addPageLink(navigation, currentPage - 1, "Previous", {
+          wrapperTag: "div",
+          wrapperClass: "govuk-pagination__prev",
+          rel: "prev",
+          ariaLabel: "Previous page"
+        });
+      }
+
+      var list = document.createElement("ul");
+      list.className = "govuk-pagination__list";
+      pageNumbers(totalPages).forEach(function (number) {
+        if (number === null) {
+          var item = document.createElement("li");
+          item.className = "govuk-pagination__item govuk-pagination__item--ellipses";
+          item.textContent = "…";
+          list.appendChild(item);
+        } else {
+          var itemClass = "govuk-pagination__item";
+          if (number === currentPage) itemClass += " govuk-pagination__item--current";
+          addPageLink(list, number, String(number), {
+            wrapperTag: "li",
+            wrapperClass: itemClass,
+            current: number === currentPage
+          });
+        }
+      });
+      navigation.appendChild(list);
+
+      if (currentPage < totalPages) {
+        addPageLink(navigation, currentPage + 1, "Next", {
+          wrapperTag: "div",
+          wrapperClass: "govuk-pagination__next",
+          rel: "next",
+          ariaLabel: "Next page"
+        });
+      }
     }
 
     function updateFreshness(selectedOrg) {
@@ -117,46 +237,65 @@
       if (empty) empty.hidden = !!details.total;
     }
 
-    function apply(announce) {
+    function apply(announce, historyMode) {
       var s = state();
       updateFreshness(s.org);
       updateProgress(s.org);
-      var matching = 0;
-      var shown = 0;
+      var matchingRows = [];
+      var shownRows = [];
       rows.forEach(function (row) {
-        var visible = false;
         if (matches(row, s)) {
-          matching += 1;
-          visible = !s.onlyPublic || row.getAttribute("data-visibility") === "public";
+          matchingRows.push(row);
+          if (!s.onlyPublic || row.getAttribute("data-visibility") === "public") {
+            shownRows.push(row);
+          }
         }
-        row.hidden = !visible;
-        if (visible) shown += 1;
       });
-      if (table) table.hidden = shown === 0;
-      if (tableRegion) tableRegion.hidden = shown === 0;
-      if (count) count.textContent = String(shown);
-      noMatch.hidden = matching !== 0;
-      allInternal.hidden = matching === 0 || shown !== 0;
+      var totalPages = Math.max(1, Math.ceil(shownRows.length / PAGE_SIZE));
+      currentPage = Math.min(Math.max(currentPage, 1), totalPages);
+      var firstIndex = (currentPage - 1) * PAGE_SIZE;
+      var pageRows = shownRows.slice(firstIndex, firstIndex + PAGE_SIZE);
+      rows.forEach(function (row) {
+        row.hidden = pageRows.indexOf(row) === -1;
+      });
+      if (table) table.hidden = pageRows.length === 0;
+      if (tableRegion) tableRegion.hidden = pageRows.length === 0;
+      if (count) count.textContent = String(shownRows.length);
+      noMatch.hidden = matchingRows.length !== 0;
+      allInternal.hidden = matchingRows.length === 0 || shownRows.length !== 0;
       if (announce) {
-        status.textContent = shown + (shown === 1 ? " repository" : " repositories") + " shown";
-        updateUrl();
+        if (shownRows.length) {
+          var first = (currentPage - 1) * PAGE_SIZE + 1;
+          var last = Math.min(currentPage * PAGE_SIZE, shownRows.length);
+          status.textContent =
+            "Showing " + first + " to " + last + " of " + shownRows.length + " repositories";
+        } else {
+          status.textContent = "No repositories shown";
+        }
+        if (historyMode !== false) updateUrl(!!historyMode);
       }
+      renderPagination(shownRows.length);
     }
 
     var timer = null;
     function onType() {
       window.clearTimeout(timer);
+      currentPage = 1;
       timer = window.setTimeout(function () { apply(true); }, DEBOUNCE_MS);
     }
 
     form.classList.add("app-visibility-filters--live");
     [org, businessUnit, onlyPublic].forEach(function (field) {
-      field.addEventListener("change", function () { apply(true); });
+      field.addEventListener("change", function () {
+        currentPage = 1;
+        apply(true);
+      });
     });
     name.addEventListener("input", onType);
     form.addEventListener("submit", function (event) {
       event.preventDefault();
       window.clearTimeout(timer);
+      currentPage = 1;
       apply(true);
     });
     if (clear) {
@@ -167,9 +306,38 @@
         businessUnit.value = "";
         name.value = "";
         onlyPublic.checked = true;
+        currentPage = 1;
         apply(true);
       });
     }
+
+    if (pagination) {
+      pagination.addEventListener("click", function (event) {
+        var link = event.target.closest("a[data-page]");
+        if (!link || !pagination.contains(link)) return;
+        event.preventDefault();
+        currentPage = parseInt(link.getAttribute("data-page"), 10) || 1;
+        apply(true, false);
+        updateUrl(true, "#archived-table");
+        var currentLink = pagination.querySelector('[aria-current="page"]');
+        if (currentLink) currentLink.focus();
+        if (tableRegion) tableRegion.scrollIntoView();
+      });
+    }
+
+    function restoreFromUrl() {
+      var params = new URLSearchParams(window.location.search);
+      org.value = params.get("org") || form.getAttribute("data-default-org") || "";
+      businessUnit.value = params.get("business_unit") || "";
+      name.value = params.get("q") || "";
+      // Same rule as the server: absent means checked, otherwise any "1" means checked.
+      var onlyPublicValues = params.getAll("only_public");
+      onlyPublic.checked =
+        onlyPublicValues.length === 0 || onlyPublicValues.indexOf("1") !== -1;
+      currentPage = parseInt(params.get("page") || "1", 10) || 1;
+      apply(false);
+    }
+    window.addEventListener("popstate", restoreFromUrl);
 
     // Browsers can restore edited field values on back/forward, so match the table to them.
     apply(false);

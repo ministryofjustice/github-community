@@ -12,7 +12,8 @@ exports.
 - **Repository visibility changes:** Visibility changes, new and deleted repositories,
   with filters and CSV export.
 - **Archived public repositories:** Archived public repositories, with progress for the
-  selected organisation or all organisations. Other filters narrow only the list.
+  selected organisation or all organisations. Other filters narrow only the list,
+  which is paginated in groups of 25.
 
 The visibility and archived pages open on Ministry of Justice. Choosing another
 organisation, or All organisations, is kept in the URL.

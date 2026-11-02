@@ -419,10 +419,11 @@ def parse_archived_query(
     args: Mapping[str, str], only_public_values: Sequence[str] = ()
 ) -> VisibilityQuery:
     """The archived repositories page only uses organisation, business unit, name and
-    the 'only still public' checkbox. Dates, activity, sort and page never apply."""
+    the 'only still public' checkbox and page. Dates, activity and sort never apply."""
     query = parse_visibility_query(args, only_public_values)
     return VisibilityQuery(
         filters=query.filters,
+        page=query.page,
         only_public=query.only_public,
         all_organisations=query.all_organisations,
     )

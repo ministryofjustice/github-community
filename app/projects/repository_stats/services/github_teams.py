@@ -17,6 +17,7 @@ from threading import Lock, local
 from urllib.parse import quote
 
 import requests
+from urllib3.exceptions import MaxRetryError
 
 from app.projects.repository_stats.services.github_inventory import (
     PER_PAGE,
@@ -35,6 +36,10 @@ MAX_TEAM_ACCESS_WORKERS = 3
 RETRY_BACKOFF_SECONDS = (2, 5)
 
 logger = logging.getLogger(__name__)
+
+
+def _transport_exhausted(error: Exception) -> bool:
+    return any(isinstance(arg, MaxRetryError) for arg in error.args)
 
 
 class RetryingGetter:
@@ -64,8 +69,17 @@ class RetryingGetter:
             last = attempt == self.attempts
             try:
                 response = self.client.get(path)
-            except (requests.Timeout, requests.ConnectionError) as error:
-                if last or self.transport_retries_failures:
+            except (
+                requests.Timeout,
+                requests.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+            ) as error:
+                # The coordinated transport retries failures before a response arrives
+                # and wraps them in MaxRetryError once exhausted. Failures reading the
+                # body are not retried there, so retry those here.
+                if last or (
+                    self.transport_retries_failures and _transport_exhausted(error)
+                ):
                     raise
                 reason = type(error).__name__
             else:

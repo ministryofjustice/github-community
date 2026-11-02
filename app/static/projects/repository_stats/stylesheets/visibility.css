@@ -434,7 +434,7 @@
   max-width: 12em;
 }
 
-/* Long unbroken names wrap rather than widen the table. */
+/* Long identifiers, including underscore-separated names, wrap instead of widening tables. */
 .app-table-scroll .govuk-table__cell {
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }

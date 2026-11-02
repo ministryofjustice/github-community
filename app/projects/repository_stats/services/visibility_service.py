@@ -115,12 +115,14 @@ class ArchivedSection:
     progress: ArchivedProgress
     repositories: list[ArchivedRepository]
     deadline: str
+    repository_page: Page
+    repository_page_numbers: list[int | None]
+    page_ids: frozenset[int]
     # Archived public repositories that match the filters, still public or not.
     matching: int = 0
     # Every tracked archived repository (all orgs, public or not), for client-side
-    # filtering. Rows not in shown_ids are rendered hidden.
+    # filtering and pagination.
     tracked: list[ArchivedRepository] = field(default_factory=list)
-    shown_ids: frozenset[int] = frozenset()
     # Progress for each organisation and for ALL_ORGANISATIONS, so the page can switch
     # progress with the Organisation filter without reloading.
     progress_by_organisation: Mapping[str, ArchivedProgress] = field(
@@ -278,6 +280,23 @@ class VisibilityService:
             )
         return context
 
+    def _current_snapshots(
+        self, dates_by_org: Mapping[str, list[date]]
+    ) -> list[VisibilitySnapshot]:
+        """Each organisation's latest snapshot, even when its last scan failed. A
+        repository in more than one (transferred while its old organisation's scan
+        failed) is kept only from its newest observation."""
+        latest_by_org = {org: dates[-1] for org, dates in dates_by_org.items() if dates}
+        snapshots_by_date = self.repository.find_snapshots_on_dates(
+            latest_by_org.values()
+        )
+        current: dict[int, tuple[date, VisibilitySnapshot]] = {}
+        for captured_on in sorted(snapshots_by_date):
+            for snapshot in snapshots_by_date[captured_on]:
+                if latest_by_org.get(snapshot.org) == captured_on:
+                    current[snapshot.github_id] = (captured_on, snapshot)
+        return [snapshot for _, snapshot in current.values()]
+
     def _activity_items(self, context: _Context) -> list[ActivityItem]:
         in_range = filter_events_in_range(
             context.events, context.date_range.from_date, context.date_range.to_date
@@ -321,11 +340,21 @@ class VisibilityService:
         self, context: _Context, snapshots: dict[date, list[VisibilitySnapshot]]
     ) -> ArchivedSection:
         first_archived_on = self.repository.find_first_archived_dates()
+        # A repository transferred while its old organisation's scan failed is in both
+        # organisations' latest snapshots; it belongs to the newer one.
+        owner: dict[int, str] = {}
+        for org, dates in sorted(
+            context.snapshot_dates_by_organisation.items(), key=lambda item: item[1][-1]
+        ):
+            for s in snapshots.get(dates[-1], []):
+                if s.org == org:
+                    owner[s.github_id] = org
         every_org = []
         for org, dates in context.snapshot_dates_by_organisation.items():
             earliest, latest = dates[0], dates[-1]
             every_org.extend(
-                archived_public_repositories(
+                r
+                for r in archived_public_repositories(
                     earliest=[s for s in snapshots.get(earliest, []) if s.org == org],
                     earliest_date=earliest,
                     events=[
@@ -337,9 +366,15 @@ class VisibilityService:
                     first_archived_on=first_archived_on,
                     business_units=context.business_units,
                 )
+                if owner.get(r.github_id, org) == org
             )
-        matching = [r for r in every_org if context.include(r.github_id, r.org, r.name)]
-        shown = [r for r in matching if r.still_public or not context.query.only_public]
+        matching = sort_archived(
+            r for r in every_org if context.include(r.github_id, r.org, r.name)
+        )
+        shown = sort_archived(
+            r for r in matching if r.still_public or not context.query.only_public
+        )
+        repository_page = paginate(shown, context.query.page, PAGE_SIZE)
         progress_by_organisation = {
             org: archived_progress(r for r in every_org if r.org == org)
             for org in context.snapshot_dates_by_organisation
@@ -354,10 +389,12 @@ class VisibilityService:
             ),
             progress_by_organisation=progress_by_organisation,
             repositories=sort_archived(shown),
+            repository_page=repository_page,
+            repository_page_numbers=page_numbers(repository_page),
+            page_ids=frozenset(r.github_id for r in repository_page.items),
             deadline=self.archived_deadline,
             matching=len(matching),
             tracked=sort_archived(every_org),
-            shown_ids=frozenset(r.github_id for r in shown),
         )
 
     def _default_organisation(self, query: VisibilityQuery) -> VisibilityQuery:
@@ -383,10 +420,9 @@ class VisibilityService:
         context = self._context(query)
         dates = context.snapshot_dates
         latest = dates[-1] if dates else None
-        snapshots = self.repository.find_snapshots_on_dates(dates[-1:])
         counts = count_snapshot(
             s
-            for s in snapshots.get(latest, [])
+            for s in self._current_snapshots(context.snapshot_dates_by_organisation)
             if context.include(s.github_id, s.org, s.name)
         )
         changes = self._changes(context) if context.date_range.is_valid else None
@@ -410,17 +446,10 @@ class VisibilityService:
     def get_overview_page(self) -> OverviewPage:
         """Totals from each organisation's latest successful snapshot."""
         dates_by_org = self.repository.find_snapshot_dates_by_organisation()
-        latest_by_org = {org: dates[-1] for org, dates in dates_by_org.items() if dates}
-        latest = max(latest_by_org.values(), default=None)
-        snapshots_by_date = self.repository.find_snapshots_on_dates(
-            latest_by_org.values()
+        latest = max(
+            (dates[-1] for dates in dates_by_org.values() if dates), default=None
         )
-        snapshots = [
-            snapshot
-            for captured_on, rows in snapshots_by_date.items()
-            for snapshot in rows
-            if latest_by_org.get(snapshot.org) == captured_on
-        ]
+        snapshots = self._current_snapshots(dates_by_org)
         scan_states = self.repository.find_organisation_scan_states(
             RECORD_VISIBILITY_JOB_NAME
         )
@@ -446,6 +475,7 @@ class VisibilityService:
         """The archived repositories page. Dates never apply, so they are dropped here."""
         query = VisibilityQuery(
             filters=query.filters,
+            page=query.page,
             only_public=query.only_public,
             all_organisations=query.all_organisations,
         )
@@ -461,7 +491,7 @@ class VisibilityService:
         snapshots = self.repository.find_snapshots_on_dates(snapshot_bounds)
         counts = count_snapshot(
             s
-            for s in snapshots.get(latest, [])
+            for s in self._current_snapshots(context.snapshot_dates_by_organisation)
             if context.include(s.github_id, s.org, s.name)
         )
         freshness: dict[str, OrganisationFreshness] = {
@@ -471,6 +501,8 @@ class VisibilityService:
         if SHOW_ALL_ORGANISATIONS_OPTION:
             freshness[ALL_ORGANISATIONS] = {"last_updated": self._last_updated()}
 
+        archived = self._archived(context, snapshots)
+        query = replace(query, page=archived.repository_page.page)
         return VisibilityPage(
             query=query,
             organisations=self.repository.find_organisations(),
@@ -478,7 +510,7 @@ class VisibilityService:
             latest_captured_on=latest,
             counts=counts,
             date_range=context.date_range,
-            archived=self._archived(context, snapshots),
+            archived=archived,
             last_updated=self._last_updated(query.filters.org, context.scan_states),
             earliest_captured_on=dates[0] if dates else None,
             organisation_names=context.organisation_names,
