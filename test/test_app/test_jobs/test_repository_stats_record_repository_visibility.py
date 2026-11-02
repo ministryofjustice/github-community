@@ -1,5 +1,6 @@
 # ruff: noqa: DTZ001 - naive datetimes here are UTC, as stored by the database
 import unittest
+from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
 
@@ -44,11 +45,11 @@ def repo(github_id, name, visibility="public", archived=False, fork=False):
 
 
 class Response:
-    def __init__(self, body, status_code=200):
+    def __init__(self, body, status_code=200, headers=None):
         self.body = body
         self.status_code = status_code
         self.links = {}
-        self.headers = {}
+        self.headers = headers or {}
 
     def json(self):
         return self.body
@@ -71,6 +72,7 @@ class FakeGitHub:
         failing_team_orgs=(),
         display_names=None,
         failing_profile_orgs=(),
+        rate_headers_by_org=None,
     ):
         self.repositories_by_org = repositories_by_org
         self.failing_orgs = set(failing_orgs)
@@ -78,6 +80,7 @@ class FakeGitHub:
         self.failing_team_orgs = set(failing_team_orgs)
         self.display_names = display_names or {}
         self.failing_profile_orgs = set(failing_profile_orgs)
+        self.rate_headers_by_org = rate_headers_by_org or {}
         # {path: how many times it times out before answering}
         self.slow_paths = {}
         self.calls = []
@@ -89,24 +92,30 @@ class FakeGitHub:
         class Client:
             def get(self, path):
                 github.calls.append(path)
+
+                def respond(body, status_code=200):
+                    return Response(
+                        body, status_code, github.rate_headers_by_org.get(org)
+                    )
+
                 if github.slow_paths.get(path):
                     github.slow_paths[path] -= 1
                     raise requests.ReadTimeout("Read timed out. (read timeout=10)")
                 teams = github.teams_by_org.get(org, [])
                 if path == f"/orgs/{org}":
                     if org in github.failing_profile_orgs:
-                        return Response({"message": "Server Error"}, 500)
-                    return Response(
+                        return respond({"message": "Server Error"}, 500)
+                    return respond(
                         {"login": org, "name": github.display_names.get(org)}
                     )
                 if path == f"/orgs/{org}/repos?type=all&per_page=100":
                     if org in github.failing_orgs:
-                        return Response({"message": "Server Error"}, 500)
-                    return Response(github.repositories_by_org.get(org, []))
+                        return respond({"message": "Server Error"}, 500)
+                    return respond(github.repositories_by_org.get(org, []))
                 if path == f"/orgs/{org}/teams?per_page=100":
                     if org in github.failing_team_orgs:
-                        return Response({"message": "Forbidden"}, 403)
-                    return Response(
+                        return respond({"message": "Forbidden"}, 403)
+                    return respond(
                         [
                             {
                                 "slug": t["slug"],
@@ -120,8 +129,8 @@ class FakeGitHub:
                     if path == f"/orgs/{org}/teams/{t['slug']}/repos?per_page=100":
                         if t["repos"] is None:
                             # Renamed or deleted since the team list was fetched.
-                            return Response({"message": "Not Found"}, 404)
-                        return Response(
+                            return respond({"message": "Not Found"}, 404)
+                        return respond(
                             [
                                 {"id": github_id, "role_name": role}
                                 for github_id, role in t["repos"].items()
@@ -163,6 +172,7 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
         failing_profile_orgs=(),
         slow_paths=None,
         workers=1,
+        rate_headers_by_org=None,
     ):
         github = FakeGitHub(
             repositories if isinstance(repositories, dict) else {MOJ: repositories},
@@ -171,13 +181,19 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
             failing_team_orgs,
             display_names,
             failing_profile_orgs,
+            rate_headers_by_org,
         )
         github.slow_paths.update(slow_paths or {})
         self.github = github
-        times = iter([at, at + timedelta(minutes=4)])
+        orgs = orgs or self.orgs
+        times = iter(
+            [at]
+            + [moment for _ in orgs for moment in (at, at + timedelta(minutes=4))]
+            + [at + timedelta(minutes=4)]
+        )
         return record_repository_visibility(
             self.repository,
-            orgs or self.orgs,
+            orgs,
             github.client_for,
             now=lambda: next(times),
             workers=workers,
@@ -229,9 +245,17 @@ class RecordRepositoryVisibilityTestCase(unittest.TestCase):
     def runs(self):
         return [
             (r.status, r.job_name, r.org)
-            for r in self.session.query(RepositoryStatsJobRun).order_by(
-                RepositoryStatsJobRun.id
-            )
+            for r in self.session.query(RepositoryStatsJobRun)
+            .filter(RepositoryStatsJobRun.org.is_(None))
+            .order_by(RepositoryStatsJobRun.id)
+        ]
+
+    def organisation_runs(self):
+        return [
+            (r.org, r.status)
+            for r in self.session.query(RepositoryStatsJobRun)
+            .filter(RepositoryStatsJobRun.org.isnot(None))
+            .order_by(RepositoryStatsJobRun.id)
         ]
 
 
@@ -251,6 +275,7 @@ class TestRecordRepositoryVisibility(RecordRepositoryVisibilityTestCase):
         self.assertEqual(
             self.runs(), [("success", "record_repository_visibility", None)]
         )
+        self.assertEqual(self.organisation_runs(), [(MOJ, "success")])
         self.assertEqual(
             [(r.org, r.repositories, r.events) for r in results], [(MOJ, 2, 0)]
         )
@@ -359,19 +384,190 @@ class TestRecordRepositoryVisibility(RecordRepositoryVisibilityTestCase):
         )
         self.assertEqual(len(self.snapshots(date(2026, 9, 24))), 3)
 
-    def test_github_failure_writes_nothing(self):
-        self.run_job([repo(1, "one")], DAY_1)
-        before = (self.snapshots(), self.events())
+    def test_later_organisation_failure_keeps_earlier_success(self):
         orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        self.run_job({MOJ: [repo(1, "one")], MAS: [repo(5, "five")]}, DAY_1, orgs)
         with self.assertRaises(GitHubInventoryError):
             self.run_job(
-                {MOJ: [repo(1, "one", "internal"), repo(2, "new")]},
+                {
+                    MOJ: [repo(1, "one", "internal"), repo(2, "new")],
+                    MAS: [repo(5, "five", "private")],
+                },
                 DAY_2,
                 orgs,
                 failing_orgs={MAS},
             )
-        self.assertEqual((self.snapshots(), self.events()), before)
+        self.assertEqual(
+            self.snapshots(DAY_2.date()),
+            {
+                (1, "2026-09-25"): ("one", "internal", False),
+                (2, "2026-09-25"): ("new", "public", False),
+            },
+        )
+        self.assertCountEqual([event[0] for event in self.events()], [1, 2])
         self.assertEqual([r[0] for r in self.runs()], ["success", "failed"])
+        self.assertEqual(
+            self.organisation_runs(),
+            [(MOJ, "success"), (MAS, "success"), (MOJ, "success"), (MAS, "failed")],
+        )
+        states = self.repository.find_organisation_scan_states(
+            "record_repository_visibility"
+        )
+        self.assertEqual(states[MAS].latest_status, "failed")
+        self.assertEqual(
+            states[MAS].last_successful_at.replace(tzinfo=UTC),
+            DAY_1 + timedelta(minutes=4),
+        )
+        self.assertEqual(
+            states[MOJ].last_successful_at.replace(tzinfo=UTC),
+            DAY_2 + timedelta(minutes=4),
+        )
+
+        self.run_job(
+            {
+                MOJ: [repo(1, "one", "internal"), repo(2, "new")],
+                MAS: [repo(5, "five", "private")],
+            },
+            DAY_2_PM,
+            orgs,
+        )
+        recovered = self.repository.find_organisation_scan_states(
+            "record_repository_visibility"
+        )[MAS]
+        self.assertEqual(recovered.latest_status, "success")
+        self.assertEqual(
+            recovered.last_successful_at.replace(tzinfo=UTC),
+            DAY_2_PM + timedelta(minutes=4),
+        )
+
+    def test_earlier_organisation_failure_does_not_stop_later_scan(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        self.run_job({MOJ: [repo(1, "one")], MAS: [repo(5, "five")]}, DAY_1, orgs)
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MOJ: [repo(1, "one")], MAS: [repo(5, "five", "internal")]},
+                DAY_2,
+                orgs,
+                failing_orgs={MOJ},
+            )
+        self.assertEqual(
+            self.snapshots(DAY_2.date()),
+            {(5, "2026-09-25"): ("five", "internal", False)},
+        )
+        self.assertEqual([event[0] for event in self.events()], [5])
+        self.assertEqual(
+            self.organisation_runs()[-2:], [(MOJ, "failed"), (MAS, "success")]
+        )
+
+    def test_database_failure_rolls_back_only_the_affected_organisation(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        self.run_job({MOJ: [repo(1, "one")], MAS: [repo(5, "five")]}, DAY_1, orgs)
+        original = self.repository.add_events
+
+        def fail_for_mas(events):
+            original(events)
+            if any(event.org == MAS for event in events):
+                self.session.flush()
+                raise RuntimeError("simulated database failure")
+
+        self.repository.add_events = fail_for_mas
+        with self.assertRaises(RuntimeError):
+            self.run_job(
+                {MOJ: [repo(1, "one", "internal")], MAS: [repo(5, "five", "private")]},
+                DAY_2,
+                orgs,
+            )
+        self.assertEqual(
+            self.snapshots(DAY_2.date()),
+            {(1, "2026-09-25"): ("one", "internal", False)},
+        )
+        self.assertEqual([event[0] for event in self.events()], [1])
+        self.assertEqual(
+            self.organisation_runs()[-2:], [(MOJ, "success"), (MAS, "failed")]
+        )
+
+    def test_database_failure_does_not_stop_a_later_organisation(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        self.run_job({MOJ: [repo(1, "one")], MAS: [repo(5, "five")]}, DAY_1, orgs)
+        original = self.repository.add_events
+
+        def fail_for_moj(events):
+            original(events)
+            if any(event.org == MOJ for event in events):
+                self.session.flush()
+                raise RuntimeError("simulated database failure")
+
+        self.repository.add_events = fail_for_moj
+        with self.assertRaises(RuntimeError):
+            self.run_job(
+                {MOJ: [repo(1, "one", "internal")], MAS: [repo(5, "five", "private")]},
+                DAY_2,
+                orgs,
+            )
+        self.assertEqual(
+            self.snapshots(DAY_2.date()),
+            {(5, "2026-09-25"): ("five", "private", False)},
+        )
+        self.assertEqual([event[0] for event in self.events()], [5])
+        self.assertEqual(
+            self.organisation_runs()[-2:], [(MOJ, "failed"), (MAS, "success")]
+        )
+
+    def test_running_and_legacy_rows_do_not_invent_org_freshness(self):
+        self.session.add_all(
+            [
+                RepositoryStatsJobRun(
+                    job_name="record_repository_visibility",
+                    started_at=DAY_1,
+                    finished_at=DAY_1,
+                    status="success",
+                ),
+                RepositoryStatsJobRun(
+                    job_name="record_repository_visibility",
+                    org=MAS,
+                    started_at=DAY_2,
+                    status="running",
+                ),
+            ]
+        )
+        self.session.commit()
+        self.assertEqual(
+            self.repository.find_organisation_scan_states(
+                "record_repository_visibility"
+            ),
+            {},
+        )
+
+    def test_org_snapshot_dates_follow_each_scan_across_midnight(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        github = FakeGitHub({MOJ: [repo(1, "one")], MAS: [repo(5, "five")]})
+        moments = iter(
+            [
+                datetime(2026, 12, 31, 23, 59, tzinfo=UTC),
+                datetime(2026, 12, 31, 23, 59, tzinfo=UTC),
+                datetime(2027, 1, 1, 0, 1, tzinfo=UTC),
+                datetime(2027, 1, 1, 0, 2, tzinfo=UTC),
+                datetime(2027, 1, 1, 0, 3, tzinfo=UTC),
+                datetime(2027, 1, 1, 0, 4, tzinfo=UTC),
+            ]
+        )
+
+        record_repository_visibility(
+            self.repository, orgs, github.client_for, now=lambda: next(moments)
+        )
+
+        self.assertEqual(
+            self.snapshots(date(2026, 12, 31)),
+            {(1, "2026-12-31"): ("one", "public", False)},
+        )
+        self.assertEqual(
+            self.snapshots(date(2027, 1, 1)),
+            {(5, "2027-01-01"): ("five", "public", False)},
+        )
+        first_mas_scan = self.repository.find_first_successful_run_started_at(
+            "record_repository_visibility", MAS
+        )
+        self.assertEqual(first_mas_scan.date(), date(2027, 1, 1))
 
     def test_database_failure_rolls_back_everything(self):
         self.run_job([repo(1, "one")], DAY_1)
@@ -391,7 +587,7 @@ class TestRecordRepositoryVisibility(RecordRepositoryVisibilityTestCase):
 
     def test_an_empty_list_after_a_full_one_is_treated_as_a_failure(self):
         self.run_job([repo(1, "one")], DAY_1)
-        with self.assertRaisesRegex(GitHubInventoryError, "no repositories"):
+        with self.assertRaisesRegex(GitHubInventoryError, "collection failed"):
             self.run_job([], DAY_2)
         self.assertEqual(self.events(), [])
         self.assertEqual([r[0] for r in self.runs()], ["success", "failed"])
@@ -484,11 +680,82 @@ class TestRecordTeamAccess(RecordRepositoryVisibilityTestCase):
             "app.projects.repository_stats.jobs.record_repository_visibility", "INFO"
         ) as logs:
             self.run_job([repo(1, "one")], DAY_1, teams=self.TEAMS)
+        output = "\n".join(logs.output)
+        self.assertIn("organisation=ministryofjustice status=success", output)
+        self.assertIn("api_calls=5", output)
+        self.assertIn("repositories=1 events=0 team_access_rows=3", output)
+
+    def test_summary_logs_only_safe_rate_metrics_in_parallel(self):
+        teams = [
+            team("team-a", {1: "read"}),
+            team("team-b", {1: "write"}),
+            team("team-c", {1: "admin"}),
+        ]
+        with self.assertLogs(
+            "app.projects.repository_stats.jobs.record_repository_visibility", "INFO"
+        ) as logs:
+            results = self.run_job(
+                [repo(1, "sensitive-repository-marker")],
+                DAY_1,
+                teams=teams,
+                workers=3,
+                rate_headers_by_org={
+                    MOJ: {
+                        "x-ratelimit-remaining": "42",
+                        "x-ratelimit-reset": "1790000000",
+                        "authorization": "sensitive-header-marker",
+                    }
+                },
+            )
+        output = "\n".join(logs.output)
+        self.assertEqual(results[0].api_calls, 6)
+        self.assertIn("duration_seconds=", output)
         self.assertIn(
-            "Recorded 1 repositories, 0 events and 3 team access rows for "
-            "ministryofjustice (5 GitHub API calls)",
-            "\n".join(logs.output),
+            "api_calls=6 rate_limit_remaining=42 rate_limit_reset=1790000000", output
         )
+        self.assertNotIn("sensitive-repository-marker", output)
+        self.assertNotIn("sensitive-header-marker", output)
+
+    def test_failed_summary_does_not_log_untrusted_values(self):
+        with (
+            patch(
+                "app.projects.repository_stats.jobs.record_repository_visibility."
+                "fetch_org_repositories",
+                side_effect=RuntimeError("sensitive-error-marker"),
+            ),
+            self.assertLogs(
+                "app.projects.repository_stats.jobs.record_repository_visibility",
+                "INFO",
+            ) as logs,
+            self.assertRaises(RuntimeError) as failure,
+        ):
+            self.run_job([repo(1, "sensitive-repository-marker")], DAY_1)
+        output = "\n".join(logs.output)
+        self.assertIn("status=failed", output)
+        self.assertIn("error_type=RuntimeError", output)
+        self.assertIn("rate_limit_remaining=unavailable", output)
+        self.assertNotIn("sensitive-error-marker", output)
+        self.assertNotIn("sensitive-repository-marker", output)
+        self.assertNotIn("sensitive-error-marker", str(failure.exception))
+
+    def test_invalid_rate_headers_are_not_logged(self):
+        with self.assertLogs(
+            "app.projects.repository_stats.jobs.record_repository_visibility", "INFO"
+        ) as logs:
+            self.run_job(
+                [repo(1, "one")],
+                DAY_1,
+                rate_headers_by_org={
+                    MOJ: {
+                        "x-ratelimit-remaining": "sensitive-header-marker",
+                        "x-ratelimit-reset": "-1",
+                    }
+                },
+            )
+        output = "\n".join(logs.output)
+        self.assertIn("rate_limit_remaining=unavailable", output)
+        self.assertIn("rate_limit_reset=unavailable", output)
+        self.assertNotIn("sensitive-header-marker", output)
 
     def test_parallel_team_collection_logs_phase_timings_and_call_counts(self):
         teams = [
@@ -768,6 +1035,163 @@ class FakeOwnership:
 
 class TestPagesReadJobData(RecordRepositoryVisibilityTestCase):
     """Job-written rows work with the existing page service, ownership included."""
+
+    def test_partial_run_keeps_freshness_and_progress_per_org(self):
+        from app.projects.repository_stats.services.visibility_logic import (
+            parse_visibility_query,
+        )
+
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        baseline = {
+            MOJ: [repo(1, "one", archived=True)],
+            MAS: [repo(5, "five", archived=True)],
+        }
+        self.run_job(baseline, DAY_1, orgs)
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {
+                    MOJ: [repo(1, "one", "internal", archived=True)],
+                    MAS: [repo(5, "five", archived=True)],
+                },
+                DAY_2,
+                orgs,
+                failing_orgs={MAS},
+            )
+        service = VisibilityService(
+            self.repository, FakeOwnership(), today=DAY_2.date()
+        )
+        overview = service.get_overview_page()
+        self.assertEqual(
+            [(org.key, org.totals.total) for org in overview.overview.organisations],
+            [(MOJ, 1), (MAS, 1)],
+        )
+        self.assertEqual(overview.last_updated, ("25 September 2026", "5:04am"))
+        self.assertEqual(
+            overview.failed_organisation_updates, {MAS: "24 September 2026"}
+        )
+        for org, updated, made_internal in (
+            (MOJ, ("25 September 2026", "5:04am"), 1),
+            (MAS, ("24 September 2026", "5:04am"), 0),
+        ):
+            with self.subTest(org=org):
+                query = parse_visibility_query({"org": org})
+                changes = service.get_changes_page(query)
+                archived = service.get_archived_page(query)
+                self.assertEqual(changes.last_updated, updated)
+                self.assertEqual(archived.last_updated, updated)
+                self.assertEqual(changes.earliest_captured_on, DAY_1.date())
+                self.assertEqual(archived.earliest_captured_on, DAY_1.date())
+                self.assertEqual(archived.archived.progress.total, 1)
+                self.assertEqual(
+                    archived.archived.progress.made_internal, made_internal
+                )
+        all_progress = service.get_archived_page(
+            parse_visibility_query({"org": "all"})
+        ).archived.progress
+        self.assertEqual((all_progress.total, all_progress.made_internal), (2, 1))
+
+        self.run_job(
+            {
+                MOJ: [repo(1, "one", "internal", archived=True)],
+                MAS: [repo(5, "five", archived=True)],
+            },
+            DAY_2_PM,
+            orgs,
+        )
+        self.assertEqual(service.get_overview_page().failed_organisation_updates, {})
+
+    def test_dev_history_import_preserves_per_org_baselines_in_prod(self):
+        from app.projects.repository_stats.services.visibility_logic import (
+            parse_visibility_query,
+        )
+
+        moj_baseline = datetime(2026, 8, 17, 4, tzinfo=UTC)
+        mas_baseline = datetime(2026, 10, 29, 4, tzinfo=UTC)
+        later = datetime(2026, 10, 30, 4, tzinfo=UTC)
+        self.run_job([repo(1, "moj-archived", archived=True)], moj_baseline)
+        self.run_job(
+            {
+                MAS: [
+                    repo(5, "mas-archived", archived=True),
+                    repo(6, "mas-private", "private"),
+                ]
+            },
+            mas_baseline,
+            orgs=(OrgInstallation(MAS, 2),),
+        )
+        self.run_job([repo(1, "moj-archived", "internal", archived=True)], later)
+        self.assertEqual(
+            self.repository.find_snapshot_dates_by_organisation(),
+            {MOJ: [moj_baseline.date(), later.date()], MAS: [mas_baseline.date()]},
+        )
+        self.assertEqual([e[0] for e in self.events()], [1])
+
+        imported_engine = create_engine("sqlite://")
+        self.addCleanup(imported_engine.dispose)
+        RepositoryStatsVisibilitySnapshot.metadata.create_all(
+            imported_engine,
+            tables=[
+                RepositoryStatsVisibilitySnapshot.__table__,
+                RepositoryStatsVisibilityEvent.__table__,
+                RepositoryStatsJobRun.__table__,
+                RepositoryStatsOrganisation.__table__,
+            ],
+        )
+        imported_session = Session(imported_engine)
+        self.addCleanup(imported_session.close)
+        snapshots = self.repository.find_snapshots_on_dates(
+            self.repository.find_snapshot_dates()
+        )
+        imported_session.add_all(
+            RepositoryStatsVisibilitySnapshot(**asdict(snapshot))
+            for rows in snapshots.values()
+            for snapshot in rows
+        )
+        imported_session.add_all(
+            RepositoryStatsVisibilityEvent(**asdict(event))
+            for event in self.repository.find_events_between(
+                moj_baseline.date(), later.date()
+            )
+        )
+        imported_session.commit()
+
+        pages = {}
+        for environment, repository, today in (
+            ("dev", self.repository, later.date()),
+            ("prod", VisibilityRepository(imported_session), date(2026, 11, 15)),
+        ):
+            service = VisibilityService(repository, FakeOwnership(), today=today)
+            for org, baseline, latest, total, made_internal in (
+                (MOJ, moj_baseline.date(), later.date(), 1, 1),
+                (MAS, mas_baseline.date(), mas_baseline.date(), 2, 0),
+            ):
+                with self.subTest(environment=environment, org=org):
+                    query = parse_visibility_query({"org": org})
+                    page = service.get_changes_page(query)
+                    self.assertEqual(page.earliest_captured_on, baseline)
+                    self.assertEqual(page.latest_captured_on, latest)
+                    self.assertEqual(page.date_range.from_date, baseline)
+                    self.assertEqual(page.date_range.to_date, latest)
+                    self.assertEqual(page.counts.total, total)
+                    archived = service.get_archived_page(query).archived
+                    self.assertEqual(archived.progress.total, 1)
+                    self.assertEqual(archived.progress.made_internal, made_internal)
+                    self.assertEqual(
+                        [r.name for r in archived.repositories],
+                        ["mas-archived"] if org == MAS else [],
+                    )
+                    pages[environment, org] = (
+                        page.date_range,
+                        page.counts,
+                        page.changes,
+                        archived,
+                    )
+            all_progress = service.get_archived_page(
+                parse_visibility_query({"org": "all"})
+            ).archived.progress
+            self.assertEqual((all_progress.total, all_progress.made_internal), (2, 1))
+        for org in (MOJ, MAS):
+            self.assertEqual(pages["dev", org], pages["prod", org])
 
     def test_changes_and_archived_pages(self):
         from app.projects.repository_stats.services.visibility_logic import (

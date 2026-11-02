@@ -17,7 +17,6 @@ from app.projects.repository_stats.config.collection_config import (
 )
 from app.projects.repository_stats.config.visibility_config import (
     VISIBILITY_ARCHIVED_DEADLINE,
-    VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
     VISIBILITY_SLACK_CHANNEL_URL,
 )
@@ -25,6 +24,9 @@ from app.projects.repository_stats.repositories.visibility_repository import (
     VisibilityRepository,
 )
 from app.projects.repository_stats.services import github_sign_in as github
+from app.projects.repository_stats.services.overview_logic import (
+    NOT_IDENTIFIED_BUSINESS_UNIT,
+)
 from app.projects.repository_stats.services.visibility_access import (
     check_stats_access,
     clear_github_sign_in,
@@ -107,8 +109,18 @@ def repository_overview():
     ]
     anchors = overview_anchors(keys)
 
+    legacy_keys = {
+        f"{org.key}/Unknown": f"{org.key}/{NOT_IDENTIFIED_BUSINESS_UNIT}"
+        for org in page.overview.organisations
+        if f"{org.key}/Unknown" not in keys
+        and f"{org.key}/{NOT_IDENTIFIED_BUSINESS_UNIT}" in keys
+    }
     open_keys = [
-        key for key in dict.fromkeys(request.args.getlist("open")) if key in keys
+        key
+        for key in dict.fromkeys(
+            legacy_keys.get(key, key) for key in request.args.getlist("open")
+        )
+        if key in keys
     ]
     # A business unit only shows when its organisation is open too.
     open_keys = [
@@ -137,7 +149,6 @@ def visibility_changes():
         "projects/repository_stats/pages/visibility_changes.html",
         page=page,
         query=page.query,
-        history_start_date=VISIBILITY_HISTORY_START_DATE,
         show_all_organisations_option=SHOW_ALL_ORGANISATIONS_OPTION,
     )
 

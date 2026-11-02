@@ -5,6 +5,7 @@
 
   var DEBOUNCE_MS = 200;
   var FILTER_PARAMS = ["org", "business_unit", "q", "only_public"];
+  var ALL_ORGANISATIONS = "all";
 
   function init() {
     var form = document.getElementById("visibility-filters");
@@ -15,6 +16,8 @@
     var count = document.getElementById("archived-count");
     var status = document.getElementById("archived-filter-status");
     var clear = document.getElementById("clear-filters");
+    var freshnessElement = document.getElementById("archived-freshness");
+    var lastUpdated = document.getElementById("archived-last-updated");
     if (!form || !noMatch || !allInternal || !status) return;
 
     var org = form.querySelector("#org");
@@ -23,6 +26,15 @@
     var onlyPublic = form.querySelector('input[type="checkbox"][name="only_public"]');
     if (!org || !businessUnit || !name || !onlyPublic) return;
 
+    var freshness = freshnessElement
+      ? JSON.parse(freshnessElement.getAttribute("data-organisations") || "{}")
+      : {};
+    var freshnessOrg = null;
+    var progressElement = document.getElementById("archived-progress");
+    var progress = progressElement
+      ? JSON.parse(progressElement.getAttribute("data-progress") || "{}")
+      : {};
+    var progressOrg = null;
     var rows = table ? Array.prototype.slice.call(table.tBodies[0].rows) : [];
     rows.forEach(function (row) {
       try {
@@ -42,7 +54,7 @@
     }
 
     function matches(row, s) {
-      if (s.org && row.getAttribute("data-org") !== s.org) return false;
+      if (s.org && s.org !== ALL_ORGANISATIONS && row.getAttribute("data-org") !== s.org) return false;
       if (s.businessUnit && row.businessUnits.indexOf(s.businessUnit) === -1) return false;
       return !s.q || (row.getAttribute("data-name") || "").indexOf(s.q) !== -1;
     }
@@ -63,8 +75,52 @@
       );
     }
 
+    function updateFreshness(selectedOrg) {
+      if (freshnessOrg === selectedOrg) return;
+      freshnessOrg = selectedOrg;
+      var details = freshness[selectedOrg];
+      if (lastUpdated) {
+        lastUpdated.textContent = "";
+        if (details && details.last_updated) {
+          var updateLine = document.createElement("p");
+          var time = document.createElement("em");
+          updateLine.className = "govuk-body-s";
+          updateLine.appendChild(document.createTextNode("Last updated: " + details.last_updated[0] + " at "));
+          time.textContent = details.last_updated[1];
+          updateLine.appendChild(time);
+          lastUpdated.appendChild(updateLine);
+        }
+      }
+    }
+
+    function setText(id, text) {
+      var element = document.getElementById(id);
+      if (element) element.textContent = text;
+    }
+
+    function updateProgress(selectedOrg) {
+      if (!progressElement || progressOrg === selectedOrg) return;
+      progressOrg = selectedOrg;
+      var details = progress[selectedOrg || ALL_ORGANISATIONS] || { total: 0, made_internal: 0, percent: 0 };
+      var summary = document.getElementById("archived-progress-summary");
+      var empty = document.getElementById("archived-progress-empty");
+      var bar = document.getElementById("archived-progress-bar");
+      var option = org.options[org.selectedIndex];
+      setText("archived-progress-organisation", option ? option.text : "All organisations");
+      setText(
+        "archived-progress-text",
+        details.made_internal + " of " + details.total + " archived public repositories have been made internal"
+      );
+      setText("archived-progress-percent", details.percent + "% complete");
+      if (bar) bar.style.width = details.percent + "%";
+      if (summary) summary.hidden = !details.total;
+      if (empty) empty.hidden = !!details.total;
+    }
+
     function apply(announce) {
       var s = state();
+      updateFreshness(s.org);
+      updateProgress(s.org);
       var matching = 0;
       var shown = 0;
       rows.forEach(function (row) {
@@ -107,7 +163,7 @@
       clear.addEventListener("click", function (event) {
         event.preventDefault();
         window.clearTimeout(timer);
-        org.value = "";
+        org.value = form.getAttribute("data-default-org") || "";
         businessUnit.value = "";
         name.value = "";
         onlyPublic.checked = true;

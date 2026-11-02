@@ -270,14 +270,30 @@ class TestQueryParsing(unittest.TestCase):
 
     def test_an_empty_or_missing_org_both_parse_to_unresolved(self):
         """Neither a missing 'org' key nor an explicitly blank one picks an
-        organisation: the service layer fills in the default when none is offered by
-        the user (SHOW_ALL_ORGANISATIONS_OPTION off)."""
-        self.assertEqual(parse_visibility_query({}).filters.org, "")
-        self.assertEqual(parse_visibility_query({"org": ""}).filters.org, "")
+        organisation: the service layer fills in the default organisation."""
+        for args in ({}, {"org": ""}):
+            query = parse_visibility_query(args)
+            self.assertEqual(query.filters.org, "")
+            self.assertFalse(query.all_organisations)
+            self.assertNotIn("org", query.to_params())
         self.assertEqual(
             parse_visibility_query({"org": "ministryofjustice"}).filters.org,
             "ministryofjustice",
         )
+
+    def test_explicit_all_organisations_is_kept_in_links_and_csv(self):
+        for value in ("all", " ALL "):
+            with self.subTest(value=value):
+                query = parse_visibility_query({"org": value, "sort": "repository"})
+                self.assertEqual(query.filters.org, "")
+                self.assertTrue(query.all_organisations)
+                self.assertEqual(query.to_params()["org"], "all")
+                self.assertIn("org=all", query.sort_query_string("repository"))
+                self.assertIn("org=all", query.query_string(page=2))
+                self.assertIn("org=all", query.csv_query_string("", ""))
+        archived = parse_archived_query({"org": "all", "from": "2026-08-01"})
+        self.assertTrue(archived.all_organisations)
+        self.assertEqual(archived.to_params(), {"org": "all"})
 
 
 class TestFilters(unittest.TestCase):

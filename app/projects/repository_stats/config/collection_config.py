@@ -15,10 +15,9 @@ DEFAULT_ORG = "ministryofjustice"
 RECORD_VISIBILITY_JOB_NAME = "record_repository_visibility"
 
 # Whether the Organisation filter on the visibility pages offers an "All organisations"
-# option. Off for now, while only one organisation has enough data for it to be
-# meaningful; flip back on once that changes. While off, the filter defaults to
-# DEFAULT_ORG whenever no organisation was requested.
-SHOW_ALL_ORGANISATIONS_OPTION = False
+# option (?org=all). Either way, a visit with no organisation requested shows
+# DEFAULT_ORG; an explicit choice, including All, is kept in the URL.
+SHOW_ALL_ORGANISATIONS_OPTION = True
 
 
 @dataclass(frozen=True)

@@ -15,7 +15,6 @@ import requests
 from flask import Flask
 
 from app.projects.repository_stats.config.visibility_config import (
-    VISIBILITY_HISTORY_START_DATE,
     VISIBILITY_SLACK_CHANNEL_NAME,
     VISIBILITY_SLACK_CHANNEL_URL,
 )
@@ -30,6 +29,7 @@ from app.projects.repository_stats.services.visibility_access import (
     GitHubAccessCheckError,
 )
 from app.projects.repository_stats.services.visibility_logic import (
+    OrganisationScanState,
     VisibilityEvent,
     VisibilitySnapshot,
 )
@@ -116,6 +116,13 @@ class FakeVisibilityRepository:
     def find_snapshot_dates(self):
         return sorted(self.snapshots)
 
+    def find_snapshot_dates_by_organisation(self):
+        result = {}
+        for day in sorted(self.snapshots):
+            for org in sorted({s.org for s in self.snapshots[day]}):
+                result.setdefault(org, []).append(day)
+        return result
+
     def find_snapshots_on_dates(self, dates):
         return {d: self.snapshots.get(d, []) for d in dates}
 
@@ -134,10 +141,22 @@ class FakeVisibilityRepository:
         return dict(self.display_names)
 
     last_run_finished_at = datetime(2026, 9, 25, 12, 4)  # noqa: DTZ001 - stored as UTC, 1:04pm BST
+    scan_states = None
 
     def find_last_successful_run_finished_at(self, job_name):
         assert job_name == "record_repository_visibility"
         return self.last_run_finished_at
+
+    def find_organisation_scan_states(self, job_name):
+        assert job_name == "record_repository_visibility"
+        if self.scan_states is not None:
+            return dict(self.scan_states)
+        if self.last_run_finished_at is None:
+            return {}
+        return {
+            org: OrganisationScanState("success", self.last_run_finished_at)
+            for org in self.find_organisations()
+        }
 
     imported_events = False
 
@@ -198,6 +217,7 @@ def create_test_app():
 
 class RepositoryStatsTestCase(unittest.TestCase):
     repository_class = FakeVisibilityRepository
+    today = TODAY
 
     def setUp(self):
         self.client = create_test_app().test_client()
@@ -211,7 +231,7 @@ class RepositoryStatsTestCase(unittest.TestCase):
                         self.repository,
                         FakeOwnership(),
                         "23 October 2026",
-                        today=TODAY,
+                        today=self.today,
                     )
                 },
             ),
@@ -610,6 +630,20 @@ class TestStatsAccess(StatsAccessTestCase):
                     self.assertIn("sign out of github.com first", main_html)
                     self.assertNotIn("Repository visibility changes", main_html)
         membership.assert_called_once()
+
+    def test_denied_team_member_cannot_access_either_org_or_csv(self):
+        self.sign_in_to_github(checked_at=time.time(), has_access=False)
+        with patch(MEMBERSHIP) as membership:
+            for url in ROUTES:
+                for org in (ORG, OTHER_ORG):
+                    with self.subTest(url=url, org=org):
+                        response = self.client.get(f"{url}?org={org}")
+                        self.assertEqual(response.status_code, 403)
+                        self.assertEqual(response.mimetype, "text/html")
+                        self.assertIn(
+                            NO_ACCESS_HEADING, response.get_data(as_text=True)
+                        )
+        membership.assert_not_called()
 
     def test_cancel_on_github(self):
         state = self.start_github_sign_in()
@@ -1178,7 +1212,8 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn("All activity (1)", body)
         self.assertIn('<option value="HMPPS" selected>HMPPS</option>', body)
         _, body = self.get(f"{CHANGES_URL}?org=someone-else")
-        self.assertIn("Nothing to show from 1 August 2026 to 25 September 2026.", body)
+        self.assertIn("No visibility snapshots have been captured yet.", body)
+        self.assertNotIn("Showing changes since", body)
 
     def test_activity_type(self):
         _, body = self.get(f"{CHANGES_URL}?activity=new")
@@ -1356,24 +1391,81 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
 
 
 class TestDefaultOrganisation(RepositoryStatsTestCase):
-    """While SHOW_ALL_ORGANISATIONS_OPTION is off, the Organisation filter offers only
-    organisations with data and no 'All organisations' choice; it defaults to
-    ministryofjustice (DEFAULT_ORG) whenever no organisation was requested, on both
-    pages, so old bookmarks with an empty or missing organisation still work."""
+    """The Organisation filter offers 'All organisations' (?org=all) and each
+    organisation with data. A visit with no organisation requested, or an empty one
+    from an old bookmark, shows ministryofjustice (DEFAULT_ORG) on both pages; an
+    explicit choice, including All, is kept on refresh and in links."""
 
     def selected_org_option(self, body):
         select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
         return re.search(r'<option value="([^"]*)"[^>]*selected', select).group(1)
 
+    def org_options(self, body):
+        select = body.split('id="org"', 1)[1].split("</select>", 1)[0]
+        return re.findall(
+            r'<option value="([^"]*)"[^>]*>\s*([^<]*?)\s*</option>', select
+        )
+
     def test_changes_page_defaults_to_ministryofjustice(self):
         _, body = self.get(CHANGES_URL)
         self.assertEqual(self.selected_org_option(body), ORG)
-        self.assertNotIn("All organisations", body)
+        self.assertEqual(
+            [value for value, _ in self.org_options(body)], ["all", ORG, OTHER_ORG]
+        )
 
     def test_archived_page_defaults_to_ministryofjustice(self):
         _, body = self.get(ARCHIVED_URL)
         self.assertEqual(self.selected_org_option(body), ORG)
-        self.assertNotIn("All organisations", body)
+        self.assertEqual(self.org_options(body)[0], ("all", "All organisations"))
+
+    def test_explicit_all_organisations_is_kept_on_both_pages(self):
+        for url in (CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(url=url):
+                _, body = self.get(f"{url}?org=all")
+                self.assertEqual(self.selected_org_option(body), "all")
+
+    def test_explicit_all_organisations_survives_links_and_csv(self):
+        _, body = self.get(f"{CHANGES_URL}?org=all&activity=all")
+        body = body.replace("&amp;", "&")
+        sort_link = re.search(
+            r'<a class="govuk-link app-visibility-sort" href="([^"]+)">Repository</a>',
+            body,
+        ).group(1)
+        self.assertIn("org=all", sort_link)
+        csv_link = re.search(r'href="([^"]*changes\.csv[^"]*)"', body).group(1)
+        self.assertIn("org=all", csv_link)
+        self.assertIn('<input type="hidden" name="org" value="all">', body)
+
+    def test_explicit_all_organisations_csv_includes_every_organisation(self):
+        self.repository.events.append(
+            VisibilityEvent(
+                300,
+                OTHER_ORG,
+                "mas-model",
+                "changed",
+                AUG_1,
+                "scan",
+                "public",
+                "internal",
+            )
+        )
+        dates = "activity=all&from=2026-08-01&to=2026-09-25"
+        csv_by_org = {}
+        for org in ("all", "", OTHER_ORG):
+            response = self.client.get(f"{CHANGES_URL}/changes.csv?org={org}&{dates}")
+            rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))[1:]
+            csv_by_org[org] = {row[1] for row in rows}
+        self.assertEqual(csv_by_org["all"], {ORG, OTHER_ORG})
+        self.assertEqual(csv_by_org[""], {ORG})
+        self.assertEqual(csv_by_org[OTHER_ORG], {OTHER_ORG})
+
+    def test_all_falls_back_to_the_default_when_the_option_is_off(self):
+        with patch(
+            "app.projects.repository_stats.services.visibility_service.SHOW_ALL_ORGANISATIONS_OPTION",
+            False,
+        ):
+            _, body = self.get(f"{CHANGES_URL}?org=all")
+        self.assertEqual(self.selected_org_option(body), ORG)
 
     def test_an_explicit_organisation_choice_is_kept(self):
         _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}")
@@ -1464,10 +1556,7 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
 
     def test_csv_sort_by_organisation_matches_the_table(self):
         # "Analytical Example" sorts before "Example Justice Organisation",
-        # the reverse of the two organisations' login order. Exercised with
-        # SHOW_ALL_ORGANISATIONS_OPTION patched on, since with it off the page only
-        # ever shows one organisation at a time and this multi-organisation ordering
-        # can't otherwise be reached.
+        # the reverse of the two organisations' login order, with All organisations.
         self.repository.events.append(
             VisibilityEvent(
                 300,
@@ -1480,9 +1569,7 @@ class TestOrganisationDisplayNames(RepositoryStatsTestCase):
                 "internal",
             )
         )
-        params = (
-            "org=&activity=all&from=2026-08-01&to=2026-09-25&sort=organisation&dir=asc"
-        )
+        params = "org=all&activity=all&from=2026-08-01&to=2026-09-25&sort=organisation&dir=asc"
         with patch(
             "app.projects.repository_stats.services.visibility_service.SHOW_ALL_ORGANISATIONS_OPTION",
             True,
@@ -1559,7 +1646,7 @@ class TestLastUpdatedLine(RepositoryStatsTestCase):
                 self.assertNotIn('<p class="govuk-body-s">Last updated', body)
 
 
-HISTORY_START_LINE = '<p class="govuk-body-s">Showing changes since: 17 August 2026</p>'
+HISTORY_START_LINE = '<p class="govuk-body-s">Showing changes since: 1 August 2026</p>'
 
 
 class TestHistoryStartLine(RepositoryStatsTestCase):
@@ -1571,9 +1658,6 @@ class TestHistoryStartLine(RepositoryStatsTestCase):
         )
         self.assertLess(body.index(HISTORY_START_LINE), body.index("<form"))
 
-    def test_uses_the_config_constant(self):
-        self.assertEqual(VISIBILITY_HISTORY_START_DATE, "17 August 2026")
-
     def test_shown_without_a_last_updated_line(self):
         self.repository.last_run_finished_at = None
         _, body = self.get(CHANGES_URL)
@@ -1582,6 +1666,318 @@ class TestHistoryStartLine(RepositoryStatsTestCase):
     def test_not_on_the_archived_page(self):
         _, body = self.get(ARCHIVED_URL)
         self.assertNotIn("Showing changes since", body)
+
+
+MOJ_BASELINE = date(2026, 8, 17)
+MAS_BASELINE = date(2026, 10, 29)
+OCT_30 = date(2026, 10, 30)
+
+
+class DifferentBaselinesRepository(FakeVisibilityRepository):
+    def __init__(self):
+        self.snapshots = {
+            MOJ_BASELINE: [
+                snap(200, "asset-alpha", "public", MOJ_BASELINE, archived=True)
+            ],
+            MAS_BASELINE: [
+                snap(
+                    300,
+                    "mas-archived",
+                    "public",
+                    MAS_BASELINE,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+                snap(301, "sample-repo-00", "public", MAS_BASELINE, org=OTHER_ORG),
+                snap(
+                    302,
+                    "mas-private",
+                    "private",
+                    MAS_BASELINE,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+            ],
+            OCT_30: [snap(200, "asset-alpha", "internal", OCT_30, archived=True)],
+        }
+        self.events = [change(200, "asset-alpha", "public", "internal", OCT_30)]
+
+    def find_first_archived_dates(self):
+        return {200: MOJ_BASELINE, 300: MAS_BASELINE, 302: MAS_BASELINE}
+
+
+class TestOrganisationHistory(RepositoryStatsTestCase):
+    repository_class = DifferentBaselinesRepository
+    today = OCT_30
+
+    def test_selected_org_controls_last_updated_on_both_pages(self):
+        self.repository.last_run_finished_at = datetime(2026, 10, 30, 4, 4)  # noqa: DTZ001
+        self.repository.scan_states = {
+            ORG: OrganisationScanState("success", datetime(2026, 10, 30, 4, 4)),  # noqa: DTZ001
+            OTHER_ORG: OrganisationScanState("failed", datetime(2026, 10, 29, 4, 5)),  # noqa: DTZ001
+        }
+        for org, baseline, last_updated in (
+            (ORG, "17 August 2026", "30 October 2026 at <em>4:04am</em>"),
+            (OTHER_ORG, "29 October 2026", "29 October 2026 at <em>4:05am</em>"),
+        ):
+            for url in (CHANGES_URL, ARCHIVED_URL):
+                with self.subTest(org=org, url=url):
+                    _, body = self.get(f"{url}?org={org}")
+                    if url == CHANGES_URL:
+                        self.assertIn(f"Showing changes since: {baseline}</p>", body)
+                    else:
+                        self.assertNotIn("baseline", body.lower())
+                    self.assertIn(f"Last updated: {last_updated}</p>", body)
+        for url in (CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(default=url):
+                _, body = self.get(url)
+                self.assertIn("Last updated: 30 October 2026 at <em>4:04am</em>", body)
+
+    def test_archived_live_filter_has_freshness_for_each_org(self):
+        self.repository.scan_states = {
+            ORG: OrganisationScanState("success", datetime(2026, 10, 30, 4, 4)),  # noqa: DTZ001
+            OTHER_ORG: OrganisationScanState("failed", datetime(2026, 10, 29, 4, 5)),  # noqa: DTZ001
+        }
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
+        data = json.loads(re.search(r"data-organisations='([^']+)'", body).group(1))
+        self.assertEqual(
+            data,
+            {
+                "all": {
+                    "last_updated": ["25 September 2026", "1:04pm"],
+                },
+                ORG: {
+                    "last_updated": ["30 October 2026", "4:04am"],
+                },
+                OTHER_ORG: {
+                    "last_updated": ["29 October 2026", "4:05am"],
+                },
+            },
+        )
+        self.assertIn(f'data-default-org="{ORG}"', body)
+
+    def test_no_org_success_does_not_invent_last_updated(self):
+        self.repository.scan_states = {
+            ORG: OrganisationScanState("success", datetime(2026, 10, 30, 4, 4)),  # noqa: DTZ001
+            OTHER_ORG: OrganisationScanState("failed", None),
+        }
+        for url in (CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(url=url):
+                _, body = self.get(f"{url}?org={OTHER_ORG}")
+                self.assertNotIn('<p class="govuk-body-s">Last updated:', body)
+                self.assertIn("29 October 2026", body)
+        _, body = self.get(OVERVIEW_URL)
+        self.assertNotIn("(last updated ", body)
+        self.assertEqual(body.count("(latest update failed)"), 1)
+        service = VisibilityService(self.repository, FakeOwnership(), today=self.today)
+        self.assertEqual(
+            service.get_overview_page().failed_organisation_updates, {OTHER_ORG: None}
+        )
+
+    def test_legacy_only_history_does_not_invent_org_dates(self):
+        # Before per-org runs existed, only the overall run was recorded.
+        self.repository.last_run_finished_at = datetime(2026, 10, 30, 4, 4)  # noqa: DTZ001
+        self.repository.scan_states = {}
+        for org, baseline in ((ORG, "17 August 2026"), (OTHER_ORG, "29 October 2026")):
+            for url in (CHANGES_URL, ARCHIVED_URL):
+                with self.subTest(org=org, url=url):
+                    _, body = self.get(f"{url}?org={org}")
+                    if url == CHANGES_URL:
+                        self.assertIn(f"Showing changes since: {baseline}</p>", body)
+                    self.assertNotIn('<p class="govuk-body-s">Last updated:', body)
+        _, body = self.get(OVERVIEW_URL)
+        self.assertIn("Last updated: 30 October 2026", body)
+        self.assertNotIn("(last updated ", body)
+        self.assertNotIn("(latest update failed)", body)
+
+    def test_overview_retains_failed_org_snapshot_until_it_recovers(self):
+        self.repository.last_run_finished_at = datetime(2026, 10, 30, 4, 4)  # noqa: DTZ001
+        self.repository.scan_states = {
+            ORG: OrganisationScanState("success", datetime(2026, 10, 30, 4, 4)),  # noqa: DTZ001
+            OTHER_ORG: OrganisationScanState("failed", datetime(2026, 10, 29, 4, 5)),  # noqa: DTZ001
+        }
+        service = VisibilityService(self.repository, FakeOwnership(), today=self.today)
+        page = service.get_overview_page()
+        self.assertEqual(
+            [(org.key, org.totals.total) for org in page.overview.organisations],
+            [(ORG, 1), (OTHER_ORG, 3)],
+        )
+        self.assertEqual(
+            page.failed_organisation_updates, {OTHER_ORG: "29 October 2026"}
+        )
+        _, body = self.get(OVERVIEW_URL)
+        self.assertIn(f'id="overview-{OTHER_ORG}"', body)
+        self.assertEqual(body.count("(last updated 29 October 2026)"), 1)
+
+        self.repository.snapshots[OCT_30].extend(
+            [
+                snap(
+                    300, "mas-archived", "public", OCT_30, archived=True, org=OTHER_ORG
+                ),
+                snap(301, "sample-repo-00", "public", OCT_30, org=OTHER_ORG),
+                snap(
+                    302, "mas-private", "private", OCT_30, archived=True, org=OTHER_ORG
+                ),
+            ]
+        )
+        self.repository.scan_states[OTHER_ORG] = OrganisationScanState(
+            "success",
+            datetime(2026, 10, 30, 13, 4),  # noqa: DTZ001
+        )
+        _, recovered = self.get(OVERVIEW_URL)
+        self.assertNotIn("(last updated ", recovered)
+
+    def test_selected_organisation_controls_history_date_and_date_limits(self):
+        for org, baseline, label, activity_count in (
+            (ORG, MOJ_BASELINE, "17 August 2026", 1),
+            (OTHER_ORG, MAS_BASELINE, "29 October 2026", 0),
+        ):
+            with self.subTest(org=org):
+                response, body = self.get(f"{CHANGES_URL}?org={org}")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(f"Showing changes since: {label}</p>", body)
+                self.assertEqual(
+                    self.filters(body).count(f'min="{baseline}" max="{OCT_30}"'), 2
+                )
+                self.assertIn(f"All activity ({activity_count})", body)
+
+    def test_baseline_only_org_uses_its_own_latest_snapshot_and_counts(self):
+        _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}")
+        self.assertIn(estate_line(3, 2, 0, 1), body)
+        self.assertIn("Nothing to show from 29 October 2026 to 29 October 2026.", body)
+        response = self.client.get(f"{CHANGES_URL}/changes.csv?org={OTHER_ORG}")
+        self.assertIn(
+            "repository-activity-2026-10-29-to-2026-10-29.csv",
+            response.headers["Content-Disposition"],
+        )
+        self.assertEqual(
+            len(list(csv.reader(io.StringIO(response.get_data(as_text=True))))), 1
+        )
+
+    def test_filters_and_early_from_date_keep_the_selected_baseline(self):
+        _, body = self.get(
+            f"{CHANGES_URL}?org={OTHER_ORG}&business_unit=HMPPS&q=sample"
+            "&from=2026-08-17&to=2026-10-30"
+        )
+        self.assertIn("Showing changes since: 29 October 2026</p>", body)
+        self.assertIn("Summary, 29 October to 30 October 2026", body)
+        self.assertIn(estate_line(1, 1, 0, 0), body)
+        self.assertIn("All activity (0)", body)
+        self.assertNotIn("There is a problem", body)
+
+    def test_to_before_selected_baseline_has_no_other_org_activity(self):
+        _, body = self.get(f"{CHANGES_URL}?org={OTHER_ORG}&to=2026-09-01")
+        self.assertIn("All activity (0)", body)
+        self.assertIn(
+            "Nothing to show from 1 September 2026 to 1 September 2026.", body
+        )
+        self.assertIn("Showing changes since: 29 October 2026</p>", body)
+
+    def test_later_changes_and_csv_use_selected_org_filters(self):
+        self.repository.snapshots[OCT_30].extend(
+            [
+                snap(
+                    300, "mas-archived", "public", OCT_30, archived=True, org=OTHER_ORG
+                ),
+                snap(301, "sample-repo-00", "internal", OCT_30, org=OTHER_ORG),
+                snap(
+                    302, "mas-private", "private", OCT_30, archived=True, org=OTHER_ORG
+                ),
+            ]
+        )
+        self.repository.events.append(
+            VisibilityEvent(
+                301,
+                OTHER_ORG,
+                "sample-repo-00",
+                "changed",
+                OCT_30,
+                "scan",
+                "public",
+                "internal",
+            )
+        )
+        params = (
+            f"org={OTHER_ORG}&business_unit=HMPPS&q=sample&activity=public-to-internal"
+        )
+        _, body = self.get(f"{CHANGES_URL}?{params}")
+        self.assertIn("Public to internal (1)", body)
+        self.assertIn(estate_line(1, 0, 1, 0), body)
+        self.assertNotIn(">asset-alpha<", body)
+        response = self.client.get(f"{CHANGES_URL}/changes.csv?{params}")
+        rows = list(csv.reader(io.StringIO(response.get_data(as_text=True))))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[1][:3], ["sample-repo-00", OTHER_ORG, "HMPPS"])
+
+    def test_archived_baseline_only_org_is_included_in_rows_and_its_own_progress(self):
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
+        self.assertEqual(self.visible_archived(body), ["mas-archived"])
+        self.assertIn(
+            "0 of 1 archived public repositories have been made internal", body
+        )
+        self.assertIn("29 October 2026", body)
+        _, body = self.get(f"{ARCHIVED_URL}?org={ORG}&only_public=0")
+        self.assertEqual(self.visible_archived(body), ["asset-alpha"])
+        self.assertIn("17 August 2026", body)
+        self.assertIn(
+            "1 of 1 archived public repositories have been made internal", body
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?org=all")
+        self.assertIn(
+            "1 of 2 archived public repositories have been made internal", body
+        )
+
+    def test_archived_later_events_and_filters_use_each_org_baseline(self):
+        self.repository.snapshots[OCT_30].extend(
+            [
+                snap(
+                    300,
+                    "mas-archived",
+                    "internal",
+                    OCT_30,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+                snap(
+                    301,
+                    "sample-repo-00",
+                    "public",
+                    OCT_30,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+            ]
+        )
+        self.repository.events.extend(
+            [
+                VisibilityEvent(
+                    300,
+                    OTHER_ORG,
+                    "mas-archived",
+                    "changed",
+                    OCT_30,
+                    "scan",
+                    "public",
+                    "internal",
+                ),
+                VisibilityEvent(
+                    301, OTHER_ORG, "sample-repo-00", "archived", OCT_30, "scan"
+                ),
+            ]
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
+        self.assertEqual(self.visible_archived(body), ["sample-repo-00"])
+        self.assertIn(
+            "1 of 2 archived public repositories have been made internal", body
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?org=all")
+        self.assertIn(
+            "2 of 3 archived public repositories have been made internal", body
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}&q=mas&only_public=0")
+        self.assertEqual(self.visible_archived(body), ["mas-archived"])
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}&business_unit=HMPPS")
+        self.assertEqual(self.visible_archived(body), ["sample-repo-00"])
 
 
 class TestNoImportedDatesNote(RepositoryStatsTestCase):
@@ -1602,6 +1998,7 @@ class TestNoSnapshots(RepositoryStatsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("No visibility snapshots have been captured yet.", body)
         self.assertNotIn("Last updated", body)
+        self.assertNotIn("Showing changes since", body)
 
     def test_archived_empty_state(self):
         response, body = self.get(ARCHIVED_URL)
@@ -1654,7 +2051,12 @@ class TestActivityCsv(RepositoryStatsTestCase):
         self.assertEqual(response.status_code, 400)
 
 
-PROGRESS_NOTE = "Progress is for all organisations and is not affected by filters"
+PROGRESS_NOTE = (
+    "Business unit, repository name and ‘still public’ filters do not affect progress."
+)
+PROGRESS_HEADING = (
+    '<h2 class="govuk-heading-m">Progress: <span id="archived-progress-organisation">'
+)
 
 
 class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
@@ -1668,13 +2070,25 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertNotIn(NO_HEADING, body)
         self.assertIn(LAST_UPDATED_LINE, body)
         self.assertIn(
-            "Archived repositories must be changed from public to internal on or before 23 October 2026.",
+            '<h2 class="govuk-notification-banner__title" id="archived-announcement-title">Important</h2>',
             body,
         )
         self.assertIn(
-            'C0AJBK3P5A8" target="_blank" rel="noopener noreferrer">#ask-developer-experience<span class="govuk-visually-hidden"> (opens in new tab)</span></a>',
+            "The deadline for changing archived public repositories to internal was 23 October 2026.",
             body,
         )
+        self.assertIn(
+            "The Developer Experience team is preparing to change the remaining archived public repositories to internal.",
+            body,
+        )
+        self.assertNotIn("on or before", body)
+        self.assertNotIn("before the deadline", body)
+        self.assertIn(
+            'C0AJBK3P5A8" target="_blank" rel="noopener noreferrer">#ask-developer-experience<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.',
+            body,
+        )
+        self.assertIn('id="archived-announcement-content"', body)
+        self.assertIn("javascript/announcement-toggle.js", body)
         self.assertNotIn(" Slack channel", body)
         self.assertIn('<details class="govuk-details">', body)
         self.assertNotIn('<details class="govuk-details" open', body)
@@ -1684,7 +2098,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             "1 of 2 archived public repositories have been made internal</p>", body
         )
         self.assertIn(
-            '<p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text">50% complete</p>',
+            '<p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">50% complete</p>',
             body,
         )
         self.assertIn("width: 50%", body)
@@ -1705,11 +2119,11 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                     for text in (
                         LAST_UPDATED_LINE,
                         "govuk-notification-banner",
-                        '<h2 class="govuk-heading-m">Progress</h2>',
-                        PROGRESS_NOTE,
                         '<h2 class="govuk-heading-m">Find repositories</h2>',
                         "Only show repositories that are still public",
                         "Apply filters",
+                        PROGRESS_HEADING,
+                        PROGRESS_NOTE,
                         '<details class="govuk-details">',
                         "first seen archived",
                     )
@@ -1787,13 +2201,48 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             filters,
         )
 
+    def test_progress_follows_the_selected_organisation(self):
+        self.repository.display_names = {
+            ORG: "Example Justice Organisation",
+            OTHER_ORG: "Analytical Example",
+        }
+        for params, heading, line in (
+            ("", "Example Justice Organisation", "1 of 2"),
+            (f"org={ORG}", "Example Justice Organisation", "1 of 2"),
+            ("org=all", "All organisations", "1 of 2"),
+        ):
+            with self.subTest(params=params):
+                _, body = self.get(f"{ARCHIVED_URL}?{params}")
+                self.assertIn(f"{PROGRESS_HEADING}{heading}</span></h2>", body)
+                self.assertIn(
+                    f"{line} archived public repositories have been made internal",
+                    body,
+                )
+                self.assertIn('id="archived-progress-empty" hidden', body)
+        _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
+        self.assertIn(f"{PROGRESS_HEADING}Analytical Example</span></h2>", body)
+        self.assertIn('id="archived-progress-summary" hidden', body)
+        self.assertIn(
+            '<p class="govuk-body" id="archived-progress-empty">There are no archived public repositories.</p>',
+            body,
+        )
+        data = json.loads(re.search(r"data-progress='([^']+)'", body).group(1))
+        self.assertEqual(
+            data,
+            {
+                "all": {"total": 2, "made_internal": 1, "percent": 50},
+                ORG: {"total": 2, "made_internal": 1, "percent": 50},
+                OTHER_ORG: {"total": 0, "made_internal": 0, "percent": 0},
+            },
+        )
+
     def test_filters_narrow_the_list_but_not_progress(self):
         all_orgs = "1 of 2 archived public repositories have been made internal</p>"
         no_match = '<div id="archived-no-match">'
         for params, shown in (
             ("business_unit=HMPPS", []),
             ("q=asset", ["asset-alpha"]),
-            (f"org={OTHER_ORG}", []),
+            ("org=all&business_unit=HMPPS", []),
             ("only_public=0", ["asset-alpha", "sample-archived-moved"]),
         ):
             with self.subTest(params=params):
@@ -1828,10 +2277,12 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
     def test_compact_layout_classes(self):
         _, body = self.get(ARCHIVED_URL)
         self.assertIn(
-            'class="govuk-notification-banner app-visibility-banner--full-width"', body
+            'class="govuk-notification-banner app-visibility-banner--full-width app-announcement"',
+            body,
         )
         self.assertIn(
-            '<div class="govuk-!-margin-bottom-4" id="archived-progress">', body
+            '<div class="govuk-!-margin-bottom-6" id="archived-progress" data-progress=',
+            body,
         )
         self.assertIn(
             '<div class="app-visibility-progress govuk-!-margin-bottom-2" aria-hidden="true">',
@@ -2069,7 +2520,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
                 ("group-label", "Business unit", []),
                 ("business-unit", "HMPPS", ["1", "0", "1", "0"]),
                 ("business-unit", "Office of the CTO", ["1", "1", "0", "0"]),
-                ("business-unit", "Unknown", ["31", "1", "30", "0"]),
+                ("business-unit", "Not identified", ["31", "1", "30", "0"]),
                 ("org", OTHER_ORG, ["1", "1", "0", "0"]),
             ],
         )
@@ -2126,7 +2577,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
     def test_open_business_unit_shows_teams(self):
         _, body = self.get(
             f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO"
-            f"&open={ORG}/Unknown&open={OTHER_ORG}/Unknown&open={ORG}/Not a unit"
+            f"&open={ORG}/Not identified&open={OTHER_ORG}/Not identified&open={ORG}/Not a unit"
         )
         self.assertEqual(
             self.rows(body),
@@ -2139,7 +2590,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
                 ("group-label", "Team", []),
                 ("team", "platform-team", ["1", "1", "0", "0"]),
                 ("team", "service-team", ["1", "1", "0", "0"]),
-                ("business-unit", "Unknown", ["31", "1", "30", "0"]),
+                ("business-unit", "Not identified", ["31", "1", "30", "0"]),
                 ("group-label", "Team", []),
                 ("team", "No team", ["31", "1", "30", "0"]),
                 ("org", OTHER_ORG, ["1", "1", "0", "0"]),
@@ -2158,7 +2609,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
         # Closing a business unit keeps the organisation and other units open.
         self.assertIn(
             f'app-overview-toggle--open" href="{OVERVIEW_URL}?open={ORG}'
-            f"&amp;open={ORG}%2FUnknown#overview-{ORG}-office-of-the-cto"
+            f"&amp;open={ORG}%2FNot+identified#overview-{ORG}-office-of-the-cto"
             '">Office of the CTO',
             body,
         )
@@ -2168,6 +2619,34 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             body,
         )
         self.assertNotIn("Not a unit", body)
+
+    def test_legacy_unknown_links_open_not_identified_in_each_organisation(self):
+        with patch.object(FakeOwnership, "business_units_by_repository", lambda _: {}):
+            for org in (ORG, OTHER_ORG):
+                with self.subTest(org=org):
+                    _, legacy = self.get(
+                        f"{OVERVIEW_URL}?open={org}&open={org}/Unknown"
+                    )
+                    _, current = self.get(
+                        f"{OVERVIEW_URL}?open={org}&open={org}/Not identified"
+                    )
+                    self.assertEqual(legacy, current)
+                    self.assertIn(("group-label", "Team", []), self.rows(legacy))
+
+    def test_real_unknown_business_unit_keeps_its_open_key(self):
+        with patch.object(
+            FakeOwnership,
+            "business_units_by_repository",
+            lambda _: {"asset-alpha": ["Unknown"]},
+        ):
+            _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Unknown")
+        rows = self.rows(body)
+        unknown = rows.index(("business-unit", "Unknown", ["1", "1", "0", "0"]))
+        self.assertEqual(rows[unknown + 1], ("group-label", "Team", []))
+        not_identified = rows.index(
+            ("business-unit", "Not identified", ["32", "1", "31", "0"])
+        )
+        self.assertEqual(rows[not_identified + 1][0], "org")
 
     def test_business_unit_needs_its_organisation_open(self):
         _, body = self.get(f"{OVERVIEW_URL}?open={ORG}/HMPPS")
@@ -2264,11 +2743,14 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
         self.assertIn(
             ("business-unit", "Office of the CTO", ["1", "1", "0", "0"]), rows
         )
-        self.assertIn(("business-unit", "Unknown", ["31", "1", "30", "0"]), rows)
+        self.assertIn(("business-unit", "Not identified", ["31", "1", "30", "0"]), rows)
 
-        self.repository.snapshots[SEP_25] = [
-            snap(1000 + i, f"sample-bulk-{i}", "internal", SEP_25) for i in range(1234)
-        ]
+        self.repository.snapshots = {
+            SEP_25: [
+                snap(1000 + i, f"sample-bulk-{i}", "internal", SEP_25)
+                for i in range(1234)
+            ]
+        }
         _, body = self.get(OVERVIEW_URL)
         self.assertEqual(
             self.rows(body)[0],
@@ -2281,7 +2763,7 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
 
         _, body = self.get(
             f"{OVERVIEW_URL}?open={ORG}&open={OTHER_ORG}&open={ORG}/Office of the CTO"
-            f"&open={ORG}/Unknown"
+            f"&open={ORG}/Not identified"
         )
         kinds = [(kind, name) for kind, name, _ in self.rows(body)]
         labels = [
@@ -2345,7 +2827,7 @@ class TestRepositoryOverviewTeamScrollBoxes(RepositoryStatsTestCase):
 
     def test_two_open_business_units_each_get_their_own_box(self):
         _, body = self.get(
-            f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO&open={ORG}/Unknown"
+            f"{OVERVIEW_URL}?open={ORG}&open={ORG}/Office of the CTO&open={ORG}/Not identified"
         )
         self.assertEqual(body.count('class="app-overview-teambox"'), 2)
 

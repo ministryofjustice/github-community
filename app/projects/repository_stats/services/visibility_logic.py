@@ -55,6 +55,12 @@ NO_BUSINESS_UNIT = "None"
 
 
 @dataclass(frozen=True)
+class OrganisationScanState:
+    latest_status: str
+    last_successful_at: datetime | None
+
+
+@dataclass(frozen=True)
 class VisibilitySnapshot:
     github_id: int
     org: str
@@ -247,6 +253,11 @@ def parse_only_public(values: Sequence[str]) -> bool:
     return "1" in values
 
 
+# The Organisation filter value for an explicit "All organisations" choice. A missing
+# organisation means no choice was made, so the page shows the default organisation.
+ALL_ORGANISATIONS = "all"
+
+
 def parse_page_number(value: str | None) -> int:
     try:
         return max(1, int(value or "1"))
@@ -286,12 +297,20 @@ class VisibilityQuery:
     direction: str = "desc"
     page: int = 1
     only_public: bool = True
+    # True when "All organisations" was chosen, so it survives links and refreshes.
+    all_organisations: bool = False
+
+    @property
+    def org_param(self) -> str:
+        if self.filters.org:
+            return self.filters.org
+        return ALL_ORGANISATIONS if self.all_organisations else ""
 
     def to_params(self, **overrides) -> dict[str, str]:
         """Non-default parameters, in a stable order, for building links and hidden inputs."""
         query = replace(self, **overrides) if overrides else self
         params = {
-            "org": query.filters.org,
+            "org": query.org_param,
             "business_unit": query.filters.business_unit,
             "q": query.filters.q,
             "from": query.from_value,
@@ -335,7 +354,7 @@ class VisibilityQuery:
         """Every parameter that shapes the activity table, including defaults, so the CSV
         matches what is on screen."""
         params = {
-            "org": self.filters.org,
+            "org": self.org_param,
             "business_unit": self.filters.business_unit,
             "q": self.filters.q,
             "from": from_value,
@@ -373,8 +392,11 @@ def parse_visibility_query(
         activity = DEFAULT_ACTIVITY
 
     # "org" absent or blank both mean no explicit choice: the service layer fills in
-    # the default organisation when SHOW_ALL_ORGANISATIONS_OPTION is off.
+    # the default organisation. ALL_ORGANISATIONS is an explicit "All organisations".
     org = (args.get("org") or "").strip()
+    all_organisations = org.lower() == ALL_ORGANISATIONS
+    if all_organisations:
+        org = ""
 
     return VisibilityQuery(
         filters=VisibilityFilters(
@@ -389,6 +411,7 @@ def parse_visibility_query(
         direction=direction,
         page=parse_page_number(args.get("page")),
         only_public=parse_only_public(only_public_values),
+        all_organisations=all_organisations,
     )
 
 
@@ -398,7 +421,11 @@ def parse_archived_query(
     """The archived repositories page only uses organisation, business unit, name and
     the 'only still public' checkbox. Dates, activity, sort and page never apply."""
     query = parse_visibility_query(args, only_public_values)
-    return VisibilityQuery(filters=query.filters, only_public=query.only_public)
+    return VisibilityQuery(
+        filters=query.filters,
+        only_public=query.only_public,
+        all_organisations=query.all_organisations,
+    )
 
 
 # Snapshot and event counts

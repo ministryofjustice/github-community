@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from app.projects.repository_stats.config.collection_config import OrgInstallation
 from app.projects.repository_stats.db_models import (
     RepositoryStatsJobRun,
     RepositoryStatsVisibilitySnapshot,
@@ -16,12 +17,15 @@ from app.projects.repository_stats.jobs.import_visibility_audit_reports import (
     main,
 )
 from app.projects.repository_stats.services.audit_import import (
+    AuditFile,
     AuditImportError,
+    AuditRow,
     read_directory,
     synthetic_github_id,
 )
 from app.projects.repository_stats.services.github_inventory import GitHubInventoryError
 from test.test_app.test_jobs.test_repository_stats_record_repository_visibility import (
+    MAS,
     MOJ,
     FakeGitHub,
     RecordRepositoryVisibilityTestCase,
@@ -227,6 +231,159 @@ class TestImportAndScan(ImportTestCase):
         events = self.imported_events()
         self.run_import()
         self.assertEqual(self.imported_events(), events)
+
+    def test_partial_first_scan_keeps_the_successful_org_snapshot(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MOJ: self.github_repos},
+                datetime(2026, 9, 20, 3, 0, tzinfo=UTC),
+                orgs,
+                failing_orgs={MAS},
+            )
+        scan_snapshot = self.snapshots(SEP_20)
+
+        summary = self.run_import()
+
+        self.assertEqual(summary.first_scan_date, SEP_20)
+        self.assertEqual(summary.skipped_dates, [SEP_20])
+        self.assertEqual(self.snapshots(SEP_20), scan_snapshot)
+
+    def test_partial_scan_in_another_org_does_not_skip_unscanned_org_history(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MAS: [repo(5, "other")]},
+                datetime(2026, 9, 20, 3, 0, tzinfo=UTC),
+                orgs,
+                failing_orgs={MOJ},
+            )
+        scan_snapshot = self.snapshots(SEP_20)
+
+        summary = self.run_import()
+
+        self.assertIsNone(summary.first_scan_date)
+        self.assertEqual(summary.skipped_dates, [])
+        self.assertEqual(
+            self.snapshots(SEP_20)[(5, "2026-09-20")],
+            scan_snapshot[(5, "2026-09-20")],
+        )
+        self.assertEqual(len(self.snapshots(SEP_20)), 4)
+        self.assertEqual(len(self.snapshots(SEP_18)), 2)
+
+    def make_runs_legacy(self):
+        """Drop the per-org rows, leaving only overall rows as before Gate 4."""
+        self.session.query(RepositoryStatsJobRun).filter(
+            RepositoryStatsJobRun.org.isnot(None)
+        ).delete()
+        self.session.commit()
+
+    def first_scan(self, org):
+        return self.repository.find_first_successful_run_started_at(
+            "record_repository_visibility", org
+        )
+
+    def assert_import_blocked(self, files, orgs, github):
+        before = (self.snapshots(), self.events(), self.runs())
+        with self.assertRaisesRegex(AuditImportError, "Cannot tell when"):
+            import_visibility_audit_reports(
+                self.repository, files, orgs, github.client_for, now=lambda: IMPORTED_AT
+            )
+        self.assertEqual((self.snapshots(), self.events(), self.runs()), before)
+        self.assertEqual(github.calls, [])
+
+    def test_legacy_overall_run_blocks_the_import_for_any_org(self):
+        # A MoJ-only overall run from before per-org runs were recorded, and MAS
+        # snapshots an earlier import wrote on the same date.
+        self.scan(self.github_repos, datetime(2026, 9, 18, 3, 0, tzinfo=UTC))
+        self.make_runs_legacy()
+        self.session.add(
+            RepositoryStatsVisibilitySnapshot(
+                github_id=5,
+                org=MAS,
+                name="other",
+                visibility="public",
+                captured_on=SEP_18,
+            )
+        )
+        self.session.commit()
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        github = FakeGitHub({MOJ: self.github_repos, MAS: [repo(5, "other")]})
+
+        for org, name in ((MAS, "other"), (MOJ, "alpha")):
+            with self.subTest(org=org):
+                files = [
+                    AuditFile(
+                        AUG_17, "synthetic.xlsx", (AuditRow(org, name, "public"),)
+                    )
+                ]
+                self.assert_import_blocked(files, orgs, github)
+
+    def test_legacy_run_before_an_orgs_first_per_org_scan_blocks_the_import(self):
+        self.scan(self.github_repos, datetime(2026, 9, 18, 3, 0, tzinfo=UTC))
+        self.make_runs_legacy()
+        self.scan(self.github_repos, datetime(2026, 9, 20, 3, 0, tzinfo=UTC))
+        files, _ = read_directory(self.dir)
+
+        self.assert_import_blocked(
+            files, self.orgs, FakeGitHub({MOJ: self.github_repos})
+        )
+
+    def test_legacy_runs_do_not_change_per_org_first_scans(self):
+        self.scan(self.github_repos, datetime(2026, 9, 18, 3, 0, tzinfo=UTC))
+        self.make_runs_legacy()
+        self.scan(self.github_repos, datetime(2026, 9, 20, 3, 0, tzinfo=UTC))
+
+        self.assertEqual(self.first_scan(MOJ).date(), SEP_20)
+        self.assertIsNone(self.first_scan(MAS))
+        self.assertEqual(
+            self.repository.find_first_legacy_successful_run_started_at(
+                "record_repository_visibility"
+            ).date(),
+            SEP_18,
+        )
+
+    def test_new_org_after_a_per_org_scan_has_no_cutoff(self):
+        self.scan(self.github_repos, datetime(2026, 9, 20, 3, 0, tzinfo=UTC))
+
+        self.assertIsNotNone(self.first_scan(MOJ))
+        self.assertIsNone(self.first_scan(MAS))
+
+    def test_successful_empty_org_scan_still_sets_its_import_cutoff(self):
+        self.scan([], datetime(2026, 9, 20, 3, 0, tzinfo=UTC))
+
+        summary = self.run_import()
+
+        self.assertEqual(summary.first_scan_date, SEP_20)
+        self.assertEqual(summary.skipped_dates, [SEP_20])
+        self.assertEqual(self.snapshots(SEP_20), {})
+
+    def test_mixed_org_files_with_different_cutoffs_are_rejected_without_writes(self):
+        orgs = [OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2)]
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MOJ: self.github_repos},
+                datetime(2026, 9, 20, 3, 0, tzinfo=UTC),
+                orgs,
+                failing_orgs={MAS},
+            )
+        before = (self.snapshots(), self.events(), self.runs())
+        files = [
+            AuditFile(
+                AUG_17,
+                "synthetic.xlsx",
+                (AuditRow(MOJ, "alpha", "public"), AuditRow(MAS, "other", "public")),
+            )
+        ]
+        github = FakeGitHub({MOJ: self.github_repos, MAS: [repo(5, "other")]})
+
+        with self.assertRaisesRegex(AuditImportError, "different first successful"):
+            import_visibility_audit_reports(
+                self.repository, files, orgs, github.client_for, now=lambda: IMPORTED_AT
+            )
+
+        self.assertEqual((self.snapshots(), self.events(), self.runs()), before)
+        self.assertEqual(github.calls, [])
 
     def test_no_bridge_when_the_first_scan_already_wrote_events(self):
         self.scan(

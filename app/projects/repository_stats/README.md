@@ -1,82 +1,40 @@
 # GitHub Repository Stats
 
-Reports on repository visibility across the MOJ organisations.
-
-Access is limited to the configured GitHub team.
+Reports on repository visibility across configured GitHub organisations. The same
+Repository Stats viewers team controls access to all organisations, pages and CSV
+exports.
 
 ## Pages
 
-- **Repository overview** shows repository totals by organisation, business unit and
-  team, including public, internal and private repositories. Organisation totals count
-  each repository once; where an existing mapping assigns a repository to multiple
-  business units, it appears under each of those units.
-- **Repository visibility changes** shows visibility changes, new repositories and
-  deleted repositories since 17 August 2026. The page supports filters and CSV export.
-- **Archived public repositories** lists archived public repositories, with the configured
-  deadline to change their visibility to internal.
+- **Repository overview:** Totals by organisation, business unit, team and visibility.
+  A repository mapped to multiple units appears under each but is counted once in its
+  organisation's total.
+- **Repository visibility changes:** Visibility changes, new and deleted repositories,
+  with filters and CSV export.
+- **Archived public repositories:** Archived public repositories, with progress for the
+  selected organisation or all organisations. Other filters narrow only the list.
 
-## Data collection
+The visibility and archived pages open on Ministry of Justice. Choosing another
+organisation, or All organisations, is kept in the URL.
 
-The `record_repository_visibility` job saves a visibility snapshot and compares it with
-the latest prior snapshot to record visibility changes, repository creation and deletion
-events. If there is no earlier snapshot, that first snapshot is the baseline and creates
-no comparison events. The historical baseline is 17 August 2026.
+## Baselines and collection
 
-The job runs in Dev and Prod at 04:00 and 13:00 UTC. Each environment has a separate
-database. Repository inventory is fetched before team access; only team access requests
-are parallelised. `REPOSITORY_STATS_TEAM_ACCESS_WORKERS` controls that pool from 1 to 3
-workers (default 1). Dev configures 3 workers to measure the effect; Prod remains at the
-serial default. Each worker uses a separate GitHub session and shares the installation's
-rate-limit cooldown. The job logs elapsed time and API-call counts for both collection
-phases. Database writes remain serial and occur only after collection.
+Each organisation's baseline is its earliest stored snapshot, including previously
+imported history:
 
-## One-off import of the old visibility audit reports
+- **Ministry of Justice:** 17 August 2026.
+- **MOJ Analytical Services:** 29 October 2026.
 
-`app/projects/repository_stats/jobs/import_visibility_audit_reports.py` loads the old
-visibility audit spreadsheets into the Repository Stats tables:
+When an organisation has no earlier snapshots, its first successful development
+collection with repository data establishes the baseline without comparison events.
+Use the same baseline in production. The visibility page shows the selected
+organisation's baseline; both pages show its last successful collection when available.
 
-- `list_repos_17aug2026.xlsx` (sheet `Repos`) is the baseline snapshot for 17 August 2026.
-- Each `Full Comparison` sheet in a `historical-YYYY-MM-DD.xlsx` or
-  `Visibility-YYYY-MM-DD.xlsx` file is a snapshot for its date.
-- Differences between consecutive snapshots become events with source `import`, dated
-  to the first file that shows the change.
+Organisations are saved independently: a failed scan retains that organisation's
+previous data without discarding other successful scans. The overall collection fails if
+any organisation fails. Team access and organisation names are collected on a
+best-effort basis.
 
-Other files are ignored. Repositories are matched by full name, so a rename appears as a
-delete and a create. Changes reversed between files are not recorded. Repository IDs
-come from the GitHub App's current repository list; repositories no longer present get
-a stable negative ID. Dates from the visibility job's first successful run onwards are
-left to that job.
-
-The spreadsheets contain real repository names. This repository is public, so never
-commit them (`*.xlsx` is in `.gitignore`).
-
-The import is safe to re-run (it replaces its own earlier import) and all-or-nothing.
-Avoid running it at the same time as the visibility job (04:00 and 13:00 UTC in both
-Dev and Prod).
-
-### Running it
-
-Run it in Dev first (`github-community-dev`), then Prod (`github-community-prod`). The
-file names below are placeholders.
-
-```bash
-NAMESPACE=github-community-dev
-POD=$(kubectl -n "$NAMESPACE" get pods -o name | grep -v job | head -n 1 | cut -d/ -f2)
-
-# 1. Copy the files into the pod
-kubectl -n "$NAMESPACE" exec "$POD" -- mkdir -p /tmp/visibility-audit
-for file in list_repos_17aug2026.xlsx historical-YYYY-MM-DD.xlsx Visibility-YYYY-MM-DD.xlsx; do
-  kubectl -n "$NAMESPACE" cp "./$file" "$POD:/tmp/visibility-audit/$file"
-done
-
-# 2. Dry run: prints counts only and writes nothing
-kubectl -n "$NAMESPACE" exec "$POD" -- \
-  python3 -m app.projects.repository_stats.jobs.import_visibility_audit_reports /tmp/visibility-audit --dry-run
-
-# 3. Import for real
-kubectl -n "$NAMESPACE" exec "$POD" -- \
-  python3 -m app.projects.repository_stats.jobs.import_visibility_audit_reports /tmp/visibility-audit
-
-# 4. Delete the copied files
-kubectl -n "$NAMESPACE" exec "$POD" -- rm -rf /tmp/visibility-audit
-```
+Configure organisations per environment with `REPOSITORY_STATS_ORGS`, a comma-separated
+list of `organisation:installation_id` entries. The GitHub App needs appropriate access
+to each organisation.

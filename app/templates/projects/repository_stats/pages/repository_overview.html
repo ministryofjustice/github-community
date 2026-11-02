@@ -69,6 +69,7 @@
             <tr class="govuk-table__row app-overview-row--org" id="{{ anchors[org.key] }}">
               <th scope="row" class="govuk-table__header">
                 <a class="govuk-link app-overview-toggle{% if org_open %} app-overview-toggle--open{% endif %}" href="{{ toggle_hrefs[org.key] }}">{{ org.name }}<span class="govuk-visually-hidden"> ({{ "hide" if org_open else "show" }} business units)</span></a>
+                {% if org.key in page.failed_organisation_updates %}{% set failed_update = page.failed_organisation_updates[org.key] %}<span class="govuk-!-font-weight-regular"> ({% if failed_update %}last updated {{ failed_update }}{% else %}latest update failed{% endif %})</span>{% endif %}
               </th>
               {{ numeric_cells(org.totals) }}
             </tr>
@@ -124,4 +125,3 @@
     </div>
   {% endif %}
 {% endblock %}
-

@@ -6,7 +6,7 @@ from app.projects.repository_stats.services.business_units import (
 )
 from app.projects.repository_stats.services.overview_logic import (
     NO_TEAM,
-    UNKNOWN_BUSINESS_UNIT,
+    NOT_IDENTIFIED_BUSINESS_UNIT,
     RepositoryTeams,
     Team,
     build_overview,
@@ -47,7 +47,7 @@ class TestBuildOverview(unittest.TestCase):
             [
                 ("Unit A", (1, 0, 1, 0)),
                 ("Unit Z", (1, 1, 0, 0)),
-                (UNKNOWN_BUSINESS_UNIT, (1, 0, 0, 1)),
+                (NOT_IDENTIFIED_BUSINESS_UNIT, (1, 0, 0, 1)),
             ],
         )
         self.assertEqual(org_b.children[0].key, "org-b/Unit A")
@@ -201,7 +201,7 @@ class TestBuildOverview(unittest.TestCase):
                 "Unit A": (1, 1, 0, 0),
                 "Unit B": (1, 0, 0, 1),
                 "Unit C": (1, 0, 1, 0),
-                "Unknown": (1, 0, 1, 0),
+                "Not identified": (1, 0, 1, 0),
             },
         )
 
