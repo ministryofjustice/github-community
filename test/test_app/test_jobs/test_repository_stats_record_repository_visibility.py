@@ -1228,5 +1228,192 @@ class TestPagesReadJobData(RecordRepositoryVisibilityTestCase):
         self.assertEqual(archived.last_updated, ("25 September 2026", "2:04pm"))
 
 
+class TestTransferredRepositoryHistory(RecordRepositoryVisibilityTestCase):
+    orgs = (OrgInstallation(MOJ, 1), OrgInstallation(MAS, 2))
+    day_3 = DAY_2 + timedelta(days=1)
+
+    def assert_reports(self, today, expected_counts, expected_archived):
+        from app.projects.repository_stats.services.visibility_logic import (
+            parse_visibility_query,
+        )
+
+        service = VisibilityService(self.repository, FakeOwnership(), today=today)
+        overview = service.get_overview_page().overview.organisations
+        self.assertEqual(
+            {org.key: org.totals.total for org in overview},
+            {MOJ: expected_counts[MOJ], MAS: expected_counts[MAS]},
+        )
+        for org in (MOJ, MAS, "all"):
+            with self.subTest(org=org):
+                query = parse_visibility_query({"org": org}, only_public_values=["0"])
+                changes = service.get_changes_page(query)
+                archived_page = service.get_archived_page(query)
+                archived = archived_page.archived
+                self.assertEqual(changes.counts.total, expected_counts[org])
+                self.assertEqual(archived_page.counts.total, expected_counts[org])
+                self.assertEqual(
+                    [repository.github_id for repository in archived.repositories],
+                    expected_archived[org],
+                )
+                self.assertEqual(archived.progress.total, len(expected_archived[org]))
+                self.assertEqual(
+                    archived.progress.made_internal, len(expected_archived[org])
+                )
+                self.assertEqual(
+                    [repository.github_id for repository in archived.tracked],
+                    expected_archived["all"],
+                )
+
+    def baseline(self):
+        self.run_job(
+            {
+                MOJ: [repo(1, "moj-keep", "private")],
+                MAS: [
+                    repo(5, "mas-archived", archived=True),
+                    repo(6, "mas-keep", "internal"),
+                ],
+            },
+            DAY_1,
+        )
+
+    def scan_with_failed_mas(self, moj_repositories, at):
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MOJ: moj_repositories},
+                at,
+                failing_orgs={MAS},
+            )
+
+    def test_transfer_then_deletion_does_not_restore_stale_copy(self):
+        self.baseline()
+        self.scan_with_failed_mas(
+            [
+                repo(1, "moj-keep", "private"),
+                repo(5, "transferred", "internal", archived=True),
+            ],
+            DAY_2,
+        )
+        self.scan_with_failed_mas([repo(1, "moj-keep", "private")], self.day_3)
+        self.assert_reports(
+            self.day_3.date(),
+            {MOJ: 1, MAS: 1, "all": 2},
+            {MOJ: [], MAS: [], "all": []},
+        )
+
+        restored_on = self.day_3 + timedelta(days=1)
+        self.scan_with_failed_mas(
+            [
+                repo(1, "moj-keep", "private"),
+                repo(5, "transferred", "internal", archived=True),
+            ],
+            restored_on,
+        )
+        self.assert_reports(
+            restored_on.date(),
+            {MOJ: 2, MAS: 1, "all": 3},
+            {MOJ: [5], MAS: [], "all": [5]},
+        )
+
+    def test_transfer_and_deletion_on_same_day_do_not_restore_stale_copy(self):
+        self.baseline()
+        self.scan_with_failed_mas(
+            [
+                repo(1, "moj-keep", "private"),
+                repo(5, "transferred", "internal", archived=True),
+            ],
+            DAY_2,
+        )
+        self.scan_with_failed_mas([repo(1, "moj-keep", "private")], DAY_2_PM)
+        self.assertNotIn((5, DAY_2.date().isoformat()), self.snapshots())
+        self.assert_reports(
+            DAY_2.date(),
+            {MOJ: 1, MAS: 1, "all": 2},
+            {MOJ: [], MAS: [], "all": []},
+        )
+
+    def assert_first_baseline_then_deletion(self, deleted_at):
+        self.run_job(
+            {
+                MAS: [
+                    repo(5, "mas-archived", archived=True),
+                    repo(6, "mas-keep", "internal"),
+                ]
+            },
+            DAY_1,
+            orgs=(OrgInstallation(MAS, 2),),
+        )
+        moj_only = (OrgInstallation(MOJ, 1),)
+        self.run_job(
+            {
+                MOJ: [
+                    repo(1, "moj-keep", "private"),
+                    repo(5, "transferred", "internal", archived=True),
+                ]
+            },
+            DAY_2,
+            orgs=moj_only,
+        )
+        self.assertFalse(
+            self.session.query(RepositoryStatsVisibilityEvent)
+            .filter_by(github_id=5, org=MOJ, event_type="created")
+            .first()
+        )
+        self.run_job(
+            {MOJ: [repo(1, "moj-keep", "private")]},
+            deleted_at,
+            orgs=moj_only,
+        )
+        self.assert_reports(
+            deleted_at.date(),
+            {MOJ: 1, MAS: 1, "all": 2},
+            {MOJ: [], MAS: [], "all": []},
+        )
+
+    def test_transfer_at_first_baseline_then_deletion(self):
+        self.assert_first_baseline_then_deletion(self.day_3)
+
+    def test_transfer_at_first_baseline_then_same_day_deletion(self):
+        self.assert_first_baseline_then_deletion(DAY_2_PM)
+
+    def test_delayed_removal_from_old_org_does_not_hide_current_owner(self):
+        self.baseline()
+        self.scan_with_failed_mas(
+            [
+                repo(1, "moj-keep", "private"),
+                repo(5, "transferred", "internal", archived=True),
+            ],
+            DAY_2,
+        )
+        with self.assertRaises(GitHubInventoryError):
+            self.run_job(
+                {MAS: [repo(6, "mas-keep", "internal")]},
+                self.day_3,
+                failing_orgs={MOJ},
+            )
+        self.assert_reports(
+            self.day_3.date(),
+            {MOJ: 2, MAS: 1, "all": 3},
+            {MOJ: [5], MAS: [], "all": [5]},
+        )
+
+    def test_same_day_removal_from_old_org_keeps_current_owner(self):
+        self.baseline()
+        self.run_job(
+            {
+                MOJ: [
+                    repo(1, "moj-keep", "private"),
+                    repo(5, "transferred", "internal", archived=True),
+                ],
+                MAS: [repo(6, "mas-keep", "internal")],
+            },
+            DAY_2,
+        )
+        self.assert_reports(
+            DAY_2.date(),
+            {MOJ: 2, MAS: 1, "all": 3},
+            {MOJ: [5], MAS: [], "all": [5]},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

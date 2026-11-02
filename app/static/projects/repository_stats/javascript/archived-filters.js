@@ -109,10 +109,22 @@
 
     function pageHref(page) {
       var params = new URLSearchParams(window.location.search);
+      FILTER_PARAMS.forEach(function (key) { params.delete(key); });
+      params.delete("page");
+      if (org.value) params.set("org", org.value);
+      if (businessUnit.value) params.set("business_unit", businessUnit.value);
+      if (name.value.trim()) params.set("q", name.value.trim());
+      if (!onlyPublic.checked) params.set("only_public", "0");
       if (page > 1) params.set("page", String(page));
-      else params.delete("page");
       var search = params.toString();
       return window.location.pathname + (search ? "?" + search : "") + "#archived-table";
+    }
+
+    function syncPaginationHrefs() {
+      if (!pagination) return;
+      pagination.querySelectorAll("a[data-page]").forEach(function (link) {
+        link.href = pageHref(parseInt(link.getAttribute("data-page"), 10) || 1);
+      });
     }
 
     function addPageLink(parent, page, label, options) {
@@ -281,6 +293,7 @@
     function onType() {
       window.clearTimeout(timer);
       currentPage = 1;
+      syncPaginationHrefs();
       timer = window.setTimeout(function () { apply(true); }, DEBOUNCE_MS);
     }
 
@@ -313,8 +326,15 @@
 
     if (pagination) {
       pagination.addEventListener("click", function (event) {
+        if (
+          event.defaultPrevented || event.button !== 0 ||
+          event.ctrlKey || event.metaKey || event.shiftKey || event.altKey
+        ) return;
         var link = event.target.closest("a[data-page]");
-        if (!link || !pagination.contains(link)) return;
+        if (
+          !link || !pagination.contains(link) ||
+          link.hasAttribute("target") || link.hasAttribute("download")
+        ) return;
         event.preventDefault();
         currentPage = parseInt(link.getAttribute("data-page"), 10) || 1;
         apply(true, false);

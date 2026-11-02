@@ -1,7 +1,7 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 
-from sqlalchemy import case, func, insert
+from sqlalchemy import case, func, insert, or_
 from sqlalchemy.orm import scoped_session
 
 from app.projects.repository_stats.db_models import (
@@ -104,6 +104,32 @@ class VisibilityRepository:
         for row in rows:
             result[row.captured_on].append(_to_snapshot(row))
         return result
+
+    def find_latest_observations(
+        self, latest_by_org: Mapping[str, date]
+    ) -> dict[tuple[int, str], date]:
+        if not latest_by_org:
+            return {}
+        latest = max(latest_by_org.values())
+        snapshot = RepositoryStatsVisibilitySnapshot
+        stale = [
+            (snapshot.org == org) & (snapshot.captured_on == captured_on)
+            for org, captured_on in latest_by_org.items()
+            if captured_on < latest
+        ]
+        if not stale:
+            return {}
+        stale_ids = self.db_session.query(snapshot.github_id).filter(or_(*stale))
+        rows = (
+            self.db_session.query(
+                snapshot.github_id, snapshot.org, func.max(snapshot.captured_on)
+            )
+            .filter(snapshot.github_id.in_(stale_ids))
+            .filter(snapshot.captured_on <= latest)
+            .group_by(snapshot.github_id, snapshot.org)
+            .all()
+        )
+        return {(github_id, org): captured_on for github_id, org, captured_on in rows}
 
     def find_events_between(
         self, from_date: date, to_date: date

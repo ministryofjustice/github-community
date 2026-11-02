@@ -442,6 +442,58 @@ def count_snapshot(snapshots: Iterable[VisibilitySnapshot]) -> SnapshotCounts:
     return SnapshotCounts(total=total, **counts)
 
 
+def reconcile_current_snapshots(
+    snapshots: Iterable[VisibilitySnapshot],
+    observations: Mapping[tuple[int, str], date],
+    events: Iterable[VisibilityEvent],
+    latest_date: date,
+) -> list[VisibilitySnapshot]:
+    """Discard stale copies superseded by later observations or departures.
+
+    A departure from an organisation last seen before the snapshot does not delete a
+    newer owner's snapshot. Snapshots win observation ties because the stored dates
+    cannot order same-day changes, but a later departure from an organisation seen on
+    or after the snapshot date still removes it.
+    """
+    current = list(snapshots)
+    ids = {snapshot.github_id for snapshot in current}
+    seen = dict(observations)
+    for snapshot in current:
+        key = (snapshot.github_id, snapshot.org)
+        seen[key] = max(seen.get(key, snapshot.captured_on), snapshot.captured_on)
+
+    deletions: dict[int, list[VisibilityEvent]] = {}
+    for event in events:
+        if event.github_id not in ids or event.occurred_on > latest_date:
+            continue
+        if event.event_type in ("created", "changed", "archived"):
+            key = (event.github_id, event.org)
+            seen[key] = max(seen.get(key, event.occurred_on), event.occurred_on)
+        elif event.event_type == "deleted":
+            deletions.setdefault(event.github_id, []).append(event)
+
+    newest: dict[int, date] = {}
+    for (github_id, _), captured_on in seen.items():
+        newest[github_id] = max(newest.get(github_id, captured_on), captured_on)
+
+    # A same-day rescan can remove the only snapshot of a new owner, leaving its
+    # deletion event as the only evidence that the older copy is no longer current.
+    return [
+        snapshot
+        for snapshot in current
+        if newest[snapshot.github_id] <= snapshot.captured_on
+        and not any(
+            event.occurred_on > snapshot.captured_on
+            and (
+                event.org == snapshot.org
+                or seen.get((snapshot.github_id, event.org), snapshot.captured_on)
+                >= snapshot.captured_on
+            )
+            for event in deletions.get(snapshot.github_id, ())
+        )
+    ]
+
+
 def filter_events_in_range(
     events: Iterable[VisibilityEvent], from_date: date, to_date: date
 ) -> list[VisibilityEvent]:

@@ -32,6 +32,7 @@ from app.projects.repository_stats.services.visibility_logic import (
     parse_archived_query,
     parse_only_public,
     parse_visibility_query,
+    reconcile_current_snapshots,
     sort_activity,
     sort_archived,
     summary_heading,
@@ -65,10 +66,11 @@ def event(
     to_v=None,
     occurred_on=date(2026, 8, 10),
     actor=None,
+    org=ORG,
 ):
     return VisibilityEvent(
         github_id=github_id,
-        org=ORG,
+        org=org,
         name=name,
         event_type=event_type,
         occurred_on=occurred_on,
@@ -488,6 +490,96 @@ class TestPagination(unittest.TestCase):
             [1, None, 4, 5, 6, 7, 8, None, 10],
         )
         self.assertEqual(page_numbers(paginate(list(range(50)), 1, 25)), [1, 2])
+
+
+class TestCurrentSnapshotReconciliation(unittest.TestCase):
+    other_org = "moj-analytical-services"
+    middle = date(2026, 9, 10)
+
+    def test_newer_snapshot_or_positive_event_supersedes_stale_copy(self):
+        stale = snapshot(1, "repo", "public", AUG_1)
+        observations = {
+            (1, ORG): AUG_1,
+            (1, self.other_org): self.middle,
+        }
+        self.assertEqual(
+            reconcile_current_snapshots([stale], observations, [], SEP_25), []
+        )
+        for kind in ("created", "changed", "archived"):
+            with self.subTest(kind=kind):
+                later = event(
+                    1,
+                    "repo",
+                    kind,
+                    to_v="internal",
+                    occurred_on=self.middle,
+                    org=self.other_org,
+                )
+                self.assertEqual(
+                    reconcile_current_snapshots([stale], {}, [later], SEP_25), []
+                )
+
+    def test_deletion_without_a_retained_observation_supersedes_stale_copy(self):
+        stale = snapshot(1, "repo", "public", AUG_1)
+        deleted = event(
+            1, "repo", "deleted", "public", occurred_on=self.middle, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], {}, [deleted], SEP_25), []
+        )
+
+    def test_old_organisations_late_deletion_does_not_remove_new_owner(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        observations = {(1, self.other_org): AUG_1}
+        old_departure = event(
+            1, "repo", "deleted", "public", occurred_on=SEP_25, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots(
+                [current], observations, [old_departure], SEP_25
+            ),
+            [current],
+        )
+
+    def test_same_day_observation_then_later_deletion_removes_stale_copy(self):
+        stale = snapshot(1, "repo", "internal", self.middle)
+        observations = {(1, self.other_org): self.middle}
+        deleted = event(
+            1, "repo", "deleted", "internal", occurred_on=SEP_25, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], observations, [deleted], SEP_25), []
+        )
+        created = event(
+            1,
+            "repo",
+            "created",
+            to_v="internal",
+            occurred_on=self.middle,
+            org=self.other_org,
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], {}, [created, deleted], SEP_25), []
+        )
+
+    def test_later_deletion_in_current_organisation_removes_stale_copy(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        deleted = event(1, "repo", "deleted", "internal", occurred_on=SEP_25)
+        self.assertEqual(
+            reconcile_current_snapshots([current], {}, [deleted], SEP_25), []
+        )
+
+    def test_same_day_and_future_events_do_not_override_current_snapshot(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        events = [
+            event(1, "repo", "deleted", "internal", occurred_on=self.middle),
+            event(1, "repo", "created", to_v="public", occurred_on=SEP_25),
+            event(2, "other-repo", "deleted", "public", occurred_on=self.middle),
+        ]
+        self.assertEqual(
+            reconcile_current_snapshots([current], {}, events, self.middle), [current]
+        )
+        self.assertEqual(reconcile_current_snapshots([], {}, events, SEP_25), [])
 
 
 class TestArchived(unittest.TestCase):

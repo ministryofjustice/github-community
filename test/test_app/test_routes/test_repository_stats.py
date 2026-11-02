@@ -127,6 +127,27 @@ class FakeVisibilityRepository:
     def find_snapshots_on_dates(self, dates):
         return {d: self.snapshots.get(d, []) for d in dates}
 
+    def find_latest_observations(self, latest_by_org):
+        if not latest_by_org:
+            return {}
+        latest = max(latest_by_org.values())
+        stale_ids = {
+            snapshot.github_id
+            for captured_on, snapshots in self.snapshots.items()
+            for snapshot in snapshots
+            if latest_by_org.get(snapshot.org) == captured_on < latest
+        }
+        observations = {}
+        for captured_on, snapshots in self.snapshots.items():
+            if captured_on <= latest:
+                for snapshot in snapshots:
+                    if snapshot.github_id in stale_ids:
+                        key = (snapshot.github_id, snapshot.org)
+                        observations[key] = max(
+                            observations.get(key, captured_on), captured_on
+                        )
+        return observations
+
     def find_events_between(self, from_date, to_date):
         return [e for e in self.events if from_date <= e.occurred_on <= to_date]
 
@@ -2004,6 +2025,103 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                                 )
                             _, public_only = self.get(f"{ARCHIVED_URL}?org={org}")
                             self.assertEqual(self.visible_archived(public_only), [])
+
+    def test_transferred_then_deleted_repository_is_not_shown_or_counted(self):
+        deleted_on = date(2026, 10, 31)
+        self.repository.snapshots = {
+            MOJ_BASELINE: [snap(900, "moj-active", "internal", MOJ_BASELINE)],
+            MAS_BASELINE: [
+                snap(
+                    300,
+                    "mas-archived",
+                    "public",
+                    MAS_BASELINE,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+                snap(
+                    302,
+                    "mas-remaining",
+                    "public",
+                    MAS_BASELINE,
+                    archived=True,
+                    org=OTHER_ORG,
+                ),
+            ],
+            OCT_30: [
+                snap(900, "moj-active", "internal", OCT_30),
+                snap(300, "transferred", "internal", OCT_30, archived=True),
+            ],
+            deleted_on: [snap(900, "moj-active", "internal", deleted_on)],
+        }
+        self.repository.events = [
+            change(300, "transferred", None, "internal", OCT_30, "created"),
+            change(300, "transferred", "internal", None, deleted_on, "deleted"),
+        ]
+        service = VisibilityService(self.repository, FakeOwnership(), today=deleted_on)
+        with patch(
+            "app.projects.repository_stats.routes.main.get_visibility_service",
+            return_value=service,
+        ):
+            for org, counts, visible in (
+                (ORG, (1, 0, 1, 0), []),
+                (OTHER_ORG, (1, 1, 0, 0), ["mas-remaining"]),
+                ("all", (2, 1, 1, 0), ["mas-remaining"]),
+            ):
+                with self.subTest(org=org):
+                    _, changes = self.get(f"{CHANGES_URL}?org={org}")
+                    self.assertIn(estate_line(*counts), changes)
+                    _, archived = self.get(f"{ARCHIVED_URL}?org={org}&only_public=0")
+                    self.assertEqual(self.visible_archived(archived), visible)
+                    self.assertNotIn("mas-archived", archived)
+                    self.assertNotIn("transferred", archived)
+                    if visible:
+                        self.assertIn(
+                            "0 of 1 archived public repositories have been made internal",
+                            archived,
+                        )
+                    else:
+                        self.assertIn('id="archived-progress-summary" hidden', archived)
+
+    def test_overview_retains_failed_organisation_after_stale_copy_is_removed(self):
+        self.repository.snapshots = {
+            AUG_1: [snap(300, "transferred", "internal", AUG_1, org=OTHER_ORG)],
+            SEP_25: [snap(900, "moj-active", "internal", SEP_25)],
+        }
+        self.repository.events = [
+            VisibilityEvent(
+                300,
+                ORG,
+                "transferred",
+                "created",
+                SEP_25,
+                "scan",
+                to_visibility="internal",
+            )
+        ]
+        self.repository.scan_states = {
+            ORG: OrganisationScanState("success", datetime(2026, 9, 25, 13, 4)),  # noqa: DTZ001
+            OTHER_ORG: OrganisationScanState("failed", datetime(2026, 9, 24, 13, 4)),  # noqa: DTZ001
+        }
+
+        _, body = self.get(OVERVIEW_URL)
+
+        self.assertIn(f'id="overview-{OTHER_ORG}"', body)
+        failed_org_row = re.search(
+            rf'<tr class="govuk-table__row app-overview-row--org" '
+            rf'id="overview-{OTHER_ORG}">(.*?)</tr>',
+            body,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(failed_org_row)
+        self.assertEqual(
+            re.findall(
+                r"govuk-table__cell--numeric[^>]*>([^<]+)<",
+                failed_org_row.group(1),
+            ),
+            ["0", "0", "0", "0"],
+        )
+        self.assertIn("(last updated 24 September 2026)", body)
 
     def test_selected_organisation_controls_history_date_and_date_limits(self):
         for org, baseline, label, activity_count in (

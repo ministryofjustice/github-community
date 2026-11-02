@@ -81,6 +81,7 @@ def build_overview(
     business_units: BusinessUnitSource,
     repository_teams: RepositoryTeams | None = None,
     organisation_names: Mapping[str, str] | None = None,
+    organisation_logins: Iterable[str] = (),
 ) -> Overview:
     """Count the latest snapshot by organisation, then business unit, then team.
 
@@ -93,7 +94,10 @@ def build_overview(
     organisation_names = organisation_names or {}
     repository_teams = repository_teams or RepositoryTeams()
     all_organisations = OverviewRow("All organisations")
-    organisations: dict[str, OverviewRow] = {}
+    organisations: dict[str, OverviewRow] = {
+        login: OverviewRow(organisation_names.get(login) or login, key=login)
+        for login in organisation_logins
+    }
     unit_rows: dict[str, dict[str, OverviewRow]] = {}
     teams: dict[tuple[str, str], dict[str, OverviewRow]] = {}
 

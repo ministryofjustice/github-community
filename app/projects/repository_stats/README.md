@@ -36,6 +36,11 @@ previous data without discarding other successful scans. The overall collection 
 any organisation fails. Team access and organisation names are collected on a
 best-effort basis.
 
+When a repository transfers or disappears, later recorded observations and departures
+prevent an older organisation's stale copy from being counted as current. Snapshots and
+events record dates rather than times, so the exact order of same-day changes is not
+always known.
+
 Configure organisations per environment with `REPOSITORY_STATS_ORGS`, a comma-separated
 list of `organisation:installation_id` entries. The GitHub App needs appropriate access
 to each organisation.

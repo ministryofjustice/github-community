@@ -179,6 +179,23 @@ class TestBuildOverview(unittest.TestCase):
             [("Alpha Example", "org-b"), ("org-a", "org-a")],
         )
 
+    def test_organisations_without_current_repositories_are_retained(self):
+        overview = build_overview(
+            [snap(1, "org-a", "repo-one", "public")],
+            {},
+            organisation_names={"org-a": "Organisation A", "org-b": "Organisation B"},
+            organisation_logins=("org-a", "org-b"),
+        )
+
+        self.assertEqual(
+            [(org.name, org.key, totals(org)) for org in overview.organisations],
+            [
+                ("Organisation A", "org-a", (1, 1, 0, 0)),
+                ("Organisation B", "org-b", (0, 0, 0, 0)),
+            ],
+        )
+        self.assertEqual(overview.organisations[1].children, [])
+
     def test_business_units_from_team_access(self):
         source = RepositoryBusinessUnits(
             by_name={"repo-one": ["Unit A"]},
