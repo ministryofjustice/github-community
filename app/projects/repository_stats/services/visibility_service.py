@@ -342,18 +342,20 @@ class VisibilityService:
         first_archived_on = self.repository.find_first_archived_dates()
         # A repository transferred while its old organisation's scan failed is in both
         # organisations' latest snapshots; it belongs to the newer one.
-        owner: dict[int, str] = {}
+        current: dict[int, VisibilitySnapshot] = {}
         for org, dates in sorted(
             context.snapshot_dates_by_organisation.items(), key=lambda item: item[1][-1]
         ):
             for s in snapshots.get(dates[-1], []):
                 if s.org == org:
-                    owner[s.github_id] = org
-        every_org = []
+                    current[s.github_id] = s
+        # Eligibility follows the GitHub ID across organisations, even after the
+        # repository disappears from its old organisation's latest snapshot.
+        eligible: dict[int, ArchivedRepository] = {}
         for org, dates in context.snapshot_dates_by_organisation.items():
             earliest, latest = dates[0], dates[-1]
-            every_org.extend(
-                r
+            eligible.update(
+                (r.github_id, r)
                 for r in archived_public_repositories(
                     earliest=[s for s in snapshots.get(earliest, []) if s.org == org],
                     earliest_date=earliest,
@@ -362,12 +364,12 @@ class VisibilityService:
                         for e in context.events
                         if e.org == org and earliest < e.occurred_on <= latest
                     ],
-                    latest=[s for s in snapshots.get(latest, []) if s.org == org],
+                    latest=list(current.values()),
                     first_archived_on=first_archived_on,
                     business_units=context.business_units,
                 )
-                if owner.get(r.github_id, org) == org
             )
+        every_org = list(eligible.values())
         matching = sort_archived(
             r for r in every_org if context.include(r.github_id, r.org, r.name)
         )

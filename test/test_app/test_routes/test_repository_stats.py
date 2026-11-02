@@ -1866,6 +1866,145 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
             (0, 2),
         )
 
+    def test_internal_transfer_preserves_archived_history_in_current_organisation(self):
+        transferred_on = date(2026, 10, 31)
+        for stale_copy in (False, True):
+            for archived_at_baseline in (False, True):
+                with self.subTest(
+                    stale_copy=stale_copy,
+                    archived_at_baseline=archived_at_baseline,
+                ):
+                    self.repository.snapshots = {
+                        MOJ_BASELINE: [
+                            snap(900, "moj-active", "internal", MOJ_BASELINE)
+                        ],
+                        MAS_BASELINE: [
+                            snap(
+                                300,
+                                "mas-archived",
+                                "public",
+                                MAS_BASELINE,
+                                archived=archived_at_baseline,
+                                org=OTHER_ORG,
+                            )
+                        ],
+                        OCT_30: [
+                            snap(
+                                300,
+                                "mas-archived",
+                                "internal",
+                                OCT_30,
+                                archived=True,
+                                org=OTHER_ORG,
+                            )
+                        ],
+                        transferred_on: [
+                            snap(900, "moj-active", "internal", transferred_on),
+                            snap(
+                                300,
+                                "transferred-internal",
+                                "internal",
+                                transferred_on,
+                                archived=True,
+                            ),
+                        ],
+                    }
+                    if not stale_copy:
+                        self.repository.snapshots[transferred_on].append(
+                            snap(
+                                901,
+                                "mas-active",
+                                "internal",
+                                transferred_on,
+                                org=OTHER_ORG,
+                            )
+                        )
+                    self.repository.events = [
+                        VisibilityEvent(
+                            300, OTHER_ORG, "mas-archived", "archived", OCT_30, "scan"
+                        ),
+                        VisibilityEvent(
+                            300,
+                            OTHER_ORG,
+                            "mas-archived",
+                            "changed",
+                            OCT_30,
+                            "scan",
+                            "public",
+                            "internal",
+                        ),
+                        change(
+                            300,
+                            "transferred-internal",
+                            None,
+                            "internal",
+                            transferred_on,
+                            "created",
+                        ),
+                    ]
+                    archived_on = MAS_BASELINE if archived_at_baseline else OCT_30
+                    with patch.object(
+                        self.repository,
+                        "find_first_archived_dates",
+                        return_value={300: archived_on},
+                    ):
+                        service = VisibilityService(
+                            self.repository, FakeOwnership(), today=transferred_on
+                        )
+                        archived = service.get_archived_page(
+                            VisibilityQuery(all_organisations=True, only_public=False)
+                        ).archived
+                        self.assertEqual(
+                            [
+                                (
+                                    r.github_id,
+                                    r.org,
+                                    r.name,
+                                    r.visibility,
+                                    r.first_archived_on,
+                                )
+                                for r in archived.tracked
+                            ],
+                            [
+                                (
+                                    300,
+                                    ORG,
+                                    "transferred-internal",
+                                    "internal",
+                                    archived_on,
+                                )
+                            ],
+                        )
+                        self.assertEqual(
+                            (archived.progress.total, archived.progress.made_internal),
+                            (1, 1),
+                        )
+                        self.assertEqual(archived.progress.percent, 100)
+                        for org, total in ((ORG, 1), (OTHER_ORG, 0), ("all", 1)):
+                            _, body = self.get(
+                                f"{ARCHIVED_URL}?org={org}&only_public=0"
+                            )
+                            self.assertEqual(
+                                self.visible_archived(body),
+                                ["transferred-internal"] if total else [],
+                            )
+                            if total:
+                                self.assertIn(
+                                    "1 of 1 archived public repositories have been made internal",
+                                    body,
+                                )
+                                self.assertIn("100% complete", body)
+                                self.assertIn(
+                                    f'href="https://github.com/{ORG}/transferred-internal"',
+                                    body,
+                                )
+                            else:
+                                self.assertIn(
+                                    'id="archived-progress-summary" hidden', body
+                                )
+                            _, public_only = self.get(f"{ARCHIVED_URL}?org={org}")
+                            self.assertEqual(self.visible_archived(public_only), [])
+
     def test_selected_organisation_controls_history_date_and_date_limits(self):
         for org, baseline, label, activity_count in (
             (ORG, MOJ_BASELINE, "17 August 2026", 1),
