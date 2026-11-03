@@ -596,6 +596,7 @@ for (const recovery of ["preset", "custom"]) {
       },
     };
     runInNewContext([
+      section("function clearConfirmation(", "function message("),
       section("function closeDateRange()", "\nfunction renderScope()"),
       section("function invalidatePreview(", '\n$("configuration").addEventListener'),
       section("function closeSuggestions()", "\nlet dateFilter;"),
@@ -777,7 +778,7 @@ test("actual tab and chart navigation preserve URL selection with safe fallback 
   const elements = new Map();
   const element = id => {
     if (!elements.has(id)) elements.set(id, {
-      hidden: false, attributes: {}, handlers: {},
+      hidden: false, attributes: {}, handlers: {}, dataset: {},
       setAttribute(key, value) { this.attributes[key] = value; },
       getAttribute(key) { return this.attributes[key]; },
       addEventListener(key, handler) { this.handlers[key] = handler; },
@@ -796,11 +797,14 @@ test("actual tab and chart navigation preserve URL selection with safe fallback 
     clone: structuredClone, syncControls() {}, renderList() {}, renderPreview() {},
   };
   context.currentSaved = () => context.charts.find(item => item.id === context.selected);
+  runInNewContext(source.slice(source.indexOf("function clearConfirmation("), source.indexOf("function message(")), context);
   runInNewContext(source.slice(source.indexOf("function updateWorkspaceURL("), source.indexOf("\nfunction chartConfig()")), context);
   runInNewContext(source.slice(source.indexOf("function activateTab("), source.indexOf('window.addEventListener("beforeunload"')), context);
   assert.equal(element("admin-panel").hidden, false);
   assert.equal(tabs[1].attributes["aria-selected"], "true");
+  element("flow-message").textContent = "Unsaved changes discarded.";
   context.select("planned");
+  assert.equal(element("flow-message").textContent, "");
   assert.equal(context.selected, "planned");
   assert.equal(context.draft.filters.query, "planned:Planned");
   assert.equal(new URL(location.href).searchParams.get("view"), "admin");
@@ -823,6 +827,49 @@ test("actual tab and chart navigation preserve URL selection with safe fallback 
   assert.equal(new URL(location.href).searchParams.get("chart"), null);
   assert.equal(new URL(location.href).searchParams.get("other"), "kept");
   assert.equal(new URL(location.href).hash, "#anchor");
+});
+
+test("confirmation clears on view and configuration actions without hiding errors", () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, {
+      dataset: {}, textContent: "", value: "", handlers: {},
+      addEventListener(type, handler) { this.handlers[type] = handler; },
+    });
+    return elements.get(id);
+  };
+  const context = {
+    $: element, draft: null, saving: false, tableVisible: false,
+    updateView() {}, CALCULATION_DEFAULTS: {}, calculationControls: {},
+    currentSaved: () => ({ id: "saved" }), selected: "saved", charts: [],
+    select() { context.clearConfirmation(); }, retainActionFocus() {},
+    message(text) { element("flow-message").textContent = text; element("flow-message").dataset.error = "false"; },
+  };
+  runInNewContext(source.slice(source.indexOf("function clearConfirmation("), source.indexOf("function message(")), context);
+  runInNewContext(source.slice(source.indexOf("function discardChanges("), source.indexOf("function retainActionFocus(")), context);
+  context.discardChanges();
+  assert.equal(element("flow-message").textContent, "Unsaved changes discarded.", "Discard confirmation is initially visible");
+  runInNewContext(source.split("\n").filter(line =>
+    line.startsWith('$("show-chart").addEventListener') || line.startsWith('$("show-table").addEventListener')
+  ).join("\n"), context);
+  // Stop after reading controls to exercise the real configuration entry point.
+  runInNewContext(source.slice(source.indexOf("function previewConfiguration("), source.indexOf('  next.threshold =')) + "\n}", context);
+  const notice = element("flow-message");
+  for (const action of [
+    () => element("show-table").handlers.click(),
+    () => element("show-chart").handlers.click(),
+    () => { context.draft = { filters: {} }; context.previewConfiguration(); },
+  ]) {
+    notice.dataset.error = "false";
+    notice.textContent = "Unsaved changes discarded.";
+    action();
+    assert.equal(notice.textContent, "");
+    notice.dataset.error = "true";
+    notice.textContent = "Could not save chart.";
+    action();
+    assert.equal(notice.textContent, "Could not save chart.");
+  }
 });
 
 test("keywords find readable genuine references without changing explicit title filters", () => {

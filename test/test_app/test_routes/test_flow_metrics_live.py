@@ -757,6 +757,32 @@ def test_bounded_workspace_keeps_history_options_and_fetches_only_cutoff_observa
         assert db.session.scalar(select(func.count()).select_from(FlowCollectionRun)) == 0
 
 
+def test_combined_history_includes_capture_before_fictional_start(app, client, monkeypatch):
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", "sample")
+    seed = sample_seed()
+    document = import_document()
+    document.update(captured_date="2026-09-01", captured_at="2026-09-01T12:00:00+00:00")
+    with app.app_context():
+        initialise_sample(seed)
+        retain_evidence(document)
+        db.session.commit()
+        original = copy.deepcopy(sample_dataset().payload)
+
+    response = client.get("/flow-metrics/api/workspace")
+    assert response.status_code == 200
+    dataset = response.json["dataset"]
+    assert dataset["history"]["from"] == "2026-09-01"
+    assert dataset["history"]["to"] == original["history"]["to"]
+    assert dataset["fictionalHistory"] == original["history"]
+    assert dataset["tickets"] == original["tickets"]
+    observation = client.get("/flow-metrics/api/observation?to=2026-09-01")
+    assert observation.status_code == 200
+    assert observation.json["observation"]["capturedAt"].startswith("2026-09-01T12:00:00")
+    assert len(observation.json["observation"]["items"]) == document["item_count"]
+    with app.app_context():
+        assert sample_dataset().payload == original == seed["dataset"]
+
+
 def test_cutoff_preserves_published_tie_order_and_snapshot_fallback(app, client):
     from app.projects.flow_metrics.archive import snapshot_document
 

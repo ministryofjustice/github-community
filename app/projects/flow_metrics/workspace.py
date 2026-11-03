@@ -240,6 +240,10 @@ def exploratory_dataset():
         },
     )
     if captures:
+        dataset["history"]["from"] = min(
+            dataset["history"]["from"],
+            captures[0]["capturedAt"][:10],
+        )
         dataset["history"]["to"] = max(
             dataset["history"]["to"],
             captures[-1]["capturedAt"][:10],

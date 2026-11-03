@@ -211,6 +211,11 @@ function fieldIcon(field) {
   return icon(paths[field] || select);
 }
 
+function clearConfirmation() {
+  const notice = $("flow-message");
+  if (notice.dataset.error !== "true") notice.textContent = "";
+}
+
 function message(text, error = false) {
   if ($("chart-workspace").hidden) document.querySelector(".flow-main").prepend($("flow-message"));
   else $("search-error").after($("flow-message"));
@@ -504,6 +509,7 @@ function updateWorkspaceURL(view) {
 }
 
 function select(id) {
+  clearConfirmation();
   selected = charts.some(item => item.id === id) ? id
     : (live ? charts.find(item => item.metric === "status")?.id : null) || charts[0]?.id;
   draft = currentSaved() ? clone(currentSaved()) : null;
@@ -1055,6 +1061,7 @@ function invalidatePreview(error) {
 
 function previewConfiguration(changedField) {
   if (!draft || saving) return;
+  clearConfirmation();
   const next = {
     ...draft, name: $("chart-name").value, metric: $("metric").value, layout: $("layout").value,
     x: $("x-axis").value, y: $("y-axis").value, group: $("group-by").value,
@@ -1434,8 +1441,8 @@ $("filter-query").addEventListener("blur", (event) => {
   if (!$("filter-date-panel").contains(event.relatedTarget)
       && !$("date-range-panel").contains(event.relatedTarget)) closeSuggestions();
 });
-$("show-chart").addEventListener("click", () => { tableVisible = false; updateView(); });
-$("show-table").addEventListener("click", () => { tableVisible = true; updateView(); });
+$("show-chart").addEventListener("click", () => { clearConfirmation(); tableVisible = false; updateView(); });
+$("show-table").addEventListener("click", () => { clearConfirmation(); tableVisible = true; updateView(); });
 $("close-drill").addEventListener("click", () => {
   $("drill-down").hidden = true;
   pendingDrillTrigger?.focus();
