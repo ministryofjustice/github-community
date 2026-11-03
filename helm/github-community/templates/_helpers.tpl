@@ -5,6 +5,13 @@ Expand the name of the chart.
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{/* Active Flow Metrics capture is deliberately restricted to DEV. */}}
+{{- define "app.flowMetrics.devOnly" -}}
+{{- if or (ne .Release.Namespace "github-community-dev") (ne .Values.app.deployment.env.SENTRY_ENV "development") -}}
+{{- fail "Flow Metrics capture is DEV only: use development values and namespace github-community-dev" -}}
+{{- end -}}
+{{- end -}}
+
 {{/*
 Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
