@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import func, select
 
+from app.projects.flow_metrics.filters import category_matches
 from app.projects.flow_metrics.service import STATUSES, parse_query, validate_chart
 from app.projects.flow_metrics.workspace import (
     capture_index,
@@ -41,18 +42,20 @@ def resolved_filters(chart):
     filters = dict(chart["filters"])
     clauses = parse_query(filters["query"])
     for field, value in clauses:
-        if field in filters and field != "query":
+        if field in filters and field not in {"query", "team"}:
             filters[field] = value
     return filters, clauses
 
 
 def matches(item, filters, clauses):
     available = item["availableFields"]
-    for key in ("team", "sprint", "status", "type", "planned"):
+    if not category_matches(item, filters, clauses, available):
+        return False
+    for key in ("sprint", "status", "type", "planned"):
         if filters[key] and (key not in available or item[key] != filters[key]):
             return False
     for field, value in clauses:
-        if field in {"from", "to", "team", "sprint", "status", "type", "planned"}:
+        if field in {"from", "to", "team", "sprint", "status", "type", "planned", "no", "has"} or field.startswith("-"):
             continue
         if field == "source":
             if value != "Genuine":
@@ -137,7 +140,7 @@ def history_result(chart, history):
     start = date.fromisoformat(filters["from"] or history["from"])
     end = date.fromisoformat(filters["to"] or history["to"])
     if start > end or start < date.fromisoformat(history["from"]) or end > date.fromisoformat(history["to"]):
-        raise ValueError("Choose dates within the captured observation history.")
+        raise ValueError(f"Use dates between {history['from']} and {history['to']}.")
     if any(field == "source" and value == "Fictional" for field, value in clauses):
         return {
             "series": [], "rows": [], "tickets": [], "itemStates": {}, "unit": "Items",
@@ -393,7 +396,7 @@ def history_result(chart, history):
     unit = "Points" if settings["value"] == "points" or (chart["metric"] == "velocity" and "calculation" not in chart) else "Items completed" if chart["metric"] == "throughput" else "Items"
     has_values = any(entry["value"] is not None for entry in result_rows)
     baseline_complete = all(baselines.values()) if baselines else None
-    note = "Points are sample-only." if unit == "Points" else "Observed between captures." if metric in {"churn", "throughput"} else "Observed at captures."
+    note = "Points use fictional estimates." if unit == "Points" else "Observed between captures." if metric in {"churn", "throughput"} else "Observed at captures."
     if baseline_complete is False and unit != "Points":
         note += " Sprint-start baseline unavailable."
     return {

@@ -516,7 +516,7 @@ def test_real_editable_age_recipe_matches_builtin(app, layout):
         assert [row["value"] for row in result(custom)["rows"]] == [0, 0]
         custom["filters"]["query"] = "to:2026-10-13"
         for definition in (custom, {**builtin, "filters": custom["filters"]}):
-            with pytest.raises(ValueError, match="within the captured observation history"):
+            with pytest.raises(ValueError, match="Use dates between"):
                 result(definition)
         custom["y"] = "statusDays"
         custom["filters"]["query"] = ""
@@ -810,6 +810,78 @@ def observed_chart(metric="flow", query="", **changes):
     }
 
 
+@pytest.mark.parametrize(("query", "expected"), [
+    ('team:Blueprint team:"Engineering Platform"', {"real:item-1", "real:item-2"}),
+    ('team:Blueprint team:"Engineering Platform" status:Done', {"real:item-2"}),
+    ('team:Blueprint team:"Engineering Platform" -team:Blueprint', {"real:item-2"}),
+    ("no:team", {"real:item-3"}),
+    ("has:team", {"real:item-1", "real:item-2", "real:item-4"}),
+    ("-team:Blueprint", {"real:item-2", "real:item-3", "real:item-4"}),
+    ("has:team -team:Blueprint -team:DevX", {"real:item-2"}),
+    ("no:priority", set()),
+    ("has:priority", set()),
+    ("-priority:High", set()),
+])
+def test_categorical_team_or_missing_presence_exclusion_and_field_and(app, query, expected):
+    from app.projects.flow_metrics.observed import history_result
+
+    with app.app_context():
+        snapshot = db.session.get(FlowSnapshot, "snapshot-test")
+        values = [
+            observed_item(1, team="Blueprint"), observed_item(2, "Done", team="Engineering Platform"),
+            observed_item(3), observed_item(4, team="DevX"),
+        ]
+        values[2]["fields"] = [value for value in values[2]["fields"] if value["field"]["id"] != "team-id"]
+        snapshot.payload = payload(values)
+        db.session.commit()
+        definitions = [
+            observed_chart("status", query),
+            observed_chart("custom", query, x="status", y="count", group=""),
+            observed_chart("flow", query),
+            observed_chart("custom", query, x="reporting", y="historicalCount", group="status",
+                           calculation={"interval": "daily"}),
+        ]
+        for definition in definitions:
+            projected = history_result(definition, {"from": "2026-10-16", "to": "2026-10-16"}) if definition["metric"] == "flow" or definition["y"] == "historicalCount" else result(definition)
+            ids = {identity for row in projected["rows"] for identity in row["ids"]}
+            assert {identity.removeprefix("real:") for identity in ids} == {identity.removeprefix("real:") for identity in expected}
+        # Genuine DevX is never renamed to the fictional display name.
+        assert normalise(snapshot)[3]["team"] == "DevX"
+        snapshot.payload = {**snapshot.payload, "mapping": {**snapshot.payload["mapping"], "team": None}}
+        for operator in ["no:team", "has:team", "-team:Blueprint"]:
+            assert result(observed_chart("status", operator))["tickets"] == [], "Uncollected is not explicitly missing"
+
+
+@pytest.mark.parametrize("mode", ["sample", "real"])
+def test_date_validation_messages_are_source_neutral_with_dynamic_bounds(app, client, monkeypatch, mode):
+    monkeypatch.setenv("FLOW_METRICS_DATA_MODE", mode)
+    if mode == "sample":
+        with app.app_context():
+            initialise_sample(sample_seed())
+    workspace = client.get("/flow-metrics/api/workspace").json
+    bounds = workspace["dataset"]["history"] if mode == "sample" else workspace["history"]
+    headers = {"X-Flow-CSRF": workspace["csrf"]}
+    endpoints = ["observed-result", "result"] if mode == "real" else ["observed-result"]
+    for endpoint in endpoints:
+        for value in ["2026-09-3", "2026-02-30", "2026-13-01"]:
+            response = client.post(
+                f"/flow-metrics/api/{endpoint}",
+                json=observed_chart(query=f"from:{value}"), headers=headers,
+            )
+            assert response.status_code == 400
+            assert response.json["error"] == "Enter a valid date: YYYY-MM-DD."
+        response = client.post(
+            f"/flow-metrics/api/{endpoint}",
+            json=observed_chart(query="from:2000-01-01"), headers=headers,
+        )
+        assert response.status_code == 400
+        assert response.json["error"] == f"Use dates between {bounds['from']} and {bounds['to']}."
+    for value in ["2026-09-3", "2026-02-30"]:
+        response = client.get("/flow-metrics/api/observation", query_string={"to": value})
+        assert response.status_code == 400
+        assert response.json["error"] == "Enter a valid date: YYYY-MM-DD."
+
+
 def observed_item(identity, status="TODO", sprint="a", archived=False, team="Blueprint"):
     value = item(f"item-{identity}", status, archived=archived)
     value["fields"][1]["name"] = team
@@ -899,6 +971,7 @@ def test_observed_sprint_progress_completed_scope_baselines_points_and_recipe_gr
         assert [row["value"] for row in counts["rows"] if row["series"] == "Completed"] == [0, 2]
         points = history_result(observed_chart("velocity"), history)
         assert all(row["value"] is None for row in points["rows"]), "Never substitute Estimation for Points"
+        assert points["note"] == "Points use fictional estimates."
         custom = history_result(observed_chart("custom", x="reporting", y="historicalCount", group="status",
                                 calculation={"interval": "daily"}), history)
         built = history_result(observed_chart("flow"), history)
@@ -1538,6 +1611,59 @@ def test_failed_collection_preserves_last_complete_snapshot(app):
         before = db.session.get(FlowSnapshot, "snapshot-test").payload
         with pytest.raises(CollectionError):
             collect(object())
+        assert db.session.get(FlowSnapshot, "snapshot-test").payload == before
+        run = db.session.execute(select(FlowCollectionRun)).scalar_one()
+        assert run.status == "failed"
+        assert run.error_code == "github_query_incomplete"
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_owned_collection_client_closes_on_success_and_failure(app, fails):
+    with (
+        app.app_context(),
+        patch("app.projects.flow_metrics.collector.ProjectClient") as factory,
+        patch("app.projects.flow_metrics.collector.collect_payload") as fetch,
+    ):
+        fetch.return_value = payload()
+        if fails:
+            fetch.side_effect = CollectionError("github_query_incomplete")
+            with pytest.raises(CollectionError, match="^github_query_incomplete$"):
+                collect()
+        else:
+            assert collect() == 3
+        fetch.assert_called_once()
+        assert fetch.call_args.args[0] is factory.return_value
+        factory.return_value.close.assert_called_once()
+
+
+def test_shared_client_partial_graphql_never_publishes(app):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    config = SimpleNamespace(
+        github=SimpleNamespace(app=SimpleNamespace(
+            client_id="test-app", private_key="test-key", installation_id=123,
+        )),
+        auth_enabled=True,
+    )
+    reply = Mock(status_code=200)
+    reply.json.return_value = {
+        "data": {"organization": None}, "errors": [{"message": "private detail"}],
+    }
+    with (
+        app.app_context(),
+        patch("app.projects.flow_metrics.collector.app_config", config),
+        patch("app.shared.services.github_app_client.GitHubAppClient.get_token", return_value="test"),
+        patch("requests.Session.request", return_value=reply),
+        patch("requests.Session.close") as close,
+        patch("app.projects.flow_metrics.collector.publish") as publish,
+    ):
+        before = copy.deepcopy(db.session.get(FlowSnapshot, "snapshot-test").payload)
+        with pytest.raises(CollectionError, match="^github_query_incomplete$"):
+            collect()
+        publish.assert_not_called()
+        close.assert_called_once()
+        reply.close.assert_called_once()
         assert db.session.get(FlowSnapshot, "snapshot-test").payload == before
         run = db.session.execute(select(FlowCollectionRun)).scalar_one()
         assert run.status == "failed"

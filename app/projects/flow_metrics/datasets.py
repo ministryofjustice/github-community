@@ -38,7 +38,7 @@ def sample_dataset():
     dataset = db.session.get(FlowDataset, SAMPLE_ID)
     if not dataset:
         raise ValueError(
-            "Initialise the fictional dataset with flow-metrics init-sample."
+            "Initialise the workspace dataset before use."
         )
     if (
         dataset.provenance != "synthetic"

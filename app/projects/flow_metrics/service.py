@@ -9,6 +9,10 @@ from sqlalchemy import select
 
 from app.projects.flow_metrics.collector import BOARD_ID, ESTIMATION_FIELD_ID
 from app.projects.flow_metrics.db_models import FlowCollectionRun, FlowSnapshot
+from app.projects.flow_metrics.filters import (
+    CATEGORY_FIELDS as FILTER_CATEGORY_FIELDS,
+)
+from app.projects.flow_metrics.filters import category_matches
 from app.shared.database import db
 
 STATUSES = ["Icebox", "TODO", "In Progress", "In Review", "Blocked / On Hold", "Done"]
@@ -90,7 +94,7 @@ METADATA_FIELDS = {
     "sub-issues-progress",
 }
 QUERY = re.compile(
-    r'\s*(?:([a-z][a-z-]*):("(?:[^"\\]|\\["\\])*"|[^\s"]+)|("(?:[^"\\]|\\["\\])*"|[^\s:"]+))\s*'
+    r'\s*(?:(-?[a-z][a-z-]*):("(?:[^"\\]|\\["\\])*"|[^\s"]+)|("(?:[^"\\]|\\["\\])*"|[^\s:"]+))\s*'
 )
 FIELD_NAMES = {
     "status": "Status",
@@ -120,8 +124,11 @@ def parse_query(query):
         field = match[1] or "keyword"
         raw = match[2] or match[3]
         value = json.loads(raw) if raw.startswith('"') else raw
-        if not value.strip() or (field != "keyword" and field not in QUERY_FIELDS):
+        if not value.strip() or (field != "keyword" and field not in QUERY_FIELDS
+                                 and field not in {"no", "has"} and not (field.startswith("-") and field[1:] in FILTER_CATEGORY_FIELDS)):
             raise ValueError("Choose a supported field and a non-empty value.")
+        if field in {"no", "has"} and value not in FILTER_CATEGORY_FIELDS:
+            raise ValueError("Choose a categorical field.")
         clauses.append((field, value))
     return clauses
 
@@ -188,7 +195,7 @@ def validate_chart(chart):
                 if date.fromisoformat(value).isoformat() != value:
                     raise ValueError()
             except ValueError:
-                raise ValueError("Use a valid date in YYYY-MM-DD format.") from None
+                raise ValueError("Enter a valid date: YYYY-MM-DD.") from None
     if dates["from"] and dates["to"] and dates["from"] > dates["to"]:
         raise ValueError("The From date must be on or before the To date.")
 
@@ -474,14 +481,14 @@ def result(chart):
     if any(field == "source" and value != "Genuine" for field, value in clauses):
         raise ValueError("Real mode supports only source:Genuine.")
     for field, value in clauses:
-        if field in FILTERS and field != "query":
+        if field in FILTERS and field not in {"query", "team"}:
             filters[field] = value
     start = first if first else datetime.now(UTC).date()
     end = latest.captured_date if latest else start
     from_date = date.fromisoformat(filters["from"]) if filters["from"] else start
     to_date = date.fromisoformat(filters["to"]) if filters["to"] else end
     if from_date > to_date or from_date < start or to_date > end:
-        raise ValueError("Choose dates within the captured observation history.")
+        raise ValueError(f"Use dates between {start.isoformat()} and {end.isoformat()}.")
     reporting = observation_at(to_date)
     empty = {
         "series": [],
@@ -552,9 +559,16 @@ def result(chart):
     for item in normalise(reporting):
         if item["archived"]:
             continue
+        available = {"repository", "type", "title", "is", *(
+            key for key, value in reporting.payload.get("mapping", {}).items() if value
+        )}
+        if reporting.payload.get("metadataVersion") == 1:
+            available.update(METADATA_FIELDS)
+        if not category_matches(item, filters, clauses, available):
+            continue
         if any(
             filters[key] and filters[key] != item[key]
-            for key in ("team", "status", "sprint", "type", "planned")
+            for key in ("status", "sprint", "type", "planned")
         ):
             continue
         if any(

@@ -10,6 +10,40 @@ const SAMPLE_METADATA_FIELDS = [
   "assignee", "label", "milestone", "reviewers", "priority", "refined",
   "blocked-by", "blocking", "relates-to", "parent-issue", "sub-issues-progress",
 ];
+export const CATEGORICAL_FILTERS = ["team", "sprint", "status", "type", "planned", "repository", "objective", "priority", "refined"];
+
+export function queryField(field) {
+  if (["no", "has"].includes(field)) return [field, field === "no" ? "No field" : "Has field",
+    CATEGORICAL_FILTERS.filter(key => SEARCH_FIELDS.find(([name]) => name === key)?.[2])];
+  const excluded = field.startsWith("-");
+  const definition = SEARCH_FIELDS.find(([key]) => key === (excluded ? field.slice(1) : field));
+  return excluded && CATEGORICAL_FILTERS.includes(field.slice(1)) && definition
+    ? [field, `Exclude ${definition[1].toLowerCase()}`, definition[2]] : excluded ? undefined : definition;
+}
+
+export function selectedTeams(filters, clauses = parseQuery(filters.query)) {
+  const values = clauses.filter(clause => clause.field === "team").map(clause => clause.value);
+  return [...new Set(values.length ? values : filters.team ? [filters.team] : [])];
+}
+
+export function categoricalMatch(ticket, filters, clauses) {
+  const available = field => ticket.provenance !== "real" || ticket.availableFields?.includes(field);
+  const teams = selectedTeams(filters, clauses);
+  if (teams.length && (!available("team") || !teams.includes(ticket.team))) return false;
+  return clauses.every(({ field, value }) => {
+    if (field === "no" || field === "has") {
+      if (!available(value)) return false;
+      const missing = [null, undefined, "", "Not set"].includes(ticket[value]);
+      return missing === (field === "no");
+    }
+    return !field.startsWith("-") || available(field.slice(1)) && ticket[field.slice(1)] !== value;
+  });
+}
+
+export function removeQueryClause(query, index) {
+  return parseQuery(query).filter((_clause, position) => position !== index)
+    .map(({ field, value }) => `${field === "keyword" ? "" : `${field}:`}${JSON.stringify(value)}`).join(" ");
+}
 export function configureSampleData(dataset) {
   liveData = false;
   eventData = dataset;
@@ -17,14 +51,14 @@ export function configureSampleData(dataset) {
   Object.assign(HISTORY, dataset.history);
   const realItems = (dataset.realObservations || []).flatMap((observation) => observation.items);
   const realOptions = dataset.realOptions || {};
-  TEAMS.splice(0, TEAMS.length, ...new Set([...dataset.teams, ...(realOptions.team || realItems.map((ticket) => ticket.team))]));
+  TEAMS.splice(0, TEAMS.length, ...new Set([...dataset.teams.map(fictionalTeam), ...(realOptions.team || realItems.map((ticket) => ticket.team))]));
   const statuses = new Set(dataset.tickets.flatMap((ticket) =>
     ticket.events.filter((event) => event.type === "status").map((event) => event.value)));
   realItems.forEach((ticket) => statuses.add(ticket.status));
   (realOptions.status || []).forEach(status => statuses.add(status));
   STATUSES.splice(0, STATUSES.length, ...new Set([...["Icebox", "TODO", "In Progress", "In Review", "Blocked / On Hold", "Done"].filter((status) => statuses.has(status)), ...statuses]));
   TICKETS.splice(0, TICKETS.length, ...dataset.tickets.map((ticket) => ({
-    ...ticket, created: dayNumber(ticket.created), provenance: "synthetic", sourceId: ticket.id,
+    ...ticket, team: fictionalTeam(ticket.team), created: dayNumber(ticket.created), provenance: "synthetic", sourceId: ticket.id,
     datasetId: dataset.fictionalDatasetId || dataset.id, source: "Fictional",
   })));
   SEARCH_FIELDS.forEach((field) => {
@@ -98,8 +132,29 @@ export function configureLiveData(metadata) {
   });
 }
 export const DEPARTMENT = "Developer Experience";
-export const TEAMS = ["Blueprint", "DevX", "Engineering Platform"];
+const fictionalTeam = team => team === "DevX" ? DEPARTMENT : team;
+export const TEAMS = ["Blueprint", DEPARTMENT, "Engineering Platform"];
 export const STATUSES = ["Icebox", "TODO", "In Progress", "In Review", "Blocked / On Hold", "Done"];
+export const STATUS_COLOURS = Object.freeze({
+  Done: "#00703c", "In Review": "#b58800", "Blocked / On Hold": "#d4351c",
+  "Blocked/On Hold": "#d4351c", "In Progress": "#4c2c92",
+  TODO: "#1d70b8", Icebox: "#007c91", "Not set": "#505a5f",
+});
+export function chartColours(chart, series, tickets, fallback) {
+  const statusSeries = chart.metric === "flow" || chart.metric === "custom" && chart.group === "status";
+  const seriesStatus = statusSeries ? series.name.split(" · ").at(-1)
+    : ["Completed", "Cycle time", "Completed items"].includes(series.name) ? "Done" : null;
+  const colour = STATUS_COLOURS[seriesStatus] || fallback;
+  return {
+    colour,
+    points: series.points.map(point => {
+      const item = point.ticketId && tickets.find(ticket => ticket.id === point.ticketId);
+      const status = chart.metric === "status" || chart.metric === "custom" && chart.x === "status"
+        ? point.label : item ? item.observedStatus || item.status || stateAt(item, item.reportingDay ?? 0)?.status : seriesStatus;
+      return STATUS_COLOURS[status] || colour;
+    }),
+  };
+}
 export const FIELDS = {
   status: "Status", team: "Team", sprint: "Sprint", repository: "Repository",
   type: "Item type", planned: "Planned and unplanned work", objective: "Objective",
@@ -138,7 +193,7 @@ export const SEARCH_FIELDS = [
 export function parseQuery(query = "") {
   if (query.length > 1000) throw new Error("Keep the filter under 1,000 characters.");
   const clauses = [];
-  const pattern = /\s*(?:([a-z][a-z-]*):("(?:[^"\\]|\\["\\])*"|[^\s"]+)|("(?:[^"\\]|\\["\\])*"|[^\s:"]+))\s*/gy;
+  const pattern = /\s*(?:(-?[a-z][a-z-]*):("(?:[^"\\]|\\["\\])*"|[^\s"]+)|("(?:[^"\\]|\\["\\])*"|[^\s:"]+))\s*/gy;
   let position = 0;
   while (position < query.trimEnd().length) {
     pattern.lastIndex = position;
@@ -150,8 +205,8 @@ export function parseQuery(query = "") {
     const value = raw.startsWith('"') ? JSON.parse(raw) : raw;
     if (!value.trim()) throw new Error("Enter a filter value.");
     if (field !== "keyword") {
-      const definition = SEARCH_FIELDS.find(([key]) => key === field);
-      if (!definition || !definition[2]) throw new Error(`${definition?.[1] || field} is unavailable in this prototype.`);
+      const definition = queryField(field);
+      if (!definition || !definition[2]) throw new Error(`${definition?.[1] || field} is unavailable.`);
       if (definition[2].length && !definition[2].includes(value)) throw new Error(`Choose an available ${definition[1].toLowerCase()} value.`);
     }
     clauses.push({ field, value });
@@ -208,15 +263,15 @@ export const LAYOUTS = {
   scatter: "Scatter", histogram: "Histogram", flow: "Cumulative flow", burnup: "Burn up",
 };
 export const METRICS = {
-  custom: { name: "Custom chart", unit: "Items", description: "Build a chart from sample board fields. Choose the category axis, measure and optional grouping; filters belong to this chart." },
-  cycle: { name: "Cycle time", unit: "Calendar days", description: "Elapsed calendar days from start to latest completion, for sample items completed in the reporting window. Same-day completion is 0.", events: true },
-  churn: { name: "Sprint churn", unit: "Items", description: "Sample scope additions and removals during each sprint. An item can contribute to both series. These are fabricated events, not inferred board history.", events: true },
-  age: { name: "Work item age", unit: "Calendar days", description: "Elapsed calendar days since creation for unfinished sample items, as at the end of the reporting window." },
-  status: { name: "Status / WIP", unit: "Items", description: "Sample status distribution at the end of the reporting window. WIP includes In Progress, In Review and Blocked / On Hold." },
-  stuck: { name: "Stuck items", unit: "Calendar days", description: "Unfinished WIP items in their current sample status for at least the configured number of calendar days, as at the reporting end date.", events: true },
-  throughput: { name: "Throughput", unit: "Items completed", description: "Sample completions per seven-day bucket in the reporting window. The final bucket may be shorter than seven days." },
-  flow: { name: "Cumulative flow", unit: "Items", description: "Daily counts by sample status, including Done, from fictional status events. Band thickness shows the number of items in each status.", events: true },
-  progress: { name: "Sprint progress", unit: "Items", description: "Burn up of sample completed work against sample sprint scope. Select a sprint to inspect its fictional scope changes; all sprints shows combined sample scope.", events: true },
+  custom: { name: "Custom chart", unit: "Items", description: "Build a chart from board fields. Choose the category axis, measure and optional grouping; filters belong to this chart." },
+  cycle: { name: "Cycle time", unit: "Calendar days", description: "Elapsed calendar days from start to latest completion, for items completed in the reporting window. Same-day completion is 0.", events: true },
+  churn: { name: "Sprint churn", unit: "Items", description: "Scope additions and removals during each sprint. An item can contribute to both series. Capture comparisons use the later capture date.", events: true },
+  age: { name: "Work item age", unit: "Calendar days", description: "Elapsed calendar days since creation for unfinished items, as at the end of the reporting window." },
+  status: { name: "Status / WIP", unit: "Items", description: "Status distribution at the end of the reporting window. WIP includes In Progress, In Review and Blocked / On Hold." },
+  stuck: { name: "Stuck items", unit: "Calendar days", description: "Unfinished WIP items in their current status for at least the configured number of calendar days, as at the reporting end date.", events: true },
+  throughput: { name: "Throughput", unit: "Items completed", description: "Completions per reporting bucket. Capture comparisons use the later capture date." },
+  flow: { name: "Cumulative flow", unit: "Items", description: "Counts by status, including Done, at recorded dates. Band thickness shows the number of items in each status.", events: true },
+  progress: { name: "Sprint progress", unit: "Items", description: "Completed work against sprint scope. Select a sprint to focus the chart; all sprints shows combined scope.", events: true },
   velocity: { name: "Velocity", unit: "Points", description: "Points committed at sprint start versus points completed by sprint end, or reporting date for an in-progress sprint.", events: true },
 };
 export const SEEDS = [
@@ -300,8 +355,8 @@ export function upgradeChart(chart) {
     throw new Error("Invalid chart filters");
   }
   const filters = { ...DEFAULT_FILTERS, ...chart.filters };
-  // Only the old aggregate label migrates; DevX is an actual board Team value.
-  if (filters.team === DEPARTMENT) filters.team = "";
+  // Only migrate the old aggregate label when it is not an available Team value.
+  if (filters.team === DEPARTMENT && !TEAMS.includes(DEPARTMENT)) filters.team = "";
   const upgraded = {
     id: chart.id, name: chart.name, metric: chart.metric, layout: chart.layout, threshold: chart.threshold,
     x: chart.x ?? "status", y: chart.y ?? "count", group: chart.group ?? "", filters,
@@ -330,8 +385,11 @@ export function validateFilters(filters) {
   }
   for (const date of [filters.from, filters.to].filter(Boolean)) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(dayNumber(date))
-        || dateAt(dayNumber(date)) !== date || date < HISTORY.from || date > HISTORY.to) {
-      throw new Error(`Use dates within ${liveData ? "captured" : "sample"} history: ${HISTORY.from} to ${HISTORY.to}.`);
+        || dateAt(dayNumber(date)) !== date) {
+      throw new Error("Enter a valid date: YYYY-MM-DD.");
+    }
+    if (date < HISTORY.from || date > HISTORY.to) {
+      throw new Error(`Use dates between ${HISTORY.from} and ${HISTORY.to}.`);
     }
   }
   if ((filters.from || HISTORY.from) > (filters.to || HISTORY.to)) {
@@ -422,7 +480,7 @@ export function scopeLabels(filters = {}) {
   const { resolved, clauses } = resolveFilters(filters);
   filters = resolved;
   return [
-    filters.team || "All teams",
+    selectedTeams(filters, clauses).join(" or ") || "All teams",
     filters.sprint || "All sprints",
     (filters.from || HISTORY.from) === (filters.to || HISTORY.to)
       ? displayDate(filters.from || HISTORY.from)
@@ -539,7 +597,8 @@ function buildResultCore(chart, filters = chart.filters || {}) {
       missingFilterEvidence++;
       return false;
     }
-    return (!filters.team || ticket.team === filters.team)
+    if (!categoricalMatch(ticket, filters, clauses)) return false;
+    return true
     && (!filters.sprint || (historicalScope && ticket.provenance !== "real" ? ticket.events.some((event) => event.type === "scope"
       && event.value === eventData.sprints.find((sprint) => sprint.name === filters.sprint)?.id && event.date <= dateAt(to))
       : ticket.sprint === filters.sprint)) && ticket.created <= to
@@ -547,6 +606,7 @@ function buildResultCore(chart, filters = chart.filters || {}) {
     && (!filters.type || ticket.type === filters.type)
     && (!filters.planned || ticket.planned === filters.planned)
     && clauses.every(({ field, value }) => {
+      if (field === "team" || field === "no" || field === "has" || field.startsWith("-")) return true;
       if (field === "source") return (ticket.provenance === "real" ? "Genuine" : "Fictional") === value;
       if (ticket.provenance === "real" && !["keyword", "from", "to"].includes(field)
           && !ticket.availableFields?.includes(field)) {
@@ -718,9 +778,9 @@ export function csvCell(value) {
 
 export function resultCSV(chart, result, filters = chart.filters || {}) {
   const mixed = result.provenance === "mixed";
-  const context = `${mixed ? "Combined exploration: fictional events and genuine observations" : liveData ? "Captured board observation; definition v1" : "Demonstration data only"}; ${chart.name}; ${scopeLabels(filters).join("; ")}; ${chart.metric === "custom" ? `${FIELDS[chart.x]}; ${MEASURES[chart.y].name}; Group: ${GROUP_FIELDS[chart.group] || "None"}` : METRICS[chart.metric].name}; ${result.note}; ${result.coverageText || ""}`;
+  const context = `${mixed ? "Combined exploration: fictional events and genuine observations" : liveData ? "Captured board observation; definition v1" : "Fictional data"}; ${chart.name}; ${scopeLabels(filters).join("; ")}; ${chart.metric === "custom" ? `${FIELDS[chart.x]}; ${MEASURES[chart.y].name}; Group: ${GROUP_FIELDS[chart.group] || "None"}` : METRICS[chart.metric].name}; ${result.note}; ${result.coverageText || ""}`;
   return [
-    ["Context", "Series", "Point", ...(chart.layout === "scatter" ? ["Completion date"] : []), result.unit, mixed ? "Item references" : liveData ? "Board item references" : "Sample item references", ...(mixed ? ["Contributor provenance", "Genuine observation at"] : [])],
+    ["Context", "Series", "Point", ...(chart.layout === "scatter" ? ["Completion date"] : []), result.unit, "Item references", ...(mixed ? ["Contributor provenance", "Genuine observation at"] : [])],
     ...result.rows.map((row) => [context, row.series, row.label,
       ...(chart.layout === "scatter" ? [displayDate(row.completedDate)] : []),
       row.value ?? "", row.ids.map((id) => {

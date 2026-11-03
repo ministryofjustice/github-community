@@ -66,7 +66,7 @@ const tickets = SAMPLE_SPRINTS.flatMap((sprint, sprintIndex) =>
       id: `SAMPLE-${sprintIndex + 1}-${String(index + 1).padStart(2, "0")}`,
       title: `Sample ${scenario} (${sprint.name})`,
       repository: `sample-repository-${index % 2 ? "beta" : "alpha"}`,
-      team: ["DevX", "Blueprint", "Engineering Platform"][index % 3],
+      team: ["Developer Experience", "Blueprint", "Engineering Platform"][index % 3],
       type: ["Task", "Bug", "Feature"][index % 3],
       objective: ["Sample reliability", "Sample developer tooling", "Sample delivery"][Math.floor(index / 3) % 3],
       planned: index < 10 ? "Planned" : "Unplanned",
@@ -102,9 +102,11 @@ export const SAMPLE_DATA = {
 export function sampleSnapshotAt(date) {
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)
       || !Number.isFinite(Date.parse(`${date}T00:00:00Z`))
-      || shiftDate(date, 0) !== date
-      || date < SAMPLE_DATA.history.from || date > SAMPLE_DATA.history.to) {
-    throw new RangeError("Choose a valid date within the sample history.");
+      || shiftDate(date, 0) !== date) {
+    throw new RangeError("Enter a valid date: YYYY-MM-DD.");
+  }
+  if (date < SAMPLE_DATA.history.from || date > SAMPLE_DATA.history.to) {
+    throw new RangeError(`Use dates between ${SAMPLE_DATA.history.from} and ${SAMPLE_DATA.history.to}.`);
   }
   return {
     date,

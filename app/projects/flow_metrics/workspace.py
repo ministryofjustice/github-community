@@ -188,9 +188,9 @@ def observation_for(reporting_date):
     try:
         upper = date.fromisoformat(reporting_date)
     except (ValueError, TypeError):
-        raise ValueError("Use a reporting date in YYYY-MM-DD format.") from None
+        raise ValueError("Enter a valid date: YYYY-MM-DD.") from None
     if upper.isoformat() != reporting_date or upper == date.max:
-        raise ValueError("Use a reporting date in YYYY-MM-DD format.")
+        raise ValueError("Enter a valid date: YYYY-MM-DD.")
     require_supported_source()
     index = capture_index()
     row = db.session.execute(

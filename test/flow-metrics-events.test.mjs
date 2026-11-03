@@ -156,14 +156,14 @@ test("progress follows additions, removals, carryover and reopen events", () => 
   assert.equal(result.series[1].points.at(-1).value, 5);
 });
 
-test("all metrics honour distinct DevX filters, saved definitions and CSV context", () => {
+test("all metrics honour fictional Developer Experience filters, saved definitions and CSV context", () => {
   for (const metric of Object.keys(METRICS)) {
-    const definition = upgradeChart(chart(metric, "team:DevX"));
+    const definition = upgradeChart(chart(metric, 'team:"Developer Experience"'));
     const result = buildResult(definition);
-    assert.ok(result.tickets.every((ticket) => ticket.team === "DevX"));
-    assert.ok(resultCSV(definition, result).includes("DevX"));
+    assert.ok(result.tickets.every((ticket) => ticket.team === "Developer Experience"));
+    assert.ok(resultCSV(definition, result).includes("Developer Experience"));
   }
-  assert.equal(upgradeChart({ ...chart("status"), filters: { team: "DevX" } }).filters.team, "DevX");
+  assert.equal(upgradeChart({ ...chart("status"), filters: { team: "Developer Experience" } }).filters.team, "Developer Experience");
   assert.equal(scopeLabels()[0], "All teams");
 });
 

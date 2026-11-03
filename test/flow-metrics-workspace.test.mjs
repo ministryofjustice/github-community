@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { SAMPLE_DATA } from "../app/static/projects/flow_metrics/javascript/flow-metrics-sample-data.mjs";
-import { configureSampleData, buildResult, CUSTOM_DEFAULTS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, pointTicket, itemCount, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
+import { configureSampleData, configureLiveData, buildResult, CUSTOM_DEFAULTS, METRICS, resultCSV, SEARCH_FIELDS, ticketChartLabel, ticketReference, ticketText, pointTicket, itemCount, datePresetRange, withDateRange, resolveFilters, chartHasDateAxis, HISTORY, validateFilters, validChart, scopeLabels, queryField, CATEGORICAL_FILTERS, chartColours, STATUS_COLOURS, removeQueryClause, parseQuery } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 import { editableRecipe, builderError } from "../app/static/projects/flow_metrics/javascript/flow-metrics-builder.mjs";
 import { observationLoader, setRealObservation, usesObservedHistory, setObservedResult, resultTicket, mergeObservedResult, SEEDS } from "../app/static/projects/flow_metrics/javascript/flow-metrics-model.mjs";
 
@@ -37,6 +37,147 @@ const projection = (series = [], extra = {}) => ({
   tickets: [], itemStates: {}, captures: ["2026-10-28T12:00:00Z"], unit: "Items",
   baselineComplete: false, unavailable: "Captured history is insufficient for this calculation.", note: "Observed between captures.",
   ...extra,
+});
+
+test("date errors distinguish format/calendar failures from dynamic available bounds in both modes", () => {
+  const options = SEARCH_FIELDS.map(field => field[2]);
+  for (const live of [false, true]) {
+    if (live) configureLiveData({ history: { from: "2026-10-16", to: "2026-10-29" }, options: {} });
+    else configureSampleData({ ...dataset(), history: { from: "2026-09-12", to: "2026-10-29" } });
+    for (const value of ["2026-09-3", "2026-02-30", "2026-13-01", "invalid"]) {
+      for (const field of ["from", "to"]) {
+        assert.throws(() => validateFilters({ ...CUSTOM_DEFAULTS.filters, query: `${field}:${value}` }),
+          { message: "Enter a valid date: YYYY-MM-DD." });
+        assert.throws(() => validateFilters({ ...CUSTOM_DEFAULTS.filters, [field]: value }),
+          { message: "Enter a valid date: YYYY-MM-DD." });
+      }
+    }
+    for (const value of ["2026-01-01", "2026-10-30"]) {
+      assert.throws(() => validateFilters({ ...CUSTOM_DEFAULTS.filters, query: `from:${value}` }),
+        { message: `Use dates between ${HISTORY.from} and ${HISTORY.to}.` });
+    }
+    assert.throws(() => validateFilters({ ...CUSTOM_DEFAULTS.filters, from: "2026-10-29", to: "2026-10-28" }),
+      { message: "The From date must be on or before the To date." });
+  }
+  configureSampleData(dataset());
+  SEARCH_FIELDS.forEach((field, index) => { field[2] = options[index]; });
+  for (const metric of Object.values(METRICS)) assert.doesNotMatch(metric.description, /sample|demonstration/i);
+});
+
+test("team values OR while other fields AND; missing, present and exclusions retain exact source contributors", () => {
+  const data = dataset();
+  data.realObservations = [{ capturedAt: "2026-10-19T12:00:00Z", items: [
+    real("1", "Done", { team: "Blueprint" }),
+    real("2", "Done", { team: "Engineering Platform" }),
+    real("3", "TODO", { team: "Not set" }),
+    real("4", "TODO", { team: "Not set", availableFields: ["status", "title", "type", "repository"] }),
+    real("5", "TODO", { team: "DevX" }),
+  ] }];
+  configureSampleData(data);
+  for (const metric of Object.keys(METRICS).filter(key => key !== "custom")) {
+    const a = chart(metric, "team:Blueprint");
+    const b = chart(metric, 'team:"Engineering Platform"');
+    const both = chart(metric, 'team:Blueprint team:"Engineering Platform"');
+    const expected = [...new Set([...ids(buildResult(a)), ...ids(buildResult(b))])].sort();
+    assert.deepEqual(ids(buildResult(both)), expected, `${metric} OR`);
+    assert.deepEqual(buildResult(editableRecipe(both)).rows, buildResult(both).rows, `${metric} editable parity`);
+  }
+  assert.match(scopeLabels(chart("status", 'team:Blueprint team:"Engineering Platform"').filters)[0], /Blueprint or Engineering Platform/);
+  for (const [query, expected] of [
+    ["source:Genuine no:team", ["real:3"]],
+    ["source:Genuine has:team", ["real:1", "real:2", "real:5"]],
+    ['source:Genuine team:Blueprint team:"Engineering Platform" status:Done -team:Blueprint', ["real:2"]],
+    ['source:Genuine has:team -team:Blueprint -team:"Engineering Platform"', ["real:5"]],
+    ["source:Genuine -team:Blueprint", ["real:2", "real:3", "real:5"]],
+  ]) {
+    const definition = chart("status", query);
+    const result = buildResult(definition);
+    assert.deepEqual(ids(result), expected, query);
+    assert.deepEqual(buildResult(editableRecipe(definition)).rows, result.rows);
+    assert.equal(total(result), expected.length);
+    const csv = resultCSV(definition, result);
+    for (const id of expected) assert.ok(csv.includes(ticketReference(result.tickets.find(ticket => ticket.id === id))));
+    assert.ok(!ids(result).includes("real:4"), "Unavailable Team is not missing and cannot satisfy exclusion");
+  }
+  const fictional = buildResult(chart("status", 'source:Fictional team:"Developer Experience"'));
+  assert.ok(fictional.sampleSize > 0);
+  assert.ok(fictional.tickets.every(ticket => ticket.team === "Developer Experience"));
+  assert.deepEqual(ids(buildResult(chart("status", "source:Genuine team:DevX"))), ["real:5"]);
+  const original = 'team:"Engineering Platform" team:Blueprint status:Done title:"a \\"quote\\""';
+  const removed = removeQueryClause(original, 1);
+  assert.deepEqual(parseQuery(removed), parseQuery(original).filter((_clause, index) => index !== 1));
+  assert.throws(() => parseQuery("no:assignee"), /available|categorical/i);
+  assert.throws(() => parseQuery("-from:2026-10-16"), /unavailable/);
+});
+
+test("selected chips remove only user clauses, keep defaults plain and use normal save/discard query flow", () => {
+  configureSampleData(dataset());
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const elements = new Map();
+  const node = () => ({
+    children: [], handlers: {}, attributes: {}, textContent: "",
+    append(...children) { this.children.push(...children); },
+    replaceChildren(...children) { this.children = children; },
+    setAttribute(key, value) { this.attributes[key] = value; },
+    addEventListener(type, handler) { this.handlers[type] = handler; },
+    focus() { this.focused = true; },
+  });
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, node());
+    return elements.get(id);
+  };
+  const saved = chart("status", 'team:Blueprint team:"Engineering Platform"');
+  const context = {
+    draft: structuredClone(saved), saving: false, $: element, scopeLabels, parseQuery, queryField, removeQueryClause,
+    document: { createDocumentFragment: node, createElement: node },
+    applySearch() {
+      validateFilters({ ...context.draft.filters, query: element("filter-query").value });
+      context.draft = { ...context.draft, filters: { ...context.draft.filters, query: element("filter-query").value } };
+      context.result = buildResult(context.draft);
+      context.renderScope();
+    },
+  };
+  runInNewContext(source.slice(source.indexOf("function renderScope()"), source.indexOf("\nfunction updateView()")), context);
+  context.renderScope();
+  const chips = element("chart-scope").children.at(-1);
+  assert.equal(chips.children.length, 2);
+  assert.equal(chips.children[0].type, "button");
+  assert.equal(chips.children[0].attributes["aria-label"], "Remove Team: Blueprint");
+  assert.equal(chips.children[1].attributes["aria-label"], "Remove Team: Engineering Platform");
+  chips.children[0].handlers.click();
+  assert.equal(element("filter-query").focused, true);
+  assert.deepEqual(parseQuery(context.draft.filters.query), [{ field: "team", value: "Engineering Platform" }]);
+  assert.ok(context.result.tickets.every(ticket => ticket.team === "Engineering Platform"));
+  assert.equal(saved.filters.query, 'team:Blueprint team:"Engineering Platform"', "Saved definition is unchanged until Save");
+  element("chart-scope").children.at(-1).children[0].handlers.click();
+  assert.equal(context.draft.filters.query, "");
+  assert.equal(element("chart-scope").children.length, 1, "Default date/All sprints have no removable chips");
+});
+
+test("one semantic status palette is independent of series order across every chart layout", () => {
+  const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
+  const statuses = ["Done", "In Review", "Blocked / On Hold", "In Progress", "TODO", "Icebox", "Not set"];
+  assert.equal(new Set(statuses.map(status => STATUS_COLOURS[status])).size, statuses.length);
+  for (const layout of ["bar", "column", "line", "area", "stacked-bar", "stacked-column", "scatter", "histogram", "flow", "burnup"]) {
+    const draft = chart("flow", "", layout);
+    const groups = statuses.toReversed().map(name => ({ name, points: [{ label: "19 Oct", value: 1, x: Date.UTC(2026, 9, 19) }] }));
+    const config = runInNewContext(`${source.slice(source.indexOf("function chartConfig()"), source.indexOf("\nfunction table("))}\nchartConfig`, {
+      draft, result: { tickets: [], series: groups, unit: "Items", axis: "Reporting date" },
+      chartColours, ticketChartLabel, pointTicket, ticketText, ticketLabel: "items", colours: ["#000000"],
+    })();
+    for (const dataset of config.data.datasets) {
+      const expected = STATUS_COLOURS[dataset.label];
+      assert.equal(dataset.pointBackgroundColor[0], expected, `${layout}/${dataset.label}`);
+      assert.equal(dataset.segment.borderColor({ p1DataIndex: 0 }), expected);
+      assert.equal(Array.isArray(dataset.borderColor) ? dataset.borderColor[0] : dataset.borderColor, expected);
+      assert.ok(Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor[0] === expected : dataset.backgroundColor.startsWith(expected));
+    }
+    const statusPoints = chartColours(chart("status", "", layout), {
+      name: "Status", points: statuses.map(label => ({ label, value: 1 })),
+    }, [], "#000000");
+    assert.deepEqual(statusPoints.points, statuses.map(status => STATUS_COLOURS[status]));
+  }
+  assert.equal(chartColours(chart("custom"), { name: "Done", points: [] }, [], "#123456").colour, "#123456", "Team/category names are not interpreted as statuses");
 });
 
 test("all default built-ins and editable charts keep sample history when genuine history is insufficient", () => {
@@ -172,15 +313,17 @@ for (const metric of ["status", "flow"]) test(`actual async ${metric} preview di
   const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
   const elements = new Map();
   const element = id => {
-    if (!elements.has(id)) elements.set(id, { hidden: false, disabled: false, replaceChildren() {} });
+    if (!elements.has(id)) elements.set(id, {
+      hidden: false, disabled: false, replaceChildren() {}, setAttribute() {},
+    });
     return elements.get(id);
   };
   const pending = [];
   const projections = [];
   const context = {
-    live: false, previewSequence: 0, pendingPreview: false, chart: null, result: { old: true },
+    live: false, saving: false, previewSequence: 0, pendingPreview: false, chart: null, result: { old: true },
     draft: chart(metric, "to:2026-10-18"), $: element, setRealObservation, buildResult,
-    usesObservedHistory, resolveFilters, HISTORY, setObservedResult,
+    usesObservedHistory, resolveFilters, HISTORY, setObservedResult, validateFilters,
     apiRequest: (route, definition) => new Promise((resolve, reject) => {
       assert.equal(route, "observed-result");
       projections.push({ definition, resolve, reject });
@@ -223,6 +366,29 @@ for (const metric of ["status", "flow"]) test(`actual async ${metric} preview di
   assert.equal(element("export-csv").disabled, true);
   assert.equal(element("table-view").hidden, true);
   assert.equal(context.error, "Cannot read observation");
+  runInNewContext([
+    source.slice(source.indexOf("function invalidatePreview("), source.indexOf("function previewConfiguration(")),
+    source.slice(source.indexOf("function applySearch("), source.indexOf('\n$("filter-query").addEventListener')),
+  ].join("\n"), context);
+  const savedQuery = context.draft.filters.query;
+  const pendingRequest = context.renderPreview();
+  await Promise.resolve();
+  assert.equal(element("result-summary").textContent, "Loading...");
+  element("filter-query").value = "from:2026-09-3";
+  context.applySearch();
+  assert.equal(context.draft.filters.query, savedQuery, "Invalid edits do not replace the validated query");
+  assert.equal(context.pendingPreview, false);
+  assert.equal(context.result, null);
+  assert.equal(element("result-summary").textContent, "Enter a valid date: YYYY-MM-DD.");
+  assert.equal(element("chart-scope").hidden, true, "Old Showing query is not presented as current");
+  assert.equal(element("chart-view").hidden, true);
+  assert.equal(element("table-view").hidden, true);
+  assert.equal(element("export-csv").disabled, true);
+  pending[3].resolve(dataset().realObservations[2]);
+  if (metric === "flow") projections[3].resolve(projection());
+  await pendingRequest;
+  assert.equal(context.result, null, "A late valid response cannot overwrite the validation error");
+  assert.equal(element("result-summary").textContent, "Enter a valid date: YYYY-MM-DD.");
 });
 
 test("Admin Manage uses the configured rendered workspace identity", () => {
@@ -278,7 +444,7 @@ test("chart ticket labels are short without losing repository identity elsewhere
 test("actual chart configuration prefixes only plotted number clashes and preserves full tooltips", () => {
   const source = readFileSync(new URL("../app/static/projects/flow_metrics/javascript/flow-metrics.js", import.meta.url), "utf8");
   const config = runInNewContext(`${source.slice(source.indexOf("function chartConfig()"), source.indexOf("\nfunction table("))}\nchartConfig`, {
-    draft: chart("age", "", "bar"), ticketChartLabel, pointTicket, ticketText,
+    draft: chart("age", "", "bar"), ticketChartLabel, pointTicket, ticketText, chartColours,
     ticketLabel: "items", colours: ["#1d70b8"],
     result: {
       unit: "Calendar days", axis: "Item",
@@ -310,7 +476,7 @@ test("bundled Chart.js preserves numeric values and orientation across layouts",
     const scatter = layout === "scatter";
     const values = [1, 100, 1];
     const config = runInNewContext(`${source.slice(source.indexOf("function chartConfig()"), source.indexOf("\nfunction table("))}\nchartConfig`, {
-      draft: chart("status", "", layout), ticketChartLabel, pointTicket, ticketText,
+      draft: chart("status", "", layout), ticketChartLabel, pointTicket, ticketText, chartColours,
       ticketLabel: "items", colours: ["#1d70b8", "#b85900"],
       result: {
         unit: "Items", axis: "Status", tickets: [],
@@ -420,9 +586,9 @@ for (const recovery of ["preset", "custom"]) {
     const context = {
       $: element, document: { createElement: () => element(`generated-${node++}`) },
       draft: structuredClone(saved), saving: false, invalidConfiguration: false,
-      previewSequence: 0, pendingPreview: false, syncPickers: [], dateRangeMenu: false, activeSuggestion: -1,
+      previewSequence: 0, pendingPreview: false, result: null, chart: null, syncPickers: [], dateRangeMenu: false, activeSuggestion: -1,
       HISTORY, validateFilters, validChart, builderError, withDateRange, datePresetRange, chartHasDateAxis,
-      resolveFilters, SEARCH_FIELDS, live: false, fieldIcon: () => element("icon"), icon: () => element("icon"),
+      resolveFilters, SEARCH_FIELDS, queryField, CATEGORICAL_FILTERS, live: false, fieldIcon: () => element("icon"), icon: () => element("icon"),
       renderList() {}, syncFieldVisibility() {},
       renderPreview() {
         context.preview = buildResult(context.draft);
@@ -431,7 +597,7 @@ for (const recovery of ["preset", "custom"]) {
     };
     runInNewContext([
       section("function closeDateRange()", "\nfunction renderScope()"),
-      section("function previewConfiguration(", '\n$("configuration").addEventListener'),
+      section("function invalidatePreview(", '\n$("configuration").addEventListener'),
       section("function closeSuggestions()", "\nlet dateFilter;"),
       section("function showSuggestions()", "\nfunction applySearch()"),
       section("function applySearch()", '\n$("filter-query").addEventListener'),
@@ -483,6 +649,21 @@ for (const recovery of ["preset", "custom"]) {
     assert.deepEqual(context.preview.rows, buildResult(context.draft).rows);
     assert.deepEqual(saved, original, "The saved chart remains unchanged for Save/Discard");
     assert.notEqual(JSON.stringify(context.draft), JSON.stringify(saved), "Corrected range remains an unsaved change");
+    const validDraft = context.draft;
+    context.result = context.preview;
+    context.pendingPreview = true;
+    element("result-summary").textContent = "Loading...";
+    element("chart-name").value = "";
+    context.previewConfiguration();
+    assert.equal(context.result, null);
+    assert.equal(context.pendingPreview, false);
+    assert.equal(element("result-summary").textContent, "Enter a chart name containing visible text.");
+    assert.equal(element("chart-scope").hidden, true);
+    assert.equal(element("export-csv").disabled, true);
+    assert.equal(context.draft, validDraft);
+    element("chart-name").value = saved.name;
+    context.previewConfiguration();
+    assert.equal(context.invalidConfiguration, false);
 
     element("filter-query").value += " ";
     context.showSuggestions();
@@ -500,8 +681,9 @@ for (const recovery of ["preset", "custom"]) {
     if (recovery === "preset") {
       context.SEARCH_FIELDS = SEARCH_FIELDS.map(([field, label, values]) => [
         field, label,
-        ({ label: ["example-label"], source: ["Sample", "Genuine"], blocking: ["example/repo#11"], "blocked-by": ["example/repo#12"] })[field] ?? values,
+        ({ label: ["example-label"], source: ["Fictional", "Genuine"], blocking: ["example/repo#11"], "blocked-by": ["example/repo#12"] })[field] ?? values,
       ]);
+      context.queryField = field => context.SEARCH_FIELDS.find(([key]) => key === field) || queryField(field);
       const labels = () => options().map(option => option.children[1].textContent);
       for (const [field, label, values] of context.SEARCH_FIELDS) {
         context.closeSuggestions();
@@ -510,7 +692,9 @@ for (const recovery of ["preset", "custom"]) {
         assert.equal(labels()[0], "Date range", field);
         if (values?.length && !["from", "to"].includes(field)) {
           options().find(option => option.children[1].textContent === label).click();
-          assert.deepEqual(labels(), values, `${field} offers only its values`);
+          const special = CATEGORICAL_FILTERS.includes(field)
+            ? [`No ${label.toLowerCase()}`, `Has ${label.toLowerCase()}`, `Exclude ${label.toLowerCase()}`] : [];
+          assert.deepEqual(labels(), [...values, ...special], `${field} offers its values and categorical operators`);
           assert.equal(context.dateRangeMenu, false);
         }
         for (const suffix of ["", "no-matching-value"]) {
@@ -518,6 +702,8 @@ for (const recovery of ["preset", "custom"]) {
           context.dateRangeMenu = true;
           element("filter-query").handlers.input();
           const expected = (values || []).filter(value => value.toLowerCase().includes(suffix));
+          if (values?.length && CATEGORICAL_FILTERS.includes(field)) expected.push(
+            `No ${label.toLowerCase()}`, `Has ${label.toLowerCase()}`, `Exclude ${label.toLowerCase()}`);
           assert.deepEqual(labels(), expected, `${field}:${suffix} excludes date range and other fields`);
           assert.equal(context.dateRangeMenu, false);
           assert.equal(element("filter-suggestions").hidden, expected.length === 0);

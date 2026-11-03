@@ -85,7 +85,9 @@ test("CSV is exact plotted rows, labelled synthetic, quoted and formula-neutrali
   const result = buildResult(seed, { team: "Blueprint" });
   const csv = resultCSV(seed, result, { team: "Blueprint" });
   assert.equal(csv.split("\r\n").length, result.rows.length + 1);
-  assert.ok(csv.includes("Demonstration data only"));
+  assert.ok(csv.includes("Fictional data"));
+  assert.ok(csv.includes('"Item references"'));
+  assert.ok(!csv.includes("Sample item references"));
   assert.ok(csv.includes("Blueprint"));
   assert.equal(csvCell('=SUM(1,2)'), '"\'=SUM(1,2)"');
   assert.equal(csvCell('  +formula'), '"\'  +formula"');
@@ -93,7 +95,7 @@ test("CSV is exact plotted rows, labelled synthetic, quoted and formula-neutrali
 });
 
 test("unfiltered charts combine the actual team values", () => {
-  assert.deepEqual(TEAMS, ["Blueprint", "DevX", "Engineering Platform"]);
+  assert.deepEqual(TEAMS, ["Blueprint", "Developer Experience", "Engineering Platform"]);
   const combined = buildResult(CUSTOM_DEFAULTS);
   const parts = TEAMS.map((team) => buildResult(CUSTOM_DEFAULTS, { team }));
   assert.equal(combined.sampleSize, 72);
@@ -167,7 +169,7 @@ test("legacy chart definitions keep IDs/names and acquire custom settings and pe
   assert.ok(validChart(upgraded));
   assert.equal(upgraded.id, "old");
   assert.equal(upgraded.filters.team, "");
-  assert.equal(upgradeChart({ ...legacy, filters: { team: "DevX" } }).filters.team, "DevX");
+  assert.equal(upgradeChart({ ...legacy, filters: { team: "Developer Experience" } }).filters.team, "Developer Experience");
   assert.equal(upgradeChart({ ...legacy, filters: { team: "Blueprint" } }).filters.team, "Blueprint");
   assert.throws(() => upgradeChart({ ...legacy, x: "__proto__" }));
   assert.throws(() => upgradeChart({ ...legacy, filters: null }));
@@ -198,7 +200,7 @@ test("search fields filter the same chart, rows, drill contributors and CSV scop
   assert.equal(result.rows.reduce((sum, row) => sum + row.value, 0), expected.length);
   const csv = resultCSV(chart, result);
   for (const value of ["Engineering Platform", "11/08/2026", "Done", "sample-repository-alpha", "title: Sample"]) assert.ok(csv.includes(value));
-  assert.throws(() => buildResult({ ...CUSTOM_DEFAULTS, filters: { query: 'team:"Developer Experience"' } }));
+  assert.ok(buildResult({ ...CUSTOM_DEFAULTS, filters: { query: 'team:"Developer Experience"' } }).sampleSize > 0);
   const open = buildResult({ ...CUSTOM_DEFAULTS, filters: { query: "is:open" } });
   assert.ok(open.tickets.every((t) => stateAt(t, open.to)?.status !== "Done"));
   const keyword = buildResult({ ...CUSTOM_DEFAULTS, filters: { query: '"documentation task"' } });

@@ -6,6 +6,7 @@ import {
   chartHasDateAxis, datePresetRange, withDateRange, resolveFilters,
   observationLoader, setRealObservation,
   usesObservedHistory, setObservedResult, resultTicket,
+  queryField, CATEGORICAL_FILTERS, parseQuery, removeQueryClause, chartColours,
 } from "./flow-metrics-model.mjs";
 import { CALCULATIONS, CALCULATION_DEFAULTS, calculationSettings, builderError, editableRecipe } from "./flow-metrics-builder.mjs";
 import { REQUEST_VERSION, REQUEST_LIMIT, requestDetails, requestKey, parseRequests } from "./flow-metrics-admin.mjs";
@@ -509,6 +510,7 @@ function select(id) {
   $("configuration").hidden = true;
   $("configure-toggle").setAttribute("aria-expanded", "false");
   $("drill-down").hidden = true;
+  $("chart-scope").hidden = true;
   syncControls();
   if (draft) $("search-error").after($("flow-message"));
   renderList();
@@ -532,11 +534,16 @@ function chartConfig() {
     type: scatter ? "scatter" : line ? "line" : "bar",
     data: {
       labels,
-      datasets: result.series.map((series, i) => ({
+      datasets: result.series.map((series, i) => {
+        const palette = chartColours(draft, series, result.tickets, colours[i % colours.length]);
+        return {
         label: series.name,
         data: series.points.map((point) => scatter ? { x: point.x, y: point.value } : point.value),
-        backgroundColor: `${colours[i % colours.length]}${line && stacked ? "55" : ""}`,
-        borderColor: colours[i % colours.length],
+        backgroundColor: line ? `${palette.colour}${stacked ? "55" : ""}` : palette.points,
+        borderColor: line ? palette.colour : palette.points,
+        pointBackgroundColor: palette.points,
+        pointBorderColor: palette.points,
+        segment: { borderColor: context => palette.points[context.p1DataIndex] || palette.colour },
         borderWidth: line ? 2 : 1,
         borderDash: i % 2 ? [6, 3] : [],
         pointStyle: i % 2 ? "rect" : "circle",
@@ -544,7 +551,7 @@ function chartConfig() {
         pointHitRadius: 10,
         fill: line && stacked ? (i === 0 ? "origin" : "-1") : false,
         tension: 0,
-      })),
+      }; }),
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -720,6 +727,7 @@ async function renderPreview() {
     result = null;
     $("export-csv").disabled = true;
     $("result-summary").textContent = "Loading...";
+    $("chart-scope").hidden = true;
     $("chart-view").hidden = true;
     $("table-view").hidden = true;
     $("drill-down").hidden = true;
@@ -848,7 +856,7 @@ $("date-range-panel").addEventListener("focusout", (event) => {
 function renderScope() {
   const labels = scopeLabels(draft.filters);
   const scope = $("chart-scope");
-  if (scope.textContent === `Showing: ${labels.join(" · ")}`) return;
+  scope.hidden = false;
   const content = document.createDocumentFragment();
   content.append("Showing: ");
   labels.forEach((label, index) => {
@@ -859,6 +867,33 @@ function renderScope() {
     content.append(value);
   });
   scope.replaceChildren(content);
+  const clauses = parseQuery(draft.filters.query);
+  const tokens = clauses.map((clause, index) => ({ ...clause, index }));
+  const queryFields = new Set(clauses.map(clause => clause.field));
+  for (const field of ["team", "sprint", "status", "type", "planned"]) {
+    if (draft.filters[field] && !queryFields.has(field)) tokens.push({ field, value: draft.filters[field], index: null });
+  }
+  const chips = document.createElement("span");
+  chips.className = "flow-filter-chips";
+  tokens.forEach(({ field, value, index }) => {
+    const label = field === "keyword" ? value : field === "no" || field === "has"
+      ? `${field === "no" ? "No" : "Has"} ${value}` : `${queryField(field)?.[1] || field}: ${value}`;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "flow-filter-chip";
+    button.textContent = `${label} ×`;
+    button.setAttribute("aria-label", `Remove ${label}`);
+    button.disabled = saving;
+    button.addEventListener("click", () => {
+      if (saving) return;
+      if (index === null) draft = { ...draft, filters: { ...draft.filters, [field]: "" } };
+      else $("filter-query").value = removeQueryClause(draft.filters.query, index);
+      $("filter-query").focus();
+      applySearch();
+    });
+    chips.append(button);
+  });
+  if (tokens.length) scope.append(chips);
 }
 
 function updateView() {
@@ -1008,6 +1043,16 @@ syncPickers.push(enhanceIconSelect("y-axis", (measure) => chartIcon(measure.star
   }
 }
 
+function invalidatePreview(error) {
+  previewSequence++;
+  pendingPreview = false;
+  result = null;
+  if (chart) { chart.destroy(); chart = null; }
+  $("result-summary").textContent = error.message;
+  ["chart-view", "table-view", "drill-down", "chart-scope"].forEach(id => { $(id).hidden = true; });
+  $("export-csv").disabled = true;
+}
+
 function previewConfiguration(changedField) {
   if (!draft || saving) return;
   const next = {
@@ -1067,10 +1112,9 @@ function previewConfiguration(changedField) {
     if (builderError(next)) throw new Error(builderError(next));
     if (!validChart(next)) throw new Error("Choose chart fields and a measure from the available options.");
   } catch (error) {
-    previewSequence++;
-    pendingPreview = false;
+    invalidatePreview(error);
     invalidConfiguration = true;
-    $("config-error").textContent = `${error.message} The chart still shows the last valid preview.`;
+    $("config-error").textContent = error.message;
     $("config-error").hidden = false;
     $("save-state").textContent = "Unsaved changes";
     $("save-chart").disabled = true;
@@ -1242,8 +1286,8 @@ function showSuggestions() {
   $("filter-date-panel").hidden = true;
   const input = $("filter-query");
   const text = input.value;
-  const valueMatch = text.match(/(?:^|\s)([a-z-]+):("[^"]*|[^\s"]*)$/);
-  const definition = valueMatch && SEARCH_FIELDS.find(([key]) => key === valueMatch[1]);
+  const valueMatch = text.match(/(?:^|\s)(-?[a-z-]+):("[^"]*|[^\s"]*)$/);
+  const definition = valueMatch && queryField(valueMatch[1]);
   if (valueMatch) dateRangeMenu = false;
   let options;
   if (dateRangeMenu && chartHasDateAxis(draft)) {
@@ -1272,6 +1316,17 @@ function showSuggestions() {
         closeSuggestions();
       },
     }));
+    if (CATEGORICAL_FILTERS.includes(definition[0])) {
+      const prefix = `${text.slice(0, valueMatch.index)}${valueMatch.index ? " " : ""}`;
+      const category = definition[0];
+      options.push(...["no", "has"].map(operator => ({
+        label: `${operator === "no" ? "No" : "Has"} ${definition[1].toLowerCase()}`,
+        choose: () => { input.value = `${prefix}${operator}:${category} `; input.focus(); applySearch(); closeSuggestions(); },
+      })), {
+        label: `Exclude ${definition[1].toLowerCase()}`,
+        choose: () => { input.value = `${prefix}-${category}:`; input.focus(); showSuggestions(); },
+      });
+    }
   } else if (definition) {
     options = [];
   } else {
@@ -1288,6 +1343,12 @@ function showSuggestions() {
         showSuggestions();
       },
     }));
+    for (const [key, label] of [["no", "No field"], ["has", "Has field"], ["-team", "Exclude team"]]) {
+      if (!label.toLowerCase().includes(fragment.toLowerCase())) continue;
+      options.push({ label, field: key, choose: () => {
+        input.value = `${text.slice(0, text.length - fragment.length)}${key}:`; input.focus(); showSuggestions();
+      } });
+    }
   }
   if (!valueMatch && !dateRangeMenu && chartHasDateAxis(draft)) options.unshift({
     label: "Date range", field: "from",
@@ -1317,7 +1378,7 @@ function showSuggestions() {
       const note = document.createElement("small");
       note.textContent = "Unavailable";
       row.append(note);
-      row.title = live ? "This field is not collected" : "No sample data for this field";
+      row.title = "No data available for this field";
     }
     row.addEventListener("mousedown", (event) => event.preventDefault());
     row.addEventListener("click", () => { if (!option.disabled) option.choose(); });
@@ -1334,8 +1395,7 @@ function applySearch() {
   try {
     validateFilters({ ...draft.filters, query: $("filter-query").value });
   } catch (error) {
-    previewSequence++;
-    pendingPreview = false;
+    invalidatePreview(error);
     invalidConfiguration = true;
     $("search-error").textContent = error.message;
     $("search-error").hidden = false;
@@ -1382,7 +1442,7 @@ $("close-drill").addEventListener("click", () => {
 });
 $("export-csv").addEventListener("click", () => {
   if (!result || pendingPreview || result.unavailable) return;
-  download(new Blob([resultCSV(draft, result)], { type: "text/csv;charset=utf-8" }), live ? "flow-metrics-board-observation.csv" : "flow-metrics-demonstration.csv");
+  download(new Blob([resultCSV(draft, result)], { type: "text/csv;charset=utf-8" }), "flow-metrics.csv");
   message("CSV exported with exact plotted values, active filters and contributor provenance.");
 });
 const tabs = [$("team-tab"), $("admin-tab")];

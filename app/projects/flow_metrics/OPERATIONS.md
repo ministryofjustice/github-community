@@ -17,6 +17,8 @@ Use the normal deployment process to change
 `false` to disable). Collection records genuine observations regardless of the
 combined workspace display mode.
 Each collector initializes the real board if needed, without replacing charts.
+Collection reuses the shared GitHub App client with token refresh. GraphQL retries
+remain collector-owned: at most three attempts, with 10s connect and 60s read timeouts.
 Disabling the CronJob does not stop existing Jobs or prevent manual CLI captures.
 Check for running Jobs when disabling; keep all saved data and charts.
 

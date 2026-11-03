@@ -176,7 +176,7 @@ def api(function):
                 "Flow Metrics database operation failed; no payload logged."
             )
             return jsonify(
-                error="Flow Metrics database is unavailable. No sample fallback is shown."
+                error="Flow Metrics database is unavailable."
             ), 503
 
     return wrapped

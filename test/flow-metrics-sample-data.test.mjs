@@ -16,7 +16,7 @@ test("fictional identities, data-derived teams and reproducible chronological ev
   assert.equal(SAMPLE_DATA.tickets.length, 36);
   assert.equal(new Set(SAMPLE_DATA.tickets.map((ticket) => ticket.id)).size, 36);
   assert.deepEqual(SAMPLE_DATA.teams, [...new Set(SAMPLE_DATA.tickets.map((ticket) => ticket.team))].sort());
-  assert.deepEqual(SAMPLE_DATA.teams, ["Blueprint", "DevX", "Engineering Platform"]);
+  assert.deepEqual(SAMPLE_DATA.teams, ["Blueprint", "Developer Experience", "Engineering Platform"]);
   for (const ticket of SAMPLE_DATA.tickets) {
     assert.match(ticket.id, /^SAMPLE-/);
     assert.match(ticket.repository, /^sample-repository-/);

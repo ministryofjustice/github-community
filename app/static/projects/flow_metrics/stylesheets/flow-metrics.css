@@ -77,6 +77,11 @@
 .flow-chart-filters { border-top: 1px solid #b1b4b6; padding-top: 16px; margin-bottom: 24px; }
 .flow-config .govuk-input[type="date"] { min-width: 0; }
 .flow-scope { color: #0b0c0c; font-weight: normal; line-height: 1.5; margin: 16px 0 20px; overflow-wrap: anywhere; }
+.flow-filter-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.flow-filter-chip { font: 16px/1.4 "GDS Transport", arial, sans-serif; color: #0b0c0c; background: #e8f1f8; border: 1px solid #b1b4b6; padding: 8px; cursor: pointer; overflow-wrap: anywhere; text-align: left; }
+.flow-filter-chip:hover { background: #f3f2f1; border-color: #0b0c0c; }
+.flow-filter-chip:focus-visible { outline: 3px solid #ffdd00; outline-offset: 0; box-shadow: 0 3px #0b0c0c; }
+.flow-filter-chip:disabled { cursor: not-allowed; color: #505a5f; }
 .flow-actions { justify-content: flex-start; }
 .flow-actions .govuk-button { margin-bottom: 0; }
 .flow-link-button { color: #1d70b8; background: none; border: 0; padding: 8px 0; font: 16px "GDS Transport", arial, sans-serif; text-decoration: underline; cursor: pointer; }

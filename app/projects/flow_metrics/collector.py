@@ -1,6 +1,5 @@
 """Read-only Projects v2 collection. Never log response payloads or credentials."""
 
-import json
 import os
 import time
 from copy import deepcopy
@@ -8,8 +7,8 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import click
-import urllib3
-from github import GithubException
+import requests
+from jwt import PyJWTError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -21,7 +20,7 @@ from app.projects.flow_metrics.db_models import (
 from app.projects.flow_metrics.locking import lock_collection
 from app.shared.config.app_config import app_config
 from app.shared.database import db
-from app.shared.services.github_app_auth_service import get_github_app_auth_headers
+from app.shared.services.github_app_client import GitHubAppClient
 
 BOARD_ID = "ministryofjustice/152"
 ESTIMATION_FIELD_ID = "PVTF_lADOACGfts4BHZqSzg_lEkY"
@@ -150,56 +149,71 @@ def collect_metadata(client, content):
         content[name] = sorted(set(values))
 
 
+class _ProjectGitHubClient(GitHubAppClient):
+    def get_token(self):
+        try:
+            return super().get_token()
+        except (requests.RequestException, ValueError, KeyError, PyJWTError):
+            raise CollectionError("github_app_authentication_failed") from None
+
+
 class ProjectClient:
     def __init__(self):
         config = app_config.github.app
+        self.client = None
         if config.client_id and config.private_key and config.installation_id:
-            try:
-                self.headers = get_github_app_auth_headers(
-                    config.client_id, config.private_key, config.installation_id
-                )
-            except (GithubException, ValueError):
-                raise CollectionError("github_app_authentication_failed") from None
+            self.client = _ProjectGitHubClient(
+                config.client_id, config.private_key, config.installation_id
+            )
+            self.session = self.client.session
         elif os.getenv("FLOW_METRICS_LOCAL_TOKEN") and not app_config.auth_enabled:
-            self.headers = {
+            self.session = requests.Session()
+            self.session.headers.update({
                 "Authorization": f"Bearer {os.environ['FLOW_METRICS_LOCAL_TOKEN']}"
-            }
+            })
         else:
             raise CollectionError("github_credentials_missing")
-        self.http = urllib3.PoolManager()
+        self.session.headers.update({"User-Agent": "MoJ-Flow-Metrics"})
+
+    def close(self):
+        if self.client is not None:
+            self.client.close()
+        else:
+            self.session.close()
 
     def query(self, query, **variables):
         for attempt in range(3):
             try:
-                response = self.http.request(
+                request = self.client.request if self.client is not None else self.session.request
+                response = request(
                     "POST",
                     "https://api.github.com/graphql",
-                    headers={
-                        **self.headers,
-                        "Content-Type": "application/json",
-                        "User-Agent": "MoJ-Flow-Metrics",
-                    },
-                    body=json.dumps({"query": query, "variables": variables}),
-                    timeout=urllib3.Timeout(connect=10, read=60),
-                    retries=False,
+                    json={"query": query, "variables": variables},
+                    timeout=(10, 60),
+                    allow_redirects=False,
                 )
-            except urllib3.exceptions.HTTPError:
+            except requests.RequestException:
                 if attempt == 2:
                     raise CollectionError("github_connection_failed") from None
                 time.sleep(2**attempt)
                 continue
-            if response.status >= 500 and attempt < 2:
-                time.sleep(2**attempt)
-                continue
-            if response.status != 200:
-                raise CollectionError(f"github_http_{response.status}")
             try:
-                data = json.loads(response.data)
-            except (ValueError, UnicodeError):
-                raise CollectionError("github_invalid_response") from None
-            if data.get("errors") or not data.get("data"):
-                raise CollectionError("github_query_incomplete")
-            return data["data"]
+                if response.status_code >= 500 and attempt < 2:
+                    time.sleep(2**attempt)
+                    continue
+                if response.status_code != 200:
+                    raise CollectionError(f"github_http_{response.status_code}")
+                try:
+                    data = response.json()
+                except (ValueError, UnicodeError):
+                    raise CollectionError("github_invalid_response") from None
+                if not isinstance(data, dict):
+                    raise CollectionError("github_invalid_response")
+                if data.get("errors") or not isinstance(data.get("data"), dict) or not data["data"]:
+                    raise CollectionError("github_query_incomplete")
+                return data["data"]
+            finally:
+                response.close()
         raise CollectionError("github_unavailable")
 
 
@@ -357,7 +371,14 @@ def collect(client=None):
             .execution_options(populate_existing=True)
         ).scalar_one()
         mapping = deepcopy(board.field_mapping)
-        payload = collect_payload(client or ProjectClient(), mapping)
+        if client is not None:
+            payload = collect_payload(client, mapping)
+        else:
+            owned_client = ProjectClient()
+            try:
+                payload = collect_payload(owned_client, mapping)
+            finally:
+                owned_client.close()
         captured_at = datetime.now(UTC)
         board = db.session.execute(
             select(FlowBoard).where(FlowBoard.id == BOARD_ID)
