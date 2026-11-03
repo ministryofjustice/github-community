@@ -1689,6 +1689,11 @@ class TestHistoryStartLine(RepositoryStatsTestCase):
         _, body = self.get(ARCHIVED_URL)
         self.assertNotIn("Showing changes since", body)
 
+    def test_not_shown_for_all_organisations(self):
+        _, body = self.get(f"{CHANGES_URL}?org=all")
+        self.assertNotIn("Showing changes since", body)
+        self.assertIn(LAST_UPDATED_LINE, body)
+
 
 MOJ_BASELINE = date(2026, 8, 17)
 MAS_BASELINE = date(2026, 10, 29)
