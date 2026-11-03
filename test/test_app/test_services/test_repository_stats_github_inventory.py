@@ -2,7 +2,7 @@
 import unittest
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from app.projects.repository_stats.clients.github_client import GitHubAppClient
@@ -22,6 +22,13 @@ from app.projects.repository_stats.services.uk_time import (
     _UkFallback,
     format_last_updated,
     london_date,
+)
+from app.shared.services.github_app_client import (
+    CoordinatedGitHubAdapter,
+    GitHubRequestCoordinator,
+)
+from app.shared.services.github_app_client import (
+    GitHubAppClient as SharedGitHubAppClient,
 )
 
 FIRST_PAGE = "/orgs/ministryofjustice/repos?type=all&per_page=100"
@@ -228,30 +235,33 @@ class TestFetchOrgProfile(unittest.TestCase):
 class TestGitHubAppClientUrls(unittest.TestCase):
     def setUp(self):
         self.client = GitHubAppClient("app", "key", 1)
-        token = patch.object(
-            GitHubAppClient, "_GitHubAppClient__get_token", return_value="t"
-        )
+        self.addCleanup(self.client.close)
+        token = patch.object(self.client, "get_token", return_value="t")
         token.start()
         self.addCleanup(token.stop)
 
     def test_paths_and_github_next_links(self):
-        with patch(
-            "app.projects.repository_stats.clients.github_client.requests.get"
-        ) as get:
+        with patch.object(self.client.session, "request") as request:
             self.client.get("/orgs/x/repos")
             self.client.get("https://api.github.com/organizations/1/repos?page=2")
         self.assertEqual(
-            [c.args[0] for c in get.call_args_list],
+            [c.args[1] for c in request.call_args_list],
             [
                 "https://api.github.com/orgs/x/repos",
                 "https://api.github.com/organizations/1/repos?page=2",
             ],
         )
 
+    def test_sends_github_headers(self):
+        with patch.object(self.client.session, "request"):
+            self.client.get("/orgs/x/repos")
+        headers = self.client.session.headers
+        self.assertEqual(headers["Authorization"], "Bearer t")
+        self.assertEqual(headers["Accept"], "application/vnd.github+json")
+        self.assertEqual(headers["X-GitHub-Api-Version"], "2022-11-28")
+
     def test_never_sends_the_token_elsewhere(self):
-        with patch(
-            "app.projects.repository_stats.clients.github_client.requests.get"
-        ) as get:
+        with patch.object(self.client.session, "request") as request:
             for url in (
                 "https://evil.example/repos",
                 "https://api.github.com.evil.example/x",
@@ -259,7 +269,98 @@ class TestGitHubAppClientUrls(unittest.TestCase):
             ):
                 with self.subTest(url=url), self.assertRaises(ValueError):
                     self.client.get(url)
-        get.assert_not_called()
+        request.assert_not_called()
+
+    def test_preserves_ten_second_request_timeout(self):
+        with patch.object(self.client.session, "request") as request:
+            self.client.get("/orgs/x/repos")
+        self.assertEqual(request.call_args.kwargs["timeout"], 10)
+
+    def test_preserves_ten_second_token_timeout(self):
+        response = Mock()
+        response.json.return_value = {
+            "token": "test-token",
+            "expires_at": "2030-01-01T00:00:00Z",
+        }
+        client = GitHubAppClient("app", "key", 1)
+        self.addCleanup(client.close)
+        with (
+            patch(
+                "app.shared.services.github_app_client.jwt.encode", return_value="jwt"
+            ),
+            patch(
+                "app.shared.services.github_app_client.requests.post",
+                return_value=response,
+            ) as post,
+        ):
+            self.assertEqual(client.get_token(), "test-token")
+            self.assertEqual(client.get_token(), "test-token")
+        post.assert_called_once()
+        self.assertEqual(post.call_args.kwargs["timeout"], 10)
+
+    def test_returns_error_responses_without_raising(self):
+        for status in (403, 404, 500):
+            with (
+                self.subTest(status=status),
+                patch.object(
+                    self.client.session,
+                    "request",
+                    return_value=Mock(status_code=status),
+                ),
+            ):
+                self.assertEqual(self.client.get("/orgs/x").status_code, status)
+
+    def test_transport_retries_only_with_a_coordinator(self):
+        adapter = self.client.session.adapters["https://"]
+        self.assertNotIsInstance(adapter, CoordinatedGitHubAdapter)
+        self.assertEqual(adapter.max_retries.total, 0)
+        coordinated = GitHubAppClient(
+            "app", "key", 1, request_coordinator=GitHubRequestCoordinator()
+        )
+        self.addCleanup(coordinated.close)
+        self.assertIsInstance(
+            coordinated.session.adapters["https://"], CoordinatedGitHubAdapter
+        )
+
+    def test_uses_the_shared_token_handling(self):
+        self.assertIsInstance(self.client, SharedGitHubAppClient)
+        self.assertIs(GitHubAppClient.get_token, SharedGitHubAppClient.get_token)
+
+    def test_installations_have_separate_tokens(self):
+        moj = GitHubAppClient("app", "key", 1)
+        mojas = GitHubAppClient("app", "key", 2)
+        self.addCleanup(moj.close)
+        self.addCleanup(mojas.close)
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+        with patch(
+            "app.shared.services.github_app_client.create_installation_token",
+            side_effect=[
+                {"token": "moj-token", "expires_at": expires_at},
+                {"token": "mojas-token", "expires_at": expires_at},
+            ],
+        ) as create:
+            self.assertEqual(moj.get_token(), "moj-token")
+            self.assertEqual(mojas.get_token(), "mojas-token")
+            self.assertEqual(moj.get_token(), "moj-token")
+        self.assertEqual([c.args[2] for c in create.call_args_list], [1, 2])
+
+    def test_exposes_the_coordinator_for_retry_decisions(self):
+        coordinator = GitHubRequestCoordinator()
+        coordinated = GitHubAppClient("app", "key", 1, request_coordinator=coordinator)
+        self.addCleanup(coordinated.close)
+        self.assertIs(coordinated.request_coordinator, coordinator)
+        self.assertIsNone(self.client.request_coordinator)
+
+    def test_worker_clients_have_separate_sessions_and_share_the_coordinator(self):
+        coordinator = GitHubRequestCoordinator()
+        first = GitHubAppClient("app", "key", 1, request_coordinator=coordinator)
+        second = GitHubAppClient("app", "key", 1, request_coordinator=coordinator)
+        self.addCleanup(first.close)
+        self.addCleanup(second.close)
+
+        self.assertIsNot(first.session, second.session)
+        self.assertIs(first.session.adapters["https://"].coordinator, coordinator)
+        self.assertIs(second.session.adapters["https://"].coordinator, coordinator)
 
 
 class TestOrgInstallations(unittest.TestCase):

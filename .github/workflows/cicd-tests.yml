@@ -34,3 +34,6 @@ jobs:
       - name: Run Tests
         id: run_tests
         run: make test
+
+      - name: Test Archived Pagination
+        run: node --test test/test_app/test_static/test_archived_filters.js

@@ -32,6 +32,7 @@ from app.projects.repository_stats.services.visibility_logic import (
     parse_archived_query,
     parse_only_public,
     parse_visibility_query,
+    reconcile_current_snapshots,
     sort_activity,
     sort_archived,
     summary_heading,
@@ -65,10 +66,11 @@ def event(
     to_v=None,
     occurred_on=date(2026, 8, 10),
     actor=None,
+    org=ORG,
 ):
     return VisibilityEvent(
         github_id=github_id,
-        org=ORG,
+        org=org,
         name=name,
         event_type=event_type,
         occurred_on=occurred_on,
@@ -270,14 +272,30 @@ class TestQueryParsing(unittest.TestCase):
 
     def test_an_empty_or_missing_org_both_parse_to_unresolved(self):
         """Neither a missing 'org' key nor an explicitly blank one picks an
-        organisation: the service layer fills in the default when none is offered by
-        the user (SHOW_ALL_ORGANISATIONS_OPTION off)."""
-        self.assertEqual(parse_visibility_query({}).filters.org, "")
-        self.assertEqual(parse_visibility_query({"org": ""}).filters.org, "")
+        organisation: the service layer fills in the default organisation."""
+        for args in ({}, {"org": ""}):
+            query = parse_visibility_query(args)
+            self.assertEqual(query.filters.org, "")
+            self.assertFalse(query.all_organisations)
+            self.assertNotIn("org", query.to_params())
         self.assertEqual(
             parse_visibility_query({"org": "ministryofjustice"}).filters.org,
             "ministryofjustice",
         )
+
+    def test_explicit_all_organisations_is_kept_in_links_and_csv(self):
+        for value in ("all", " ALL "):
+            with self.subTest(value=value):
+                query = parse_visibility_query({"org": value, "sort": "repository"})
+                self.assertEqual(query.filters.org, "")
+                self.assertTrue(query.all_organisations)
+                self.assertEqual(query.to_params()["org"], "all")
+                self.assertIn("org=all", query.sort_query_string("repository"))
+                self.assertIn("org=all", query.query_string(page=2))
+                self.assertIn("org=all", query.csv_query_string("", ""))
+        archived = parse_archived_query({"org": "all", "from": "2026-08-01"})
+        self.assertTrue(archived.all_organisations)
+        self.assertEqual(archived.to_params(), {"org": "all"})
 
 
 class TestFilters(unittest.TestCase):
@@ -472,6 +490,96 @@ class TestPagination(unittest.TestCase):
             [1, None, 4, 5, 6, 7, 8, None, 10],
         )
         self.assertEqual(page_numbers(paginate(list(range(50)), 1, 25)), [1, 2])
+
+
+class TestCurrentSnapshotReconciliation(unittest.TestCase):
+    other_org = "moj-analytical-services"
+    middle = date(2026, 9, 10)
+
+    def test_newer_snapshot_or_positive_event_supersedes_stale_copy(self):
+        stale = snapshot(1, "repo", "public", AUG_1)
+        observations = {
+            (1, ORG): AUG_1,
+            (1, self.other_org): self.middle,
+        }
+        self.assertEqual(
+            reconcile_current_snapshots([stale], observations, [], SEP_25), []
+        )
+        for kind in ("created", "changed", "archived"):
+            with self.subTest(kind=kind):
+                later = event(
+                    1,
+                    "repo",
+                    kind,
+                    to_v="internal",
+                    occurred_on=self.middle,
+                    org=self.other_org,
+                )
+                self.assertEqual(
+                    reconcile_current_snapshots([stale], {}, [later], SEP_25), []
+                )
+
+    def test_deletion_without_a_retained_observation_supersedes_stale_copy(self):
+        stale = snapshot(1, "repo", "public", AUG_1)
+        deleted = event(
+            1, "repo", "deleted", "public", occurred_on=self.middle, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], {}, [deleted], SEP_25), []
+        )
+
+    def test_old_organisations_late_deletion_does_not_remove_new_owner(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        observations = {(1, self.other_org): AUG_1}
+        old_departure = event(
+            1, "repo", "deleted", "public", occurred_on=SEP_25, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots(
+                [current], observations, [old_departure], SEP_25
+            ),
+            [current],
+        )
+
+    def test_same_day_observation_then_later_deletion_removes_stale_copy(self):
+        stale = snapshot(1, "repo", "internal", self.middle)
+        observations = {(1, self.other_org): self.middle}
+        deleted = event(
+            1, "repo", "deleted", "internal", occurred_on=SEP_25, org=self.other_org
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], observations, [deleted], SEP_25), []
+        )
+        created = event(
+            1,
+            "repo",
+            "created",
+            to_v="internal",
+            occurred_on=self.middle,
+            org=self.other_org,
+        )
+        self.assertEqual(
+            reconcile_current_snapshots([stale], {}, [created, deleted], SEP_25), []
+        )
+
+    def test_later_deletion_in_current_organisation_removes_stale_copy(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        deleted = event(1, "repo", "deleted", "internal", occurred_on=SEP_25)
+        self.assertEqual(
+            reconcile_current_snapshots([current], {}, [deleted], SEP_25), []
+        )
+
+    def test_same_day_and_future_events_do_not_override_current_snapshot(self):
+        current = snapshot(1, "repo", "internal", self.middle)
+        events = [
+            event(1, "repo", "deleted", "internal", occurred_on=self.middle),
+            event(1, "repo", "created", to_v="public", occurred_on=SEP_25),
+            event(2, "other-repo", "deleted", "public", occurred_on=self.middle),
+        ]
+        self.assertEqual(
+            reconcile_current_snapshots([current], {}, events, self.middle), [current]
+        )
+        self.assertEqual(reconcile_current_snapshots([], {}, events, SEP_25), [])
 
 
 class TestArchived(unittest.TestCase):
@@ -710,7 +818,7 @@ class TestChangesHeading(unittest.TestCase):
 
 
 class TestParseArchivedQuery(unittest.TestCase):
-    def test_keeps_only_estate_filters_and_checkbox(self):
+    def test_keeps_archived_filters_checkbox_and_page(self):
         query = parse_archived_query(
             {
                 "org": ORG,
@@ -727,12 +835,20 @@ class TestParseArchivedQuery(unittest.TestCase):
         self.assertEqual(
             query,
             VisibilityQuery(
-                filters=VisibilityFilters(ORG, "HMPPS", "case"), only_public=False
+                filters=VisibilityFilters(ORG, "HMPPS", "case"),
+                page=3,
+                only_public=False,
             ),
         )
         self.assertEqual(
             query.to_params(),
-            {"org": ORG, "business_unit": "HMPPS", "q": "case", "only_public": "0"},
+            {
+                "org": ORG,
+                "business_unit": "HMPPS",
+                "q": "case",
+                "page": "3",
+                "only_public": "0",
+            },
         )
         self.assertTrue(query.filter_applied)
         self.assertTrue(query.estate_filter_applied)

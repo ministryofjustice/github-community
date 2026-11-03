@@ -55,6 +55,12 @@ NO_BUSINESS_UNIT = "None"
 
 
 @dataclass(frozen=True)
+class OrganisationScanState:
+    latest_status: str
+    last_successful_at: datetime | None
+
+
+@dataclass(frozen=True)
 class VisibilitySnapshot:
     github_id: int
     org: str
@@ -247,6 +253,11 @@ def parse_only_public(values: Sequence[str]) -> bool:
     return "1" in values
 
 
+# The Organisation filter value for an explicit "All organisations" choice. A missing
+# organisation means no choice was made, so the page shows the default organisation.
+ALL_ORGANISATIONS = "all"
+
+
 def parse_page_number(value: str | None) -> int:
     try:
         return max(1, int(value or "1"))
@@ -286,12 +297,20 @@ class VisibilityQuery:
     direction: str = "desc"
     page: int = 1
     only_public: bool = True
+    # True when "All organisations" was chosen, so it survives links and refreshes.
+    all_organisations: bool = False
+
+    @property
+    def org_param(self) -> str:
+        if self.filters.org:
+            return self.filters.org
+        return ALL_ORGANISATIONS if self.all_organisations else ""
 
     def to_params(self, **overrides) -> dict[str, str]:
         """Non-default parameters, in a stable order, for building links and hidden inputs."""
         query = replace(self, **overrides) if overrides else self
         params = {
-            "org": query.filters.org,
+            "org": query.org_param,
             "business_unit": query.filters.business_unit,
             "q": query.filters.q,
             "from": query.from_value,
@@ -335,7 +354,7 @@ class VisibilityQuery:
         """Every parameter that shapes the activity table, including defaults, so the CSV
         matches what is on screen."""
         params = {
-            "org": self.filters.org,
+            "org": self.org_param,
             "business_unit": self.filters.business_unit,
             "q": self.filters.q,
             "from": from_value,
@@ -373,8 +392,11 @@ def parse_visibility_query(
         activity = DEFAULT_ACTIVITY
 
     # "org" absent or blank both mean no explicit choice: the service layer fills in
-    # the default organisation when SHOW_ALL_ORGANISATIONS_OPTION is off.
+    # the default organisation. ALL_ORGANISATIONS is an explicit "All organisations".
     org = (args.get("org") or "").strip()
+    all_organisations = org.lower() == ALL_ORGANISATIONS
+    if all_organisations:
+        org = ""
 
     return VisibilityQuery(
         filters=VisibilityFilters(
@@ -389,6 +411,7 @@ def parse_visibility_query(
         direction=direction,
         page=parse_page_number(args.get("page")),
         only_public=parse_only_public(only_public_values),
+        all_organisations=all_organisations,
     )
 
 
@@ -396,9 +419,14 @@ def parse_archived_query(
     args: Mapping[str, str], only_public_values: Sequence[str] = ()
 ) -> VisibilityQuery:
     """The archived repositories page only uses organisation, business unit, name and
-    the 'only still public' checkbox. Dates, activity, sort and page never apply."""
+    the 'only still public' checkbox and page. Dates, activity and sort never apply."""
     query = parse_visibility_query(args, only_public_values)
-    return VisibilityQuery(filters=query.filters, only_public=query.only_public)
+    return VisibilityQuery(
+        filters=query.filters,
+        page=query.page,
+        only_public=query.only_public,
+        all_organisations=query.all_organisations,
+    )
 
 
 # Snapshot and event counts
@@ -412,6 +440,58 @@ def count_snapshot(snapshots: Iterable[VisibilitySnapshot]) -> SnapshotCounts:
         if snapshot.visibility in counts:
             counts[snapshot.visibility] += 1
     return SnapshotCounts(total=total, **counts)
+
+
+def reconcile_current_snapshots(
+    snapshots: Iterable[VisibilitySnapshot],
+    observations: Mapping[tuple[int, str], date],
+    events: Iterable[VisibilityEvent],
+    latest_date: date,
+) -> list[VisibilitySnapshot]:
+    """Discard stale copies superseded by later observations or departures.
+
+    A departure from an organisation last seen before the snapshot does not delete a
+    newer owner's snapshot. Snapshots win observation ties because the stored dates
+    cannot order same-day changes, but a later departure from an organisation seen on
+    or after the snapshot date still removes it.
+    """
+    current = list(snapshots)
+    ids = {snapshot.github_id for snapshot in current}
+    seen = dict(observations)
+    for snapshot in current:
+        key = (snapshot.github_id, snapshot.org)
+        seen[key] = max(seen.get(key, snapshot.captured_on), snapshot.captured_on)
+
+    deletions: dict[int, list[VisibilityEvent]] = {}
+    for event in events:
+        if event.github_id not in ids or event.occurred_on > latest_date:
+            continue
+        if event.event_type in ("created", "changed", "archived"):
+            key = (event.github_id, event.org)
+            seen[key] = max(seen.get(key, event.occurred_on), event.occurred_on)
+        elif event.event_type == "deleted":
+            deletions.setdefault(event.github_id, []).append(event)
+
+    newest: dict[int, date] = {}
+    for (github_id, _), captured_on in seen.items():
+        newest[github_id] = max(newest.get(github_id, captured_on), captured_on)
+
+    # A same-day rescan can remove the only snapshot of a new owner, leaving its
+    # deletion event as the only evidence that the older copy is no longer current.
+    return [
+        snapshot
+        for snapshot in current
+        if newest[snapshot.github_id] <= snapshot.captured_on
+        and not any(
+            event.occurred_on > snapshot.captured_on
+            and (
+                event.org == snapshot.org
+                or seen.get((snapshot.github_id, event.org), snapshot.captured_on)
+                >= snapshot.captured_on
+            )
+            for event in deletions.get(snapshot.github_id, ())
+        )
+    ]
 
 
 def filter_events_in_range(

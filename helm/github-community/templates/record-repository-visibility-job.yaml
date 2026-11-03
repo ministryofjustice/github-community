@@ -49,6 +49,10 @@ spec:
                value: {{ .Values.app.deployment.env.GITHUB_APP_PRIVATE_KEY | quote }}
              - name: GITHUB_APP_INSTALLATION_ID
                value: {{ .Values.app.deployment.env.GITHUB_APP_INSTALLATION_ID | quote }}
+             - name: REPOSITORY_STATS_ORGS
+               value: {{ .Values.app.deployment.env.REPOSITORY_STATS_ORGS | default "" | quote }}
+             - name: REPOSITORY_STATS_TEAM_ACCESS_WORKERS
+               value: {{ .Values.app.jobs.record_repository_visibility.workers | default 1 | quote }}
              - name: GUNICORN_WORKERS
                value: "1"
 

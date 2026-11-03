@@ -11,7 +11,7 @@ from app.projects.repository_stats.services.business_units import (
 )
 from app.projects.repository_stats.services.visibility_logic import VisibilitySnapshot
 
-UNKNOWN_BUSINESS_UNIT = "Unknown"
+NOT_IDENTIFIED_BUSINESS_UNIT = "Not identified"
 NO_TEAM = "No team"
 
 
@@ -81,19 +81,23 @@ def build_overview(
     business_units: BusinessUnitSource,
     repository_teams: RepositoryTeams | None = None,
     organisation_names: Mapping[str, str] | None = None,
+    organisation_logins: Iterable[str] = (),
 ) -> Overview:
     """Count the latest snapshot by organisation, then business unit, then team.
 
     A repository owned by several business units counts under each one, and a repository
     several teams can access counts under each of those teams. Repositories with no
-    business unit count under "Unknown"; those with no team count under "No team".
+    business unit count under "Not identified"; those with no team count under "No team".
     Organisations show their display name (organisation_names, by login) if known, and
     are keyed by login.
     """
     organisation_names = organisation_names or {}
     repository_teams = repository_teams or RepositoryTeams()
     all_organisations = OverviewRow("All organisations")
-    organisations: dict[str, OverviewRow] = {}
+    organisations: dict[str, OverviewRow] = {
+        login: OverviewRow(organisation_names.get(login) or login, key=login)
+        for login in organisation_logins
+    }
     unit_rows: dict[str, dict[str, OverviewRow]] = {}
     teams: dict[tuple[str, str], dict[str, OverviewRow]] = {}
 
@@ -118,7 +122,7 @@ def build_overview(
             }.values()
         )
         by_name = unit_rows.setdefault(snapshot.org, {})
-        for owner in owners or (UNKNOWN_BUSINESS_UNIT,):
+        for owner in owners or (NOT_IDENTIFIED_BUSINESS_UNIT,):
             business_unit = by_name.setdefault(
                 owner,
                 OverviewRow(owner, key=business_unit_key(snapshot.org, owner)),
@@ -137,7 +141,7 @@ def build_overview(
 
     for org_name, org in organisations.items():
         org.children = _sorted(
-            unit_rows.get(org_name, {}).values(), UNKNOWN_BUSINESS_UNIT
+            unit_rows.get(org_name, {}).values(), NOT_IDENTIFIED_BUSINESS_UNIT
         )
         for business_unit in org.children:
             business_unit.children = _sorted(

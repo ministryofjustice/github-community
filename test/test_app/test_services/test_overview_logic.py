@@ -6,7 +6,7 @@ from app.projects.repository_stats.services.business_units import (
 )
 from app.projects.repository_stats.services.overview_logic import (
     NO_TEAM,
-    UNKNOWN_BUSINESS_UNIT,
+    NOT_IDENTIFIED_BUSINESS_UNIT,
     RepositoryTeams,
     Team,
     build_overview,
@@ -47,7 +47,7 @@ class TestBuildOverview(unittest.TestCase):
             [
                 ("Unit A", (1, 0, 1, 0)),
                 ("Unit Z", (1, 1, 0, 0)),
-                (UNKNOWN_BUSINESS_UNIT, (1, 0, 0, 1)),
+                (NOT_IDENTIFIED_BUSINESS_UNIT, (1, 0, 0, 1)),
             ],
         )
         self.assertEqual(org_b.children[0].key, "org-b/Unit A")
@@ -179,6 +179,23 @@ class TestBuildOverview(unittest.TestCase):
             [("Alpha Example", "org-b"), ("org-a", "org-a")],
         )
 
+    def test_organisations_without_current_repositories_are_retained(self):
+        overview = build_overview(
+            [snap(1, "org-a", "repo-one", "public")],
+            {},
+            organisation_names={"org-a": "Organisation A", "org-b": "Organisation B"},
+            organisation_logins=("org-a", "org-b"),
+        )
+
+        self.assertEqual(
+            [(org.name, org.key, totals(org)) for org in overview.organisations],
+            [
+                ("Organisation A", "org-a", (1, 1, 0, 0)),
+                ("Organisation B", "org-b", (0, 0, 0, 0)),
+            ],
+        )
+        self.assertEqual(overview.organisations[1].children, [])
+
     def test_business_units_from_team_access(self):
         source = RepositoryBusinessUnits(
             by_name={"repo-one": ["Unit A"]},
@@ -201,7 +218,7 @@ class TestBuildOverview(unittest.TestCase):
                 "Unit A": (1, 1, 0, 0),
                 "Unit B": (1, 0, 0, 1),
                 "Unit C": (1, 0, 1, 0),
-                "Unknown": (1, 0, 1, 0),
+                "Not identified": (1, 0, 1, 0),
             },
         )
 

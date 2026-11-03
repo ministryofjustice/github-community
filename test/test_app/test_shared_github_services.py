@@ -19,7 +19,6 @@ from app.shared.services.github_collection_config import (
     parse_organisation_installations,
 )
 
-
 MODULE = "app.shared.services.github_app_client"
 
 
@@ -179,6 +178,9 @@ class TestSharedGitHubAppClient(unittest.TestCase):
             self.assertEqual(self.client.get_token(), "moj-token")
             self.assertEqual(other.get_token(), "mojas-token")
         self.assertEqual([entry.args[2] for entry in token.call_args_list], [123, 456])
+        self.assertTrue(
+            all(entry.kwargs["timeout"] == (10, 60) for entry in token.call_args_list)
+        )
         self.assertIsNot(self.client.session, other.session)
 
     def test_refreshes_tokens_at_actual_expiry_or_after_55_minutes(self):

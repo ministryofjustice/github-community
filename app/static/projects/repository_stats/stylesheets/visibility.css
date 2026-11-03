@@ -21,6 +21,56 @@
   margin-bottom: 30px;
 }
 
+/* Archived page announcement: Hide/Show sits at the right of the "Important" title. */
+.app-announcement__header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 15px;
+}
+
+.app-announcement__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.25;
+  text-decoration: underline;
+  text-underline-offset: 0.1578em;
+  cursor: pointer;
+}
+
+.app-announcement__toggle:hover {
+  text-decoration-thickness: 3px;
+}
+
+.app-announcement__toggle:focus {
+  outline: 3px solid transparent;
+  background-color: #ffdd00;
+  box-shadow: 0 -2px #ffdd00, 0 4px #0b0c0c;
+  color: #0b0c0c;
+  text-decoration: none;
+}
+
+.app-announcement__chevron {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-top: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  transform: translateY(2px) rotate(45deg);
+}
+
+.app-announcement__toggle[aria-expanded="false"] .app-announcement__chevron {
+  transform: translateY(-2px) rotate(225deg);
+}
+
 .app-visibility-filters .govuk-select,
 .app-visibility-filters .govuk-input {
   width: 100%;
@@ -384,7 +434,7 @@
   max-width: 12em;
 }
 
-/* Long unbroken names wrap rather than widen the table. */
+/* Long identifiers, including underscore-separated names, wrap instead of widening tables. */
 .app-table-scroll .govuk-table__cell {
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }

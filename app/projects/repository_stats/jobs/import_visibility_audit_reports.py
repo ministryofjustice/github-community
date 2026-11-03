@@ -13,10 +13,15 @@ repositories once (the same call as the visibility job) and matches them by full
 Repositories GitHub no longer has under that name get a stable negative id, so they never
 clash with real ids and the scan job records them as deleted.
 
-The visibility job owns every date from its first successful run onwards: import files
-for those dates are skipped. The import adds the events between its last file and that
-first run's snapshot, dropping any that run (or a later one the same day) already wrote,
-so nothing is lost and nothing is duplicated.
+The visibility job owns every date from an organisation's first successful run onwards:
+import files for those dates are skipped. Overall-only runs recorded before
+per-organisation runs don't show which organisations they scanned, and snapshots don't
+show whether a scan or this import wrote them. If such a run predates an organisation's
+first per-organisation run (or it has none), its cutoff is unknown, so the import stops
+before reading GitHub or writing anything. Files covering organisations with different
+first-scan dates must be imported separately. The import adds the events between its
+last file and that first run's snapshot, dropping any that run (or a later one the same
+day) already wrote, so nothing is lost and nothing is duplicated.
 
 Safe to re-run: each run replaces the organisation's earlier import (its snapshots before
 the first scan date and its "import" events) in one transaction. Any error rolls back the
@@ -101,10 +106,28 @@ def import_visibility_audit_reports(
     started_at = now()
     installations = {org.org: org.installation_id for org in orgs}
     try:
-        first_scan = repository.find_first_successful_run_started_at(
+        file_orgs = sorted({row.org for f in files for row in f.rows})
+        legacy_scan = repository.find_first_legacy_successful_run_started_at(
             RECORD_VISIBILITY_JOB_NAME
         )
-        first_scan_date = london_date(first_scan) if first_scan else None
+        first_scan_dates = set()
+        for org in file_orgs:
+            first_scan = repository.find_first_successful_run_started_at(
+                RECORD_VISIBILITY_JOB_NAME, org
+            )
+            if legacy_scan and (first_scan is None or legacy_scan < first_scan):
+                raise AuditImportError(
+                    f"Cannot tell when {org} was first scanned: older visibility "
+                    "runs did not record which organisations they scanned. "
+                    "Nothing was imported"
+                )
+            first_scan_dates.add(london_date(first_scan) if first_scan else None)
+        if len(first_scan_dates) > 1:
+            raise AuditImportError(
+                "Organisations have different first successful scan dates; "
+                "import their files separately"
+            )
+        first_scan_date = next(iter(first_scan_dates), None)
         usable = [
             f
             for f in files
@@ -125,12 +148,16 @@ def import_visibility_audit_reports(
         # Everything that can fail (GitHub, the data) happens before any write.
         summaries, writes = [], []
         for org in file_orgs:
-            inventory = {
-                full_name_key(record.org, record.name): record
-                for record in fetch_org_repositories(
-                    client_for(installations[org]), org
-                )
-            }
+            client = client_for(installations[org])
+            try:
+                inventory = {
+                    full_name_key(record.org, record.name): record
+                    for record in fetch_org_repositories(client, org)
+                }
+            finally:
+                close = getattr(client, "close", None)
+                if close:
+                    close()
             plan = build_plan(org, usable, inventory)
             bridge = _bridge_events(repository, org, plan, first_scan_date)
             summaries.append(

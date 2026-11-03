@@ -64,8 +64,8 @@ class RepositoryStatsVisibilityEvent(db.Model):
 class RepositoryStatsJobRun(db.Model):
     """One row per run of a Repository Stats data-collection job.
 
-    The pages show the finish time of the latest successful run as "Last updated".
-    Times are stored in UTC. org is empty when one run covers every configured organisation.
+    Visibility collection records an overall row (org is empty) and one row per
+    organisation. Times are stored in UTC.
     """
 
     __tablename__ = "repository_stats_job_runs"

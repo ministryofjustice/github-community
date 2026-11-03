@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import Lock
 from typing import Protocol
 
 PER_PAGE = 100
@@ -126,12 +127,76 @@ def fetch_org_profile(client: GitHubGetter, org: str) -> OrganisationProfile:
 
 
 class CountingGetter:
-    """Wraps a GitHub client and counts its API calls, for the job log."""
+    """Wraps a GitHub client and records safe API metrics for the job log."""
 
-    def __init__(self, client: GitHubGetter):
+    def __init__(
+        self, client: GitHubGetter, shared_counter: "RequestCounter | None" = None
+    ):
         self.client = client
-        self.calls = 0
+        self.counter = shared_counter or RequestCounter()
+
+    @property
+    def calls(self) -> int:
+        return self.counter.calls
+
+    @property
+    def request_coordinator(self):
+        return getattr(self.client, "request_coordinator", None)
 
     def get(self, path: str):
-        self.calls += 1
-        return self.client.get(path)
+        self.counter.increment()
+        response = self.client.get(path)
+        self.counter.observe_rate_limit(response)
+        return response
+
+    def close(self):
+        close = getattr(self.client, "close", None)
+        if close:
+            close()
+
+
+class RequestCounter:
+    """Thread-safe metrics shared by request wrappers used in parallel."""
+
+    def __init__(self):
+        self._calls = 0
+        self._rate_limit_remaining: int | None = None
+        self._rate_limit_reset: int | None = None
+        self._lock = Lock()
+
+    @property
+    def calls(self) -> int:
+        with self._lock:
+            return self._calls
+
+    def increment(self):
+        with self._lock:
+            self._calls += 1
+
+    @property
+    def rate_limit(self) -> tuple[int | None, int | None]:
+        with self._lock:
+            return self._rate_limit_remaining, self._rate_limit_reset
+
+    def observe_rate_limit(self, response) -> None:
+        headers = getattr(response, "headers", None)
+        if not headers:
+            return
+
+        def number(name: str) -> int | None:
+            value = headers.get(name)
+            if (
+                isinstance(value, str)
+                and len(value) <= 20
+                and value.isascii()
+                and value.isdecimal()
+            ):
+                return int(value)
+            return None
+
+        remaining = number("x-ratelimit-remaining")
+        reset = number("x-ratelimit-reset")
+        if remaining is not None or reset is not None:
+            with self._lock:
+                self._rate_limit_remaining = remaining
+                self._rate_limit_reset = reset

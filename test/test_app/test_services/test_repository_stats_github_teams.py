@@ -1,7 +1,9 @@
 import unittest
+from threading import Barrier
 from types import SimpleNamespace
 
 import requests
+from urllib3.exceptions import MaxRetryError, ReadTimeoutError
 
 from app.projects.repository_stats.services.github_inventory import (
     CountingGetter,
@@ -114,7 +116,13 @@ class TestFetchOrgTeamAccess(unittest.TestCase):
             ),
             self.assertRaisesRegex(GitHubInventoryError, "500"),
         ):
-            fetch_org_team_access(github, ORG, sleep=sleeps.append)
+            fetch_org_team_access(
+                github,
+                ORG,
+                sleep=sleeps.append,
+                workers=2,
+                client_for_worker=lambda: github,
+            )
         self.assertEqual(github.calls.count(team_repos("b-team")), 3)
         self.assertEqual(sleeps, [2, 5])
 
@@ -177,6 +185,43 @@ class TestFetchOrgTeamAccess(unittest.TestCase):
         github = FakeGitHub({TEAMS: page([])})
         self.assertEqual(fetch_org_team_access(github, ORG), [])
         self.assertEqual(github.calls, [TEAMS])
+
+    def test_worker_pool_uses_separate_clients_and_keeps_team_order(self):
+        teams = [{"slug": f"team-{index}"} for index in range(3)]
+        github = FakeGitHub({TEAMS: page(teams)})
+        rendezvous = Barrier(3)
+        clients = []
+
+        class WorkerClient:
+            def __init__(self):
+                self.closed = False
+
+            def get(self, path):
+                rendezvous.wait(timeout=2)
+                slug = path.split("/teams/")[1].split("/")[0]
+                return page([{"id": int(slug[-1]), "role_name": "read"}])
+
+            def close(self):
+                self.closed = True
+
+        def client_for_worker():
+            client = WorkerClient()
+            clients.append(client)
+            return client
+
+        records = fetch_org_team_access(
+            github,
+            ORG,
+            workers=3,
+            client_for_worker=client_for_worker,
+        )
+
+        self.assertEqual(
+            [(record.team_slug, record.github_id) for record in records],
+            [("team-0", 0), ("team-1", 1), ("team-2", 2)],
+        )
+        self.assertEqual(len(clients), 3)
+        self.assertTrue(all(client.closed for client in clients))
 
     def test_slug_is_quoted_in_the_path(self):
         github = FakeGitHub(
@@ -252,6 +297,52 @@ class TestRetryingGetter(unittest.TestCase):
             ).get("/x")
         self.assertIs(response, last)
         self.assertEqual(self.flaky.calls, 3)
+
+    def test_coordinated_transport_owns_retries(self):
+        class Coordinated:
+            request_coordinator = object()
+
+            def __init__(self):
+                self.calls = 0
+
+            def get(self, _path):
+                self.calls += 1
+                return page({}, status_code=503)
+
+        client = Coordinated()
+        response = RetryingGetter(client, sleep=self.sleeps.append).get("/x")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual((client.calls, self.sleeps), (1, []))
+
+    def test_coordinated_transport_body_read_failures_are_retried(self):
+        # Requests raises these while reading the body, after the transport's retries.
+        for error in (
+            requests.ConnectionError(ReadTimeoutError(None, "/x", "slow")),
+            requests.exceptions.ChunkedEncodingError("cut off"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                sleeps = []
+                client = self.coordinated(error, error, page({}))
+                with self.assertLogs(
+                    "app.projects.repository_stats.services.github_teams"
+                ):
+                    response = RetryingGetter(client, sleep=sleeps.append).get("/x")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual((client.calls, sleeps), (3, [2, 5]))
+
+    def test_coordinated_transport_exhausted_retries_are_not_repeated(self):
+        exhausted = requests.ConnectionError(MaxRetryError(None, "/x", "gone"))
+        client = self.coordinated(exhausted)
+        with self.assertRaises(requests.ConnectionError):
+            RetryingGetter(client, sleep=self.sleeps.append).get("/x")
+        self.assertEqual((client.calls, self.sleeps), (1, []))
+
+    @staticmethod
+    def coordinated(*results):
+        client = Flaky(*results)
+        client.request_coordinator = object()
+        return client
 
     def test_4xx_is_not_retried(self):
         forbidden = page({}, status_code=403)

@@ -71,10 +71,16 @@ def is_team_member(
     client: GitHubAppClient | None = None,
 ) -> bool:
     """Docs: https://docs.github.com/en/rest/teams/members#get-team-membership-for-a-user"""
-    client = client or get_github_client()
-    response = client.get(
-        f"/orgs/{org}/teams/{team_slug}/memberships/{github_username}"
-    )
+    own_client = client is None
+    if client is None:
+        client = get_github_client()
+    try:
+        response = client.get(
+            f"/orgs/{org}/teams/{team_slug}/memberships/{github_username}"
+        )
+    finally:
+        if own_client:
+            client.close()
     if response.status_code == 200:
         # Pending invitations also return 200; only an active membership counts.
         # Fail closed: a non-dict body or a missing "state" must not grant access.

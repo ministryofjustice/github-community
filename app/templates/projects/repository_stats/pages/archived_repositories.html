@@ -2,6 +2,7 @@
 {% from "govuk_frontend_jinja/components/tag/macro.html" import govukTag %}
 {% from "govuk_frontend_jinja/components/select/macro.html" import govukSelect %}
 {% from "govuk_frontend_jinja/components/inset-text/macro.html" import govukInsetText %}
+{% from "govuk_frontend_jinja/components/pagination/macro.html" import govukPagination %}
 
 {% set archived_url = url_for("repository_stats_main.archived_repositories") %}
 {% set archived = page.archived %}
@@ -52,39 +53,32 @@
 
   <div class="govuk-!-margin-bottom-6">
     <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Archived public repositories</h1>
-    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+    <div id="archived-freshness" data-organisations='{{ page.organisation_freshness | tojson }}' aria-live="polite" aria-atomic="true">
+      <div id="archived-last-updated">{% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}</div>
+    </div>
   </div>
 
-  {% set banner_html %}
-    <p class="govuk-notification-banner__heading">Archived repositories must be changed from public to internal on or before {{ archived.deadline }}.</p>
-    <p class="govuk-body">If your team owns a repository on this list, change its visibility yourself. After the deadline, the Developer Experience team will change any remaining repositories to internal.</p>
-    <p class="govuk-body">If a repository needs to stay public, ask in the <a class="govuk-notification-banner__link" href="{{ slack_channel_url }}" target="_blank" rel="noopener noreferrer">{{ slack_channel_name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a> before the deadline.</p>
-  {% endset %}
-  {{ govukNotificationBanner({"titleText": "Important", "html": banner_html, "classes": "app-visibility-banner--full-width"}) }}
-
-  <div class="govuk-!-margin-bottom-4" id="archived-progress">
-    <h2 class="govuk-heading-m">Progress</h2>
-    {% if archived.progress.total %}
-      <div class="app-visibility-progress-summary">
-        <p class="govuk-body govuk-!-margin-bottom-1">{{ archived.progress.made_internal }} of {{ archived.progress.total }} archived public repositories have been made internal</p>
-        <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text">{{ archived.progress.percent }}% complete</p>
-      </div>
-      <div class="app-visibility-progress govuk-!-margin-bottom-2" aria-hidden="true"><div class="app-visibility-progress__bar" style="width: {{ archived.progress.percent }}%"></div></div>
-    {% else %}
-      <p class="govuk-body">There are no archived public repositories.</p>
-    {% endif %}
-    <p class="govuk-body-s app-visibility-secondary-text govuk-!-margin-bottom-0">Progress is for all organisations and is not affected by filters</p>
+  {# announcement-toggle.js adds the Show/Hide button and starts collapsed; without JavaScript the text always shows. #}
+  <div class="govuk-notification-banner app-visibility-banner--full-width app-announcement" role="region" aria-labelledby="archived-announcement-title" id="archived-announcement">
+    <div class="govuk-notification-banner__header app-announcement__header">
+      <h2 class="govuk-notification-banner__title" id="archived-announcement-title">Important</h2>
+    </div>
+    <div class="govuk-notification-banner__content" id="archived-announcement-content">
+      <p class="govuk-notification-banner__heading">The deadline for changing archived public repositories to internal was {{ archived.deadline }}.</p>
+      <p class="govuk-body">The Developer Experience team is preparing to change the remaining archived public repositories to internal.</p>
+      <p class="govuk-body">If a repository needs to remain public, contact <a class="govuk-notification-banner__link" href="{{ slack_channel_url }}" target="_blank" rel="noopener noreferrer">{{ slack_channel_name }}<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.</p>
+    </div>
   </div>
 
   {# Filters: dates never apply to archived repositories, so there are no date fields. #}
-  <form method="get" action="{{ archived_url }}#visibility-filters" class="app-visibility-filters app-visibility-filters--compact" id="visibility-filters" novalidate>
+  <form method="get" action="{{ archived_url }}#visibility-filters" class="app-visibility-filters app-visibility-filters--compact" id="visibility-filters" data-default-org="{{ page.default_organisation }}" novalidate>
     <h2 class="govuk-heading-m">Find repositories</h2>
-    {{ hidden_inputs(["org", "business_unit", "q", "only_public"]) }}
+    {{ hidden_inputs(["org", "business_unit", "q", "only_public", "page"]) }}
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
         {% set org_items = [] %}
         {% if show_all_organisations_option %}
-          {% set _ = org_items.append({"value": "", "text": "All organisations", "selected": not query.filters.org}) %}
+          {% set _ = org_items.append({"value": "all", "text": "All organisations", "selected": not query.filters.org}) %}
         {% endif %}
         {% for org in page.organisations %}
           {% set _ = org_items.append({"value": org, "text": page.organisation_name(org), "selected": org == query.filters.org}) %}
@@ -126,6 +120,24 @@
     </div>
   </form>
 
+  {# Progress follows the Organisation filter only. archived-filters.js switches it using
+     data-progress when the organisation changes. #}
+  {% set progress_org_name = page.organisation_name(query.filters.org) if query.filters.org else "All organisations" %}
+  <div class="govuk-!-margin-bottom-6" id="archived-progress" data-progress='{{ archived.progress_data() | tojson }}'>
+    <div aria-live="polite" aria-atomic="true">
+      <h2 class="govuk-heading-m">Progress: <span id="archived-progress-organisation">{{ progress_org_name }}</span></h2>
+      <div id="archived-progress-summary"{% if not archived.progress.total %} hidden{% endif %}>
+        <div class="app-visibility-progress-summary">
+          <p class="govuk-body govuk-!-margin-bottom-1" id="archived-progress-text">{{ archived.progress.made_internal }} of {{ archived.progress.total }} archived public repositories have been made internal</p>
+          <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">{{ archived.progress.percent }}% complete</p>
+        </div>
+        <div class="app-visibility-progress govuk-!-margin-bottom-2" aria-hidden="true"><div class="app-visibility-progress__bar" id="archived-progress-bar" style="width: {{ archived.progress.percent }}%"></div></div>
+      </div>
+      <p class="govuk-body" id="archived-progress-empty"{% if archived.progress.total %} hidden{% endif %}>There are no archived public repositories.</p>
+    </div>
+    <p class="govuk-body-s app-visibility-secondary-text govuk-!-margin-bottom-0">Business unit, repository name and ‘still public’ filters do not affect progress.</p>
+  </div>
+
   {% set how_to_html %}
     <ol class="govuk-list govuk-list--number">
       <li>Go to the repository and select <strong>Settings</strong>.</li>
@@ -143,13 +155,13 @@
     <div id="archived-no-match"{% if archived.matching %} hidden{% endif %}>
       {{ govukInsetText({"text": "No archived public repositories match your filters. Try clearing your filters."}) }}
     </div>
-    <div id="archived-all-internal"{% if not archived.matching or archived.repositories %} hidden{% endif %}>
+    <div id="archived-all-internal"{% if not archived.matching or archived.repository_page.total_items %} hidden{% endif %}>
       {{ govukInsetText({"text": "All archived repositories that match your filters are now internal."}) }}
     </div>
     {% if archived.tracked %}
-      <div class="app-table-scroll" role="region" aria-label="Archived repositories table" tabindex="0" id="archived-table-region"{% if not archived.repositories %} hidden{% endif %}>
-        <table class="govuk-table app-visibility-archived-table" id="archived-table"{% if not archived.repositories %} hidden{% endif %}>
-          <caption class="govuk-table__caption govuk-table__caption--m">Repositories (<span id="archived-count">{{ archived.repositories | length }}</span>)</caption>
+      <div class="app-table-scroll" role="region" aria-label="Archived repositories table" tabindex="0" id="archived-table-region"{% if not archived.repository_page.items %} hidden{% endif %}>
+        <table class="govuk-table app-visibility-archived-table" id="archived-table"{% if not archived.repository_page.items %} hidden{% endif %}>
+          <caption class="govuk-table__caption govuk-table__caption--m">Repositories (<span id="archived-count">{{ archived.repository_page.total_items }}</span>)</caption>
           <thead class="govuk-table__head">
             <tr class="govuk-table__row">
               <th scope="col" class="govuk-table__header">Repository</th>
@@ -162,7 +174,7 @@
           </thead>
           <tbody class="govuk-table__body">
             {% for repository in archived.tracked %}
-              <tr class="govuk-table__row" data-org="{{ repository.org }}" data-business-units='{{ repository.business_units | list | tojson }}' data-name="{{ repository.name | lower }}" data-visibility="{{ repository.visibility }}"{% if repository.github_id not in archived.shown_ids %} hidden{% endif %}>
+              <tr class="govuk-table__row" data-org="{{ repository.org }}" data-business-units='{{ repository.business_units | list | tojson }}' data-name="{{ repository.name | lower }}" data-visibility="{{ repository.visibility }}"{% if repository.github_id not in archived.page_ids %} hidden{% endif %}>
                 <td class="govuk-table__cell">
                   {{ repository_link(repository) }}
                   {% if repository.fork %}<span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">Fork</span>{% endif %}
@@ -178,8 +190,32 @@
         </table>
       </div>
     {% endif %}
+    <p class="govuk-body" id="archived-showing"{% if not archived.repository_page.total_items %} hidden{% endif %}>Showing {{ archived.repository_page.first_item_number }} to {{ archived.repository_page.last_item_number }} of {{ archived.repository_page.total_items }}</p>
+    <div id="archived-pagination" data-page="{{ archived.repository_page.page }}"{% if archived.repository_page.total_pages <= 1 %} hidden{% endif %}>
+      {% if archived.repository_page.total_pages > 1 %}
+        {% set pagination_items = [] %}
+        {% for number in archived.repository_page_numbers %}
+          {% if number is none %}
+            {% set _ = pagination_items.append({"ellipsis": true}) %}
+          {% else %}
+            {% set _ = pagination_items.append({
+              "number": number,
+              "href": archived_url ~ query.query_string(page=number) ~ "#archived-table",
+              "current": number == archived.repository_page.page
+            }) %}
+          {% endif %}
+        {% endfor %}
+        {{ govukPagination({
+          "landmarkLabel": "Archived repository pages",
+          "previous": {"href": archived_url ~ query.query_string(page=archived.repository_page.page - 1) ~ "#archived-table"} if archived.repository_page.page > 1 else None,
+          "next": {"href": archived_url ~ query.query_string(page=archived.repository_page.page + 1) ~ "#archived-table"} if archived.repository_page.page < archived.repository_page.total_pages else None,
+          "items": pagination_items
+        }) }}
+      {% endif %}
+    </div>
     <p class="govuk-visually-hidden" id="archived-filter-status" role="status" aria-live="polite"></p>
   </div>
 
   <script src="{{ url_for('static', filename='projects/repository_stats/javascript/archived-filters.js') }}"></script>
+  <script src="{{ url_for('static', filename='projects/repository_stats/javascript/announcement-toggle.js') }}"></script>
 {% endblock %}

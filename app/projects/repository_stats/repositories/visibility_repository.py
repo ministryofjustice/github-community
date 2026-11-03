@@ -1,7 +1,7 @@
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import date, datetime
 
-from sqlalchemy import func, insert
+from sqlalchemy import case, func, insert, or_
 from sqlalchemy.orm import scoped_session
 
 from app.projects.repository_stats.db_models import (
@@ -18,6 +18,7 @@ from app.projects.repository_stats.services.github_inventory import (
 )
 from app.projects.repository_stats.services.github_teams import TeamAccessRecord
 from app.projects.repository_stats.services.visibility_logic import (
+    OrganisationScanState,
     VisibilityEvent,
     VisibilitySnapshot,
 )
@@ -66,6 +67,24 @@ class VisibilityRepository:
         )
         return [row[0] for row in rows]
 
+    def find_snapshot_dates_by_organisation(self) -> dict[str, list[date]]:
+        rows = (
+            self.db_session.query(
+                RepositoryStatsVisibilitySnapshot.org,
+                RepositoryStatsVisibilitySnapshot.captured_on,
+            )
+            .distinct()
+            .order_by(
+                RepositoryStatsVisibilitySnapshot.org,
+                RepositoryStatsVisibilitySnapshot.captured_on,
+            )
+            .all()
+        )
+        result: dict[str, list[date]] = {}
+        for org, captured_on in rows:
+            result.setdefault(org, []).append(captured_on)
+        return result
+
     def find_snapshots_on(self, captured_on: date) -> list[VisibilitySnapshot]:
         return self.find_snapshots_on_dates([captured_on]).get(captured_on, [])
 
@@ -85,6 +104,32 @@ class VisibilityRepository:
         for row in rows:
             result[row.captured_on].append(_to_snapshot(row))
         return result
+
+    def find_latest_observations(
+        self, latest_by_org: Mapping[str, date]
+    ) -> dict[tuple[int, str], date]:
+        if not latest_by_org:
+            return {}
+        latest = max(latest_by_org.values())
+        snapshot = RepositoryStatsVisibilitySnapshot
+        stale = [
+            (snapshot.org == org) & (snapshot.captured_on == captured_on)
+            for org, captured_on in latest_by_org.items()
+            if captured_on < latest
+        ]
+        if not stale:
+            return {}
+        stale_ids = self.db_session.query(snapshot.github_id).filter(or_(*stale))
+        rows = (
+            self.db_session.query(
+                snapshot.github_id, snapshot.org, func.max(snapshot.captured_on)
+            )
+            .filter(snapshot.github_id.in_(stale_ids))
+            .filter(snapshot.captured_on <= latest)
+            .group_by(snapshot.github_id, snapshot.org)
+            .all()
+        )
+        return {(github_id, org): captured_on for github_id, org, captured_on in rows}
 
     def find_events_between(
         self, from_date: date, to_date: date
@@ -147,6 +192,38 @@ class VisibilityRepository:
             .filter(RepositoryStatsJobRun.status == "success")
             .scalar()
         )
+
+    def find_organisation_scan_states(
+        self, job_name: str
+    ) -> dict[str, OrganisationScanState]:
+        run = RepositoryStatsJobRun
+        completed = (
+            self.db_session.query(
+                run.org.label("org"),
+                run.status.label("status"),
+                func.max(case((run.status == "success", run.finished_at), else_=None))
+                .over(partition_by=run.org)
+                .label("last_successful_at"),
+                func.row_number()
+                .over(
+                    partition_by=run.org,
+                    order_by=(run.finished_at.desc(), run.id.desc()),
+                )
+                .label("rank"),
+            )
+            .filter(run.job_name == job_name)
+            .filter(run.org.isnot(None))
+            .filter(run.status.in_(("success", "failed")))
+            .filter(run.finished_at.isnot(None))
+            .subquery()
+        )
+        rows = self.db_session.query(
+            completed.c.org, completed.c.status, completed.c.last_successful_at
+        ).filter(completed.c.rank == 1)
+        return {
+            org: OrganisationScanState(status, last_successful_at)
+            for org, status, last_successful_at in rows
+        }
 
     # Writes, used by the visibility job. They don't commit: the job owns the transaction.
 
@@ -249,10 +326,10 @@ class VisibilityRepository:
         )
 
     def start_job_run(
-        self, job_name: str, started_at: datetime
+        self, job_name: str, started_at: datetime, org: str | None = None
     ) -> RepositoryStatsJobRun:
         run = RepositoryStatsJobRun(
-            job_name=job_name, started_at=started_at, status="running"
+            job_name=job_name, org=org, started_at=started_at, status="running"
         )
         self.db_session.add(run)
         return run
@@ -267,12 +344,53 @@ class VisibilityRepository:
 
     # Used by the one-off audit import. They don't commit: the import owns the transaction.
 
-    def find_first_successful_run_started_at(self, job_name: str) -> datetime | None:
-        return (
-            self.db_session.query(func.min(RepositoryStatsJobRun.started_at))
-            .filter(RepositoryStatsJobRun.job_name == job_name)
-            .filter(RepositoryStatsJobRun.status == "success")
-            .scalar()
+    def find_first_successful_run_started_at(
+        self, job_name: str, org: str | None = None
+    ) -> datetime | None:
+        run = RepositoryStatsJobRun
+        query = (
+            self.db_session.query(run.started_at, run.org)
+            .filter(run.job_name == job_name)
+            .filter(run.status == "success")
+        )
+        if org is None:
+            row = query.order_by(run.started_at).first()
+            return row.started_at if row else None
+
+        own = query.filter(run.org == org).order_by(run.started_at).first()
+        return own.started_at if own else None
+
+    def find_first_legacy_successful_run_started_at(
+        self, job_name: str
+    ) -> datetime | None:
+        """The earliest successful overall-only run: one recorded before
+        per-organisation runs, so the organisations it scanned are unknown.
+
+        Snapshots can't fill that gap: they don't record whether a scan or the audit
+        import wrote them."""
+        run = RepositoryStatsJobRun
+        org_run_starts = [
+            started_at
+            for (started_at,) in self.db_session.query(run.started_at)
+            .filter(run.job_name == job_name)
+            .filter(run.org.isnot(None))
+        ]
+        return next(
+            (
+                started_at
+                for started_at, finished_at in self.db_session.query(
+                    run.started_at, run.finished_at
+                )
+                .filter(run.job_name == job_name)
+                .filter(run.status == "success")
+                .filter(run.org.is_(None))
+                .order_by(run.started_at)
+                if not any(
+                    started_at <= org_start <= (finished_at or started_at)
+                    for org_start in org_run_starts
+                )
+            ),
+            None,
         )
 
     def find_snapshots_for_org_on(
