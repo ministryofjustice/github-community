@@ -66,7 +66,7 @@ const tickets = SAMPLE_SPRINTS.flatMap((sprint, sprintIndex) =>
       id: `SAMPLE-${sprintIndex + 1}-${String(index + 1).padStart(2, "0")}`,
       title: `Sample ${scenario} (${sprint.name})`,
       repository: `sample-repository-${index % 2 ? "beta" : "alpha"}`,
-      team: ["Developer Experience", "Blueprint", "Engineering Platform"][index % 3],
+      team: ["DevX", "Blueprint", "Engineering Platform"][index % 3],
       type: ["Task", "Bug", "Feature"][index % 3],
       objective: ["Sample reliability", "Sample developer tooling", "Sample delivery"][Math.floor(index / 3) % 3],
       planned: index < 10 ? "Planned" : "Unplanned",

@@ -1,6 +1,7 @@
 # Flow Metrics operations
 
 DEV combines fictional sample data and genuine observations; use the **Source** filter to select either. Keep sample charts until a later phase.
+The packaged dataset is immutable; fictional team display names are normalized when read.
 
 Current-state charts use the latest capture at the reporting cutoff. History charts compare captures across the selected range. Sample history ends on its recorded end date. Cycle time and sprint commitments need additional evidence.
 

@@ -671,6 +671,8 @@ def test_sample_init_cli_preserves_existing_empty_workspace_and_real_data(app):
         board.charts = []
         board.chart_revision = 7
         checksum = db.session.get(FlowDataset, SAMPLE_ID).content_sha256
+        assert checksum == "9d0b112d27a30254f899cd01b997d0f5d837c22721c42745d6f92881fdec80d2"
+        original = copy.deepcopy(sample_dataset().payload)
         db.session.commit()
     with patch("app.projects.flow_metrics.collector.ProjectClient") as github:
         second = runner.invoke(args=["flow-metrics", "init-sample"])
@@ -681,6 +683,8 @@ def test_sample_init_cli_preserves_existing_empty_workspace_and_real_data(app):
         assert board.charts == []
         assert board.chart_revision == 7
         assert db.session.get(FlowDataset, SAMPLE_ID).content_sha256 == checksum
+        assert sample_dataset().payload == original
+        assert original["teams"] == ["Blueprint", "DevX", "Engineering Platform"]
         assert db.session.get(FlowBoard, BOARD_ID).charts == real_charts
         assert db.session.get(FlowSnapshot, "snapshot-test").payload == prior
         assert db.session.scalar(select(func.count()).select_from(FlowEvidence)) == 0
