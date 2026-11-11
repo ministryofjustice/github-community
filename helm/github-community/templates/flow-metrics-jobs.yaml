@@ -1,0 +1,70 @@
+{{- if or (dig "flowMetrics" "webhook" "enabled" false .Values.app) (dig "flow_metrics_process_deliveries" "enabled" false .Values.app.jobs) }}
+{{- fail "Flow Metrics webhook receiver and processor are deferred to Phase 3" }}
+{{- end }}
+{{- $settings := .Values.app.jobs.flow_metrics_reconcile | default dict }}
+{{- if $settings.enabled }}
+{{- include "app.flowMetrics.devOnly" $ }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "app.fullname" $ | trunc 29 | trimSuffix "-" }}-flow-metrics-reconcile
+  labels:
+    {{- include "app.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ required "Flow Metrics job schedule is required" $settings.schedule | quote }}
+  timeZone: {{ $settings.timeZone | default "Etc/UTC" | quote }}
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 300
+  successfulJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          serviceAccountName: cd-serviceaccount
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: flow-metrics-reconcile
+              image: "{{ $.Values.app.deployment.image.repository }}:{{ $.Values.app.deployment.image.tag | default $.Chart.AppVersion }}"
+              imagePullPolicy: IfNotPresent
+              command: ["python3", "-m", "flask"]
+              args: ["--app", "app.app", "flow-metrics", "collect"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - "ALL"
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 1Gi
+              env:
+                {{- range $key := list "POSTGRES_USER" "POSTGRES_PASSWORD" "POSTGRES_DB" "POSTGRES_HOST" "POSTGRES_PORT" }}
+                - name: {{ $key }}
+                  value: {{ index $.Values.app.deployment.env $key | quote }}
+                {{- end }}
+                {{- range $key := list "GITHUB_APP_CLIENT_ID" "GITHUB_APP_PRIVATE_KEY" "GITHUB_APP_INSTALLATION_ID" }}
+                - name: {{ $key }}
+                  value: {{ index $.Values.app.deployment.env $key | quote }}
+                {{- end }}
+                - name: SENTRY_ENV
+                  value: {{ $.Values.app.deployment.env.SENTRY_ENV | quote }}
+                {{- with $.Values.app.deployment.env.SENTRY_DSN_KEY }}
+                - name: SENTRY_DSN_KEY
+                  value: {{ . | quote }}
+                {{- end }}
+          restartPolicy: Never
+{{- end }}

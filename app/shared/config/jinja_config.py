@@ -1,6 +1,7 @@
 from flask import Flask
 from jinja2 import ChoiceLoader, PackageLoader, PrefixLoader
 
+from app.projects.flow_metrics.config import workspace_enabled
 from app.shared.config.app_config import app_config
 
 
@@ -18,3 +19,4 @@ def configure_jinja(app: Flask) -> None:
     app.jinja_env.globals["govukRebrand"] = False
     app.jinja_env.globals["phase_banner_text"] = app_config.phase_banner_text
     app.jinja_env.globals["public_base_url"] = app_config.public_base_url
+    app.jinja_env.globals["flow_metrics_enabled"] = workspace_enabled
