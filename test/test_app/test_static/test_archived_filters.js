@@ -11,6 +11,13 @@ const script = fs.readFileSync(
   ),
   "utf8"
 );
+const visibilityScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    "../../../app/static/projects/repository_stats/javascript/visibility-filters.js"
+  ),
+  "utf8"
+);
 
 function element(tagName, attributes = {}) {
   const node = {
@@ -99,6 +106,8 @@ function fixture() {
   );
   const table = element("table");
   table.tBodies = [{ rows }];
+  const sortLink = element("a", { "data-sort": "archived", "data-direction": "asc" });
+  table.querySelectorAll = (selector) => selector === "a[data-sort]" ? [sortLink] : [];
   const pagination = element("div", { "data-page": "1" });
   const tableRegion = element("div");
   const showing = element("p");
@@ -172,9 +181,22 @@ function fixture() {
   }
 
   return {
-    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, tableRegion
+    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, sortLink, tableRegion
   };
 }
+
+test("sort links retain live filters even during the search debounce", () => {
+  const page = fixture();
+  page.name.value = "new search";
+  page.onlyPublic.checked = false;
+  page.name.listeners.input();
+  const url = new URL(page.sortLink.href, "http://example.test");
+  assert.equal(url.searchParams.get("q"), "new search");
+  assert.equal(url.searchParams.get("only_public"), "0");
+  assert.equal(url.searchParams.get("sort"), "archived");
+  assert.equal(url.searchParams.get("dir"), "asc");
+  assert.equal(url.searchParams.has("page"), false);
+});
 
 test("an ordinary pagination click updates the page and keeps the filters", () => {
   const page = fixture();
@@ -254,4 +276,50 @@ test("a click already prevented by another handler does not change the page", ()
   page.click({ defaultPrevented: true });
   assert.equal(page.pagination.getAttribute("data-page"), "1");
   assert.equal(page.historyCalls.length, 0);
+});
+
+test("visibility select changes submit their own form without applying dates", () => {
+  const submitted = [];
+  const ids = ["visibility-filters", "visibility-activity-filters", "visibility-date-filters"];
+  const forms = Object.fromEntries(ids.map((id) => {
+    const form = element("form");
+    form.requestSubmit = () => submitted.push(id);
+    return [id, form];
+  }));
+  vm.runInNewContext(visibilityScript, {
+    document: { getElementById: (id) => forms[id], querySelectorAll: () => [] }
+  });
+
+  const event = (tagName) => ({ target: { matches: (selector) => selector === tagName } });
+  forms[ids[0]].listeners.change(event("select"));
+  forms[ids[1]].listeners.change(event("select"));
+  forms[ids[0]].listeners.change(event("input"));
+
+  assert.deepEqual(submitted, ids.slice(0, 2));
+  assert.equal(forms[ids[2]].listeners.change, undefined);
+});
+
+test("visibility calendar enhancement requires the native picker API", () => {
+  for (const supported of [true, false]) {
+    let opened = false;
+    const input = {
+      before() {},
+      focus() {},
+      showPicker: supported ? () => { opened = true; } : undefined
+    };
+    const button = element("button");
+    button.hidden = true;
+    const picker = { querySelector: (selector) => selector.startsWith("input") ? input : button };
+    vm.runInNewContext(visibilityScript, {
+      document: {
+        getElementById: () => null,
+        querySelectorAll: () => [picker],
+        createElement: () => ({ append() {} })
+      }
+    });
+
+    assert.equal(button.hidden, !supported);
+    button.listeners.click?.();
+    assert.equal(opened, supported);
+  }
 });

@@ -56,6 +56,26 @@
   {% endfor %}
 {% endmacro %}
 
+{% macro date_input(name, label, value, limits) %}
+  <div class="app-date-picker">
+    {{ govukInput({
+      "label": {"text": label},
+      "id": name,
+      "name": name,
+      "type": "date",
+      "value": value,
+      "attributes": limits,
+      "errorMessage": {"text": errors[name]} if errors.get(name) else None
+    }) }}
+    <button class="app-date-picker__button" type="button" aria-label="Open calendar for {{ label }} date" aria-controls="{{ name }}" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false">
+        <rect x="3.5" y="5.5" width="17" height="16" rx="1"></rect>
+        <path d="M7.5 3.5v4M16.5 3.5v4M3.5 9.5h17M8 13h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01"></path>
+      </svg>
+    </button>
+  </div>
+{% endmacro %}
+
 {% block head %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
@@ -74,6 +94,8 @@
     ]
   }) }}
 
+  {% include "projects/repository_stats/components/report_nav.html" %}
+
   {% if errors %}
     {% set error_list = [] %}
     {% if errors.get("from") %}
@@ -88,14 +110,17 @@
   <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Repository visibility changes</h1>
   <div class="govuk-!-margin-bottom-6">
     <p class="govuk-body-l govuk-!-margin-bottom-4">Track repository visibility changes, new repositories and deleted repositories.</p>
-    {% if page.earliest_captured_on and not query.all_organisations %}<p class="govuk-body-s">Showing changes since: {{ fmt(page.earliest_captured_on) }}</p>{% endif %}
-    {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+    <div class="app-visibility-freshness{% if page.last_updated %} app-visibility-freshness--updated{% endif %}">
+      {% if page.earliest_captured_on and not query.all_organisations %}<p class="govuk-body-s">Showing changes since: {{ fmt(page.earliest_captured_on) }}</p>{% endif %}
+      {% if page.last_updated %}<p class="govuk-body-s">Last updated: {{ page.last_updated[0] }} at <em>{{ page.last_updated[1] }}</em></p>{% endif %}
+    </div>
   </div>
 
   {# Filters #}
-  <form method="get" action="{{ visibility_url }}" class="app-visibility-filters" id="visibility-filters" novalidate>
+  <div class="app-visibility-filters">
+  <form method="get" action="{{ visibility_url }}" id="visibility-filters" novalidate>
     <h2 class="govuk-visually-hidden">Filter repositories</h2>
-    {{ hidden_inputs(["org", "business_unit", "q", "from", "to", "page"]) }}
+    {{ hidden_inputs(["org", "business_unit", "q", "page"]) }}
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
         {% set org_items = [] %}
@@ -118,6 +143,7 @@
         {{ govukInput({
           "id": "q",
           "name": "q",
+          "type": "search",
           "label": {"text": "Repository name"},
           "value": query.filters.q,
           "spellcheck": false,
@@ -125,37 +151,30 @@
         }) }}
       </div>
     </div>
+    <noscript>{{ govukButton({"text": "Filter"}) }}</noscript>
+  </form>
+    <details class="app-visibility-date-control"{% if query.from_value or query.to_value or errors %} open{% endif %}>
+      <summary>Choose dates</summary>
+    <form method="get" action="{{ visibility_url }}" id="visibility-date-filters" novalidate>
+    {{ hidden_inputs(["from", "to", "page"]) }}
     <div class="app-visibility-filter-row">
       <div class="app-visibility-dates" id="visibility-dates">
       {% set date_limits = {} %}
       {% if page.earliest_captured_on %}{% set _ = date_limits.update({"min": page.earliest_captured_on.isoformat()}) %}{% endif %}
       {% if page.today %}{% set _ = date_limits.update({"max": page.today.isoformat()}) %}{% endif %}
-      {{ govukInput({
-        "label": {"text": "From"},
-        "id": "from",
-        "name": "from",
-        "type": "date",
-        "value": query.from_value,
-        "attributes": date_limits,
-        "errorMessage": {"text": errors["from"]} if errors.get("from") else None
-      }) }}
-      {{ govukInput({
-        "label": {"text": "To"},
-        "id": "to",
-        "name": "to",
-        "type": "date",
-        "value": query.to_value,
-        "attributes": date_limits,
-        "errorMessage": {"text": errors["to"]} if errors.get("to") else None
-      }) }}
+        {{ date_input("from", "From", query.from_value, date_limits) }}
+        {{ date_input("to", "To", query.to_value, date_limits) }}
       </div>
       <div class="app-visibility-filter-actions">
-        {{ govukButton({"text": "Apply filters"}) }}
-        <a class="govuk-link" id="clear-filters" href="{{ visibility_url }}">Clear filters</a>
+        {{ govukButton({"text": "Filter"}) }}
+        <a class="govuk-link" id="clear-dates" href="{{ visibility_url }}{{ query.query_string(from_value='', to_value='', page=1) }}">Clear dates</a>
       </div>
     </div>
-  </form>
+    </form>
+    </details>
+  </div>
 
+  <div class="app-visibility-summary-head">
   {% set changes_heading = page.changes_heading %}
   {% if changes_heading %}
     <h2 class="govuk-heading-m">{{ changes_heading }}</h2>
@@ -164,6 +183,7 @@
     <p class="govuk-body">No visibility snapshots have been captured yet.</p>
   {% endif %}
   <p class="govuk-body app-visibility-estate">Current repositories: <strong>{{ page.counts.total }}</strong> <span aria-hidden="true">·</span> Public <strong>{{ page.counts.public }}</strong> <span aria-hidden="true">·</span> Internal <strong>{{ page.counts.internal }}</strong> <span aria-hidden="true">·</span> Private <strong>{{ page.counts.private }}</strong></p>
+  </div>
 
   {% if changes %}
     {{ stats([
@@ -172,25 +192,21 @@
       ("Deleted repositories", changes.deleted_count)
     ]) }}
 
-    {% set transition_rows = [] %}
-    {% for transition in changes.transitions %}
-      {% set _ = transition_rows.append([
-        {"html": visibility_tag(transition.from_visibility)},
-        {"html": visibility_tag(transition.to_visibility)},
-        {"text": transition.count | string, "format": "numeric"}
-      ]) %}
-    {% endfor %}
-    {{ govukTable({
-      "caption": "Changes by transition",
-      "captionClasses": "govuk-visually-hidden",
-      "classes": "govuk-!-margin-bottom-6",
-      "head": [{"text": "From"}, {"text": "To"}, {"text": "Changes", "format": "numeric"}],
-      "rows": transition_rows
-    }) }}
+    <h3 class="govuk-heading-s">Visibility changes by transition</h3>
+    {% set maximum = changes.transitions | map(attribute="count") | max %}
+    <div class="app-transition-list" role="list">
+      {% for transition in changes.transitions %}
+        <div class="app-transition-row" role="listitem">
+          <div class="app-transition-labels">{{ visibility_tag(transition.from_visibility) }} <span aria-label="to">→</span> {{ visibility_tag(transition.to_visibility) }}</div>
+          <div class="app-transition-track" aria-hidden="true"><div class="app-transition-bar" style="width: {{ (100 * transition.count / maximum) if maximum else 0 }}%"></div></div>
+          <div class="app-transition-count">{{ transition.count }}</div>
+        </div>
+      {% endfor %}
+    </div>
 
     {% set activity_page = changes.activity_page %}
     <h2 class="govuk-heading-m" id="activity-table">{{ changes.activity_label }} ({{ activity_page.total_items }})</h2>
-    <form method="get" action="{{ visibility_url }}#activity-table" novalidate>
+    <form method="get" action="{{ visibility_url }}#activity-table" id="visibility-activity-filters" novalidate>
       {{ hidden_inputs(["activity", "page"]) }}
       {% set activity_items = [] %}
       {% for value, text in page.activity_options %}
@@ -198,7 +214,7 @@
       {% endfor %}
       <div class="app-visibility-controls">
         {{ govukSelect({"id": "activity", "name": "activity", "label": {"text": "Activity type"}, "items": activity_items}) }}
-        {{ govukButton({"text": "Show activity", "classes": "govuk-button--secondary govuk-!-margin-bottom-0"}) }}
+        <noscript>{{ govukButton({"text": "Filter"}) }}</noscript>
         {% if activity_page.total_items %}
           <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 app-visibility-controls__end" role="button" draggable="false" data-module="govuk-button" href="{{ csv_url }}{{ query.csv_query_string(query.from_value, query.to_value) }}">Download CSV</a>
         {% endif %}
@@ -264,4 +280,5 @@
   {% else %}
     {{ govukInsetText({"text": "Enter a valid date range to see visibility changes."}) }}
   {% endif %}
+  <script src="{{ url_for('static', filename='projects/repository_stats/javascript/visibility-filters.js') }}"></script>
 {% endblock %}

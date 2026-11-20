@@ -3,18 +3,22 @@ from flask import Blueprint, Response, abort, render_template, request
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )
+from app.projects.repository_standards.routes.owner_id import (
+    register_owner_id_converter,
+)
 from app.projects.repository_standards.services.owner_service import (
     get_owner_service,
-)
-from app.projects.repository_standards.services.technical_standard_service import (
-    get_technical_standard_service,
 )
 from app.projects.repository_standards.services.technical_standard_badge import (
     get_technical_standard_badge_svg,
 )
+from app.projects.repository_standards.services.technical_standard_service import (
+    get_technical_standard_service,
+)
 from app.shared.middleware.auth import requires_auth
 
 technical_standard = Blueprint("technical_standard", __name__)
+technical_standard.record_once(register_owner_id_converter)
 
 TEMPLATES = "projects/repository_standards/technical_standard"
 VISIBILITY_FILTERS = {"all", "public", "private", "internal"}
@@ -124,9 +128,9 @@ def business_units():
     )
 
 
-@technical_standard.route("/business-units/<owner_id>", methods=["GET"])
+@technical_standard.route("/business-units/<owner_id:owner_id>", methods=["GET"])
 @requires_auth
-def business_unit(owner_id: str):
+def business_unit(owner_id: int):
     owner = get_owner_service().find_by_id(owner_id)
     if owner is None or owner.type != "BUSINESS_UNIT":
         abort(404)
@@ -160,9 +164,9 @@ def teams():
     )
 
 
-@technical_standard.route("/teams/<owner_id>", methods=["GET"])
+@technical_standard.route("/teams/<owner_id:owner_id>", methods=["GET"])
 @requires_auth
-def team(owner_id: str):
+def team(owner_id: int):
     owner = get_owner_service().find_by_id(owner_id)
     if owner is None or owner.type != "TEAM":
         abort(404)

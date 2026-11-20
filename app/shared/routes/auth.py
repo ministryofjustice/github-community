@@ -1,6 +1,7 @@
 import logging
 
-from flask import Blueprint, current_app, redirect, session, url_for
+from authlib.integrations.base_client.errors import MismatchingStateError, OAuthError
+from flask import Blueprint, current_app, redirect, render_template, session, url_for
 
 from app.projects.repository_stats.services.visibility_access import (
     SESSION_KEY as STATS_ACCESS_SESSION_KEY,
@@ -36,7 +37,23 @@ def logout():
 
 @auth_route.route("/callback", methods=["GET", "POST"])
 def callback():
-    session["user"] = auth0_service.get_access_token()
+    try:
+        token = auth0_service.get_access_token()
+    except MismatchingStateError:
+        logger.warning("Shared sign-in rejected: OAuth state validation failed")
+        return render_template(
+            "shared/pages/errors/sign_in.html",
+            error_message="We could not verify your sign-in. Please start again.",
+        ), 400
+    except OAuthError as error:
+        if error.error != "access_denied":
+            raise
+        logger.info("Shared sign-in was denied by the identity provider")
+        return render_template(
+            "shared/pages/errors/sign_in.html",
+            error_message="Sign-in was cancelled or access was denied.",
+        ), 403
+    session["user"] = token
     # A new sign-in always gets a fresh Repository Stats team check.
     session.pop(STATS_ACCESS_SESSION_KEY, None)
     path = session.pop("post_auth_redirect_path", None)

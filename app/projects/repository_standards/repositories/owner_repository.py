@@ -48,7 +48,7 @@ class OwnerRepository:
 
         return owners
 
-    def find_by_id(self, id: str) -> Owner | None:
+    def find_by_id(self, id: int) -> Owner | None:
         owner = self.db_session.query(Owner).filter(Owner.id == id).first()
 
         return owner
@@ -73,7 +73,7 @@ class OwnerRepository:
         return owner
 
     def update_by_id(
-        self, id: str, owner_name: str, owner_teams: List[str]
+        self, id: int, owner_name: str, owner_teams: List[str]
     ) -> Owner | None:
         owner = self.find_by_id(id)
         if not owner:
@@ -90,7 +90,7 @@ class OwnerRepository:
         self.db_session.commit()
         return owner
 
-    def delete_by_id(self, id: str) -> bool:
+    def delete_by_id(self, id: int) -> bool:
         owner = self.find_by_id(id)
         if not owner:
             return False

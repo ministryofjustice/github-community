@@ -46,6 +46,14 @@ SORT_COLUMNS = (
     ("date", "Date"),
 )
 SORT_KEYS = tuple(key for key, _ in SORT_COLUMNS)
+ARCHIVED_SORT_KEYS = (
+    "repository",
+    "organisation",
+    "business_unit",
+    "archived",
+    "pushed",
+    "visibility",
+)
 
 CSV_HEADERS = ("repository", "organisation", "business_unit", "activity", "date")
 CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -418,14 +426,21 @@ def parse_visibility_query(
 def parse_archived_query(
     args: Mapping[str, str], only_public_values: Sequence[str] = ()
 ) -> VisibilityQuery:
-    """The archived repositories page only uses organisation, business unit, name and
-    the 'only still public' checkbox and page. Dates, activity and sort never apply."""
+    """Parse archived filters and sorting, excluding dates and activity."""
     query = parse_visibility_query(args, only_public_values)
+    sort = args.get("sort", "")
+    if sort not in ARCHIVED_SORT_KEYS:
+        sort = DEFAULT_SORT
+    direction = args.get("dir", "")
+    if direction not in ("asc", "desc"):
+        direction = default_direction(sort)
     return VisibilityQuery(
         filters=query.filters,
         page=query.page,
         only_public=query.only_public,
         all_organisations=query.all_organisations,
+        sort=sort,
+        direction=direction,
     )
 
 
@@ -834,9 +849,12 @@ def archived_progress(repositories: Iterable[ArchivedRepository]) -> ArchivedPro
 
 def sort_archived(
     repositories: Iterable[ArchivedRepository],
+    sort: str = DEFAULT_SORT,
+    direction: str = "desc",
+    organisation_names: Mapping[str, str] | None = None,
 ) -> list[ArchivedRepository]:
-    """Still-public first, then oldest archived date, then name."""
-    return sorted(
+    """Preserve default ordering; unknown dates always sort last."""
+    ordered = sorted(
         repositories,
         key=lambda r: (
             not r.still_public,
@@ -845,3 +863,21 @@ def sort_archived(
             r.name.lower(),
         ),
     )
+    keys = {
+        "repository": lambda r: r.name.lower(),
+        "organisation": lambda r: (organisation_names or {}).get(r.org, r.org).lower(),
+        "business_unit": lambda r: r.business_unit_text.lower(),
+        "archived": lambda r: (
+            r.first_archived_on.isoformat() if r.first_archived_on else ""
+        ),
+        "pushed": lambda r: r.pushed_at.isoformat() if r.pushed_at else "",
+        "visibility": lambda r: r.visibility.lower(),
+    }
+    if sort not in keys:
+        return ordered
+    key = keys[sort]
+    if sort in ("archived", "pushed"):
+        known = [r for r in ordered if key(r)]
+        unknown = [r for r in ordered if not key(r)]
+        return sorted(known, key=key, reverse=direction == "desc") + unknown
+    return sorted(ordered, key=key, reverse=direction == "desc")

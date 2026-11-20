@@ -1,5 +1,204 @@
 /* Repository Stats visibility changes and archived repositories pages only. Colours are GOV.UK Frontend palette values. */
 
+.app-report-nav,
+.app-visibility-freshness,
+.app-visibility-date-control,
+.app-visibility-stats,
+.app-transition-list {
+  font-family: "GDS Transport", arial, sans-serif;
+}
+
+.app-report-nav {
+  margin: 0 0 26px;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.app-report-nav__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-report-nav a {
+  display: inline-block;
+  padding: 10px 0 9px;
+  border-bottom: 4px solid transparent;
+  color: #1d70b8;
+  font-family: inherit;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-report-nav a:hover {
+  color: #003078;
+  text-decoration: underline;
+}
+
+.app-report-nav a:focus {
+  outline: 3px solid transparent;
+  background: #ffdd00;
+  box-shadow: 0 -2px #ffdd00, 0 4px #0b0c0c;
+  color: #0b0c0c;
+}
+
+.app-report-nav a[aria-current="page"] {
+  border-bottom-color: #1d70b8;
+  color: #0b0c0c;
+}
+
+.app-visibility-freshness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  color: #505a5f;
+  font-size: 14px;
+}
+
+.app-visibility-freshness p {
+  margin: 0;
+  color: #505a5f;
+}
+
+.app-visibility-freshness em {
+  color: #0b0c0c;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.app-visibility-freshness--updated p:last-child::before {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #00703c;
+  content: "";
+}
+
+.app-visibility-date-control {
+  margin: 0 0 16px;
+  padding-top: 12px;
+  border-top: 1px solid #b1b4b6;
+}
+
+.app-visibility-date-control summary {
+  width: fit-content;
+  color: #1d70b8;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.app-visibility-dates input[type="date"] {
+  appearance: auto;
+}
+
+.app-date-picker__control {
+  position: relative;
+}
+
+.app-date-picker__control .govuk-input {
+  padding-inline-end: 40px;
+}
+
+.app-date-picker__control input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.app-date-picker__button:not([hidden]) {
+  position: absolute;
+  inset-inline-end: 2px;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background-color: #fff;
+  color: #0b0c0c;
+  cursor: pointer;
+}
+
+.app-date-picker__button:not([hidden]):hover {
+  background-color: #f3f2f1;
+}
+
+.app-date-picker__button:not([hidden]):focus {
+  outline: 3px solid transparent;
+  background-color: #ffdd00;
+  box-shadow: inset 0 -3px #0b0c0c;
+}
+
+.app-visibility-date-control .app-visibility-filter-row {
+  margin-top: 13px;
+}
+
+.app-visibility-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 22px;
+  margin-bottom: 14px;
+}
+
+.app-visibility-summary-head .govuk-heading-m,
+.app-visibility-summary-head .app-visibility-estate {
+  margin: 0;
+}
+
+.app-visibility-summary-head .app-visibility-estate {
+  padding: 0;
+  border: 0;
+  color: #505a5f;
+  font-size: 15px;
+}
+
+.app-visibility-estate strong {
+  color: #0b0c0c;
+}
+
+.app-transition-list {
+  margin-bottom: 32px;
+  border-top: 1px solid #b1b4b6;
+}
+
+.app-transition-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(150px, 1.7fr) 52px;
+  align-items: center;
+  gap: 12px 18px;
+  min-height: 46px;
+  border-bottom: 1px solid #b1b4b6;
+}
+
+.app-transition-labels {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.app-transition-track {
+  height: 7px;
+  background: #e5e6e7;
+}
+
+.app-transition-bar {
+  height: 100%;
+  background: #1d70b8;
+}
+
+.app-transition-count {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .app-visibility-filters {
   background-color: #f3f2f1;
   padding: 20px 20px 5px;
@@ -76,7 +275,6 @@
   width: 100%;
 }
 
-/* Second filter row: From, To, then Apply filters and Clear filters, bottom-aligned. */
 .app-visibility-filter-row {
   display: flex;
   flex-direction: column;
@@ -106,7 +304,7 @@
 /* Stat blocks: a <dl> where each group holds a small label (dt) above a big number (dd). */
 .app-visibility-stats {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 15px;
   margin: 0 0 30px;
   padding: 0;
@@ -154,8 +352,23 @@
 
 .app-visibility-progress-summary {
   display: flex;
-  flex-direction: column;
-  max-width: 640px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px 24px;
+}
+
+.app-visibility-progress-meter {
+  width: max-content;
+  max-width: 100%;
+}
+
+.app-visibility-progress-summary .govuk-body {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.app-visibility-progress-summary .app-visibility-secondary-text {
+  white-space: nowrap;
 }
 
 .app-visibility-secondary-text {
@@ -163,11 +376,15 @@
 }
 
 .app-visibility-progress {
-  height: 20px;
+  height: 16px;
   background-color: #f3f2f1;
   border: 1px solid #b1b4b6;
   margin-bottom: 20px;
-  max-width: 640px;
+}
+
+.app-visibility-guide .govuk-details__summary {
+  color: #1d70b8;
+  font-weight: 700;
 }
 
 .app-visibility-progress__bar {
@@ -182,6 +399,12 @@
 
 .app-visibility-sort:hover {
   text-decoration: underline;
+}
+
+.app-archived-date-hint {
+  color: #505a5f;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .app-visibility-nowrap {
@@ -226,15 +449,52 @@
     align-items: flex-end;
   }
 
-  .app-visibility-progress-summary {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 20px;
-  }
-
   .app-visibility-controls__end {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-report-nav {
+    overflow-x: auto;
+  }
+
+  .app-report-nav__list {
+    flex-wrap: nowrap;
+    gap: 18px;
+    width: max-content;
+  }
+
+  .app-report-nav a {
+    white-space: nowrap;
+  }
+
+  .app-transition-row {
+    grid-template-columns: minmax(0, 1fr) 42px;
+    gap: 5px 12px;
+    padding: 9px 0;
+  }
+
+  .app-transition-track {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .app-transition-count {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .app-visibility-stats {
+    gap: 12px;
+  }
+
+  .app-visibility-stats__value {
+    font-size: 29px;
+  }
+
+  .app-visibility-stats__label {
+    font-size: 13px;
   }
 }
 
@@ -421,6 +681,14 @@
 @media (max-width: 40.0625em) {
   .app-table-scroll--overview {
     overflow-x: auto;
+  }
+
+  .app-overview-table {
+    min-width: 680px;
+  }
+
+  .app-visibility-archived-table {
+    min-width: 760px;
   }
 }
 

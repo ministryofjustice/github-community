@@ -165,7 +165,7 @@ class TestOrganisationAssetIdentity(unittest.TestCase):
         db.session.commit()
 
         updated = OwnerRepository().update_by_id(
-            str(owner.id), "Renamed Analytics Team", ["new-team"]
+            owner.id, "Renamed Analytics Team", ["new-team"]
         )
 
         config = OwnerConfig.from_dict(updated.config)

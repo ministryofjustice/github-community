@@ -1,6 +1,6 @@
 import logging
 import re
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from flask import (
     Blueprint,
@@ -43,6 +43,7 @@ from app.projects.repository_stats.services.visibility_ownership import (
 from app.projects.repository_stats.services.visibility_service import (
     VisibilityService,
 )
+from app.shared.config.app_config import app_config
 from app.shared.middleware.auth import requires_auth, requires_stats_access
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def get_visibility_service() -> VisibilityService:
 @requires_auth
 @requires_stats_access
 def index():
-    return render_template("projects/repository_stats/pages/home.html")
+    return redirect(url_for("repository_stats_main.visibility_changes"))
 
 
 @repository_stats_main.route("/overview", methods=["GET"])
@@ -227,9 +228,24 @@ def render_github_problem(problem: str, status: int, retry_href: str | None = No
     )
 
 
+@repository_stats_main.before_request
+def use_public_host():
+    """Normalize configured aliases before sign-in."""
+    if (
+        request.method not in ("GET", "HEAD")
+        or request.endpoint == "repository_stats_main.github_callback"
+    ):
+        return None
+    host = (request.host or "").split(":", 1)[0].lower()
+    public_host = urlsplit(app_config.public_base_url).hostname
+    if host == public_host or host not in app_config.public_host_aliases:
+        return None
+    path = request.full_path if request.query_string else request.path
+    return redirect(app_config.public_base_url + path, 302)
+
+
 def github_callback_url() -> str:
-    # Built from the request host so dev and both production hostnames work. Always
-    # https, like the Auth0 callback: TLS ends at the ingress in front of the app.
+    # HTTPS is required even when TLS terminates upstream.
     return url_for(
         "repository_stats_main.github_callback", _external=True, _scheme="https"
     )
