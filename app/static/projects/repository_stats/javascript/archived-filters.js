@@ -256,10 +256,10 @@
       var option = org.options[org.selectedIndex];
       setText("archived-progress-organisation", option ? option.text : "All organisations");
       setText(
-        "archived-progress-text",
-        details.made_internal + " of " + details.total + " archived public repositories have been made internal"
+        "archived-progress-count",
+        details.made_internal.toLocaleString("en-GB") + " of " + details.total.toLocaleString("en-GB")
       );
-      setText("archived-progress-percent", details.percent + "% complete");
+      setText("archived-progress-percent", details.percent + "%");
       if (bar) bar.style.width = details.percent + "%";
       if (summary) summary.hidden = !details.total;
       if (empty) empty.hidden = !!details.total;

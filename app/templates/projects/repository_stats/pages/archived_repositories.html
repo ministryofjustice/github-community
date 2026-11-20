@@ -130,8 +130,8 @@
       <h2 class="govuk-heading-m">Progress: <span id="archived-progress-organisation">{{ progress_org_name }}</span></h2>
       <div class="app-visibility-progress-meter" id="archived-progress-summary"{% if not archived.progress.total %} hidden{% endif %}>
         <div class="app-visibility-progress-summary">
-          <p class="govuk-body govuk-!-margin-bottom-1" id="archived-progress-text">{{ archived.progress.made_internal }} of {{ archived.progress.total }} archived public repositories have been made internal</p>
-          <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">{{ archived.progress.percent }}% complete</p>
+          <p class="govuk-body govuk-!-margin-bottom-1"><strong id="archived-progress-count">{{ "{:,}".format(archived.progress.made_internal) }} of {{ "{:,}".format(archived.progress.total) }}</strong> archived public repositories have been made internal</p>
+          <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text"><strong id="archived-progress-percent">{{ archived.progress.percent }}%</strong> complete</p>
         </div>
         <div class="app-visibility-progress govuk-!-margin-bottom-2" aria-hidden="true"><div class="app-visibility-progress__bar" id="archived-progress-bar" style="width: {{ archived.progress.percent }}%"></div></div>
       </div>
@@ -167,7 +167,7 @@
             <tr class="govuk-table__row">
               {% for key, label in [("repository", "Repository"), ("organisation", "Organisation"), ("business_unit", "Business unit"), ("archived", "Archived"), ("pushed", "Last pushed"), ("visibility", "Visibility")] %}
                 {% set next_direction = ("asc" if query.direction == "desc" else "desc") if query.sort == key else "asc" %}
-                <th scope="col" class="govuk-table__header" aria-sort="{{ query.aria_sort(key) }}">
+                <th scope="col" class="govuk-table__header{% if key == 'archived' %} app-visibility-nowrap{% endif %}" aria-sort="{{ query.aria_sort(key) }}">
                   <a class="govuk-link app-visibility-sort" data-sort="{{ key }}" data-direction="{{ next_direction }}" href="{{ archived_url }}{{ query.sort_query_string(key) }}#archived-table">{{ label }}{% if query.sort == key %} <span aria-hidden="true">{{ "▲" if query.direction == "asc" else "▼" }}</span>{% endif %}</a>{% if key == "archived" %} <span class="app-archived-date-hint">first seen<br>archived</span>{% endif %}
                 </th>
               {% endfor %}

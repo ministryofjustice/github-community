@@ -289,8 +289,8 @@ class RepositoryStatsTestCase(unittest.TestCase):
         return [name for name, hidden in self.archived_rows(body) if not hidden]
 
     @staticmethod
-    def filters(body):
-        return body.split('id="visibility-filters"', 1)[1].split("</form>", 1)[0]
+    def filters(body, form_id="visibility-filters"):
+        return body.split(f'id="{form_id}"', 1)[1].split("</form>", 1)[0]
 
 
 def estate_line(total, public, internal, private):
@@ -1295,27 +1295,25 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn("Repository visibility changes", crumbs)
 
     def test_filter_form(self):
-        _, body = self.get(f"{CHANGES_URL}?activity=new&sort=repository&dir=asc&page=2")
+        _, body = self.get(
+            f"{CHANGES_URL}?activity=new&sort=repository&dir=asc&page=2&from=2026-08-02"
+        )
         filters = self.filters(body)
-        self.assertIn(f'action="{CHANGES_URL}" class="app-visibility-filters"', body)
-        for field in (
-            'id="org"',
-            'id="business_unit"',
-            'id="q"',
-            'id="from"',
-            'id="to"',
-        ):
+        for field in ('id="org"', 'id="business_unit"', 'id="q"'):
             self.assertIn(field, filters)
+        self.assertIn('<input type="hidden" name="from" value="2026-08-02">', filters)
         self.assertIn('<input type="hidden" name="activity" value="new">', filters)
         self.assertIn('<input type="hidden" name="sort" value="repository">', filters)
         self.assertNotIn('type="hidden" name="page"', filters)
-        row = filters.split('<div class="app-visibility-filter-row">', 1)[1]
-        self.assertLess(row.index('id="to"'), row.index("Apply filters"))
-        self.assertLess(row.index("Apply filters"), row.index("Clear filters"))
-        self.assertIn(
-            f'<a class="govuk-link" id="clear-filters" href="{CHANGES_URL}">Clear filters</a>',
-            filters,
-        )
+        dates = body.split("<details", 1)[1].split("</details>", 1)[0]
+        self.assertEqual(dates.count('type="date"'), 2)
+        self.assertLess(dates.index('id="from"'), dates.index('id="to"'))
+        self.assertLess(dates.index('id="to"'), dates.index("Filter\n"))
+        self.assertLess(dates.index("Filter\n"), dates.index("Clear dates"))
+        for text in ("Apply filters", "Clear filters", "Show activity", "date-picker.js"):
+            self.assertNotIn(text, body)
+        self.assertIn('id="visibility-activity-filters"', body)
+        self.assertIn("javascript/visibility-filters.js", body)
 
     def test_date_disclosure_preserves_filters_and_opens_for_dates_and_errors(self):
         _, body = self.get(CHANGES_URL)
@@ -1496,8 +1494,9 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn("There is a problem", body)
         escaped = message.replace("'", "&#39;")
         self.assertIn(f'<a href="#{field}">{escaped}</a>', body)
-        self.assertIn(f'id="{field}-error"', self.filters(body))
-        self.assertIn(escaped, self.filters(body))
+        date_filters = self.filters(body, "visibility-date-filters")
+        self.assertIn(f'id="{field}-error"', date_filters)
+        self.assertIn(escaped, date_filters)
         self.assertIn('<h2 class="govuk-heading-m">Summary</h2>', body)
         self.assertIn("Enter a valid date range to see visibility changes.", body)
 
@@ -1625,7 +1624,7 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             body,
         )
         self.assertIn('<h2 class="govuk-heading-m">Summary</h2>', body)
-        self.assertIn('id="from-error"', self.filters(body))
+        self.assertIn('id="from-error"', self.filters(body, "visibility-date-filters"))
         self.assertIn("Enter a valid date range to see visibility changes.", body)
         self.assertIn(
             "Error: Repository visibility changes",
@@ -1762,7 +1761,7 @@ class TestDefaultOrganisation(RepositoryStatsTestCase):
         self.assertIn('<div id="archived-no-match" hidden>', body)
         self.assertNotIn('id="archived-table" hidden', body)
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal</p>", body
+            "1 of 2</strong> archived public repositories have been made internal</p>", body
         )
 
 
@@ -2257,10 +2256,10 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                             )
                             if total:
                                 self.assertIn(
-                                    "1 of 1 archived public repositories have been made internal",
+                                    "1 of 1</strong> archived public repositories have been made internal",
                                     body,
                                 )
-                                self.assertIn("100% complete", body)
+                                self.assertIn("100%</strong> complete", body)
                                 self.assertIn(
                                     f'href="https://github.com/{ORG}/transferred-internal"',
                                     body,
@@ -2323,7 +2322,7 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                     self.assertNotIn("transferred", archived)
                     if visible:
                         self.assertIn(
-                            "0 of 1 archived public repositories have been made internal",
+                            "0 of 1</strong> archived public repositories have been made internal",
                             archived,
                         )
                     else:
@@ -2379,7 +2378,10 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(f"Showing changes since: {label}</p>", body)
                 self.assertEqual(
-                    self.filters(body).count(f'min="{baseline}" max="{OCT_30}"'), 2
+                    self.filters(body, "visibility-date-filters").count(
+                        f'min="{baseline}" max="{OCT_30}"'
+                    ),
+                    2,
                 )
                 self.assertIn(f"All activity ({activity_count})", body)
 
@@ -2455,18 +2457,18 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
         self.assertEqual(self.visible_archived(body), ["mas-archived"])
         self.assertIn(
-            "0 of 1 archived public repositories have been made internal", body
+            "0 of 1</strong> archived public repositories have been made internal", body
         )
         self.assertIn("29 October 2026", body)
         _, body = self.get(f"{ARCHIVED_URL}?org={ORG}&only_public=0")
         self.assertEqual(self.visible_archived(body), ["asset-alpha"])
         self.assertIn("17 August 2026", body)
         self.assertIn(
-            "1 of 1 archived public repositories have been made internal", body
+            "1 of 1</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org=all")
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal", body
+            "1 of 2</strong> archived public repositories have been made internal", body
         )
 
     def test_archived_later_events_and_filters_use_each_org_baseline(self):
@@ -2510,11 +2512,11 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
         self.assertEqual(self.visible_archived(body), ["sample-repo-00"])
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal", body
+            "1 of 2</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org=all")
         self.assertIn(
-            "2 of 3 archived public repositories have been made internal", body
+            "2 of 3</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}&q=mas&only_public=0")
         self.assertEqual(self.visible_archived(body), ["mas-archived"])
@@ -2637,10 +2639,11 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertIn("How to change a repository&#39;s visibility", body)
         self.assertIn("<strong>Unarchive this repository</strong>", body)
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal</p>", body
+            '<strong id="archived-progress-count">1 of 2</strong> archived public repositories have been made internal</p>',
+            body,
         )
         self.assertIn(
-            '<p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">50% complete</p>',
+            '<strong id="archived-progress-percent">50%</strong> complete</p>',
             body,
         )
         self.assertIn("width: 50%", body)
@@ -2756,7 +2759,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                 _, body = self.get(f"{ARCHIVED_URL}?{params}")
                 self.assertIn(f"{PROGRESS_HEADING}{heading}</span></h2>", body)
                 self.assertIn(
-                    f"{line} archived public repositories have been made internal",
+                    f"{line}</strong> archived public repositories have been made internal",
                     body,
                 )
                 self.assertIn('id="archived-progress-empty" hidden', body)
@@ -2778,7 +2781,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         )
 
     def test_filters_narrow_the_list_but_not_progress(self):
-        all_orgs = "1 of 2 archived public repositories have been made internal</p>"
+        all_orgs = "1 of 2</strong> archived public repositories have been made internal</p>"
         no_match = '<div id="archived-no-match">'
         for params, shown in (
             ("business_unit=HMPPS", []),
@@ -2944,6 +2947,11 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertIn(
             '<span class="app-archived-date-hint">first seen<br>archived</span>',
             head,
+        )
+        self.assertRegex(
+            head,
+            r'class="govuk-table__header app-visibility-nowrap"[^>]*>\s*'
+            r'<a[^>]*data-sort="archived"',
         )
         self.assertIn('Repositories (<span id="archived-count">2</span>)', body)
 

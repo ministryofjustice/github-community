@@ -36,4 +36,4 @@ jobs:
         run: make test
 
       - name: Test Repository Stats JavaScript
-        run: node --test test/test_app/test_static/test_archived_filters.js test/test_app/test_static/test_date_picker.js
+        run: node --test test/test_app/test_static/test_archived_filters.js

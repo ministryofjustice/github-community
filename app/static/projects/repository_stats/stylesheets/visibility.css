@@ -92,21 +92,28 @@
   cursor: pointer;
 }
 
+.app-visibility-dates input[type="date"] {
+  appearance: auto;
+}
+
 .app-date-picker__control {
   position: relative;
 }
 
 .app-date-picker__control .govuk-input {
-  padding-inline-end: 48px;
+  padding-inline-end: 40px;
 }
 
-.app-date-picker__button {
+.app-date-picker__control input::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.app-date-picker__button:not([hidden]) {
   position: absolute;
   inset-inline-end: 2px;
   top: 2px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   width: 36px;
   height: 36px;
   padding: 0;
@@ -116,31 +123,18 @@
   cursor: pointer;
 }
 
-.app-date-picker__button:hover {
+.app-date-picker__button:not([hidden]):hover {
   background-color: #f3f2f1;
 }
 
-.app-date-picker__button:focus {
+.app-date-picker__button:not([hidden]):focus {
   outline: 3px solid transparent;
   background-color: #ffdd00;
-  box-shadow: 0 -2px #ffdd00, 0 4px #0b0c0c;
-  color: #0b0c0c;
-}
-
-.app-date-picker__button[hidden] {
-  display: none;
+  box-shadow: inset 0 -3px #0b0c0c;
 }
 
 .app-visibility-date-control .app-visibility-filter-row {
   margin-top: 13px;
-}
-
-.app-visibility-filters > .app-visibility-filter-actions {
-  padding-bottom: 15px;
-}
-
-.app-visibility-filters > .app-visibility-filter-actions .govuk-button {
-  margin-bottom: 0;
 }
 
 .app-visibility-summary-head {
@@ -281,7 +275,6 @@
   width: 100%;
 }
 
-/* Second filter row: From, To, then Apply filters and Clear filters, bottom-aligned. */
 .app-visibility-filter-row {
   display: flex;
   flex-direction: column;
