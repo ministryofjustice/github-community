@@ -231,7 +231,10 @@ def render_github_problem(problem: str, status: int, retry_href: str | None = No
 @repository_stats_main.before_request
 def use_public_host():
     """Normalize configured aliases before sign-in."""
-    if request.method not in ("GET", "HEAD"):
+    if (
+        request.method not in ("GET", "HEAD")
+        or request.endpoint == "repository_stats_main.github_callback"
+    ):
         return None
     host = (request.host or "").split(":", 1)[0].lower()
     public_host = urlsplit(app_config.public_base_url).hostname

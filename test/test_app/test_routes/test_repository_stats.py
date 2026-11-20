@@ -620,6 +620,16 @@ class TestStatsAccess(StatsAccessTestCase):
         self.sign_in_on_host(f"https://{ALIAS_HOST}")
         response = self.client.post(SWITCH_URL, base_url=f"https://{ALIAS_HOST}")
         self.assertEqual(response.location, GITHUB_LOGIN_URL)
+        with self.client.session_transaction(
+            base_url=f"https://{ALIAS_HOST}"
+        ) as flask_session:
+            flask_session["stats_github_oauth_state"] = "existing-state"
+        response = self.client.get(
+            f"{CALLBACK_URL}?state=existing-state&error=access_denied",
+            base_url=f"https://{ALIAS_HOST}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.location)
 
     def test_github_login_not_configured(self):
         with patch(
