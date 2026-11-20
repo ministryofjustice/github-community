@@ -1,7 +1,7 @@
 import csv
 import io
 import unittest
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from app.projects.repository_stats.services.visibility_logic import (
     ActivityItem,
@@ -583,6 +583,48 @@ class TestCurrentSnapshotReconciliation(unittest.TestCase):
 
 
 class TestArchived(unittest.TestCase):
+    def test_explicit_sorting_keeps_unknown_dates_last(self):
+        repositories = [
+            ArchivedRepository(
+                1,
+                "z",
+                ORG,
+                ("Unit B",),
+                "public",
+                AUG_1,
+                datetime(2026, 8, 2, tzinfo=UTC),
+            ),
+            ArchivedRepository(
+                2,
+                "a",
+                "other",
+                ("Unit A",),
+                "internal",
+                SEP_25,
+                datetime(2026, 9, 2, tzinfo=UTC),
+            ),
+            ArchivedRepository(3, "missing", ORG, (), "public", None, None),
+        ]
+        for field in ("archived", "pushed"):
+            for direction, expected in (
+                ("asc", ["z", "a", "missing"]),
+                ("desc", ["a", "z", "missing"]),
+            ):
+                with self.subTest(field=field, direction=direction):
+                    self.assertEqual(
+                        [r.name for r in sort_archived(repositories, field, direction)],
+                        expected,
+                    )
+        self.assertEqual(
+            [
+                r.name
+                for r in sort_archived(
+                    repositories, "organisation", "asc", {ORG: "Zed", "other": "Alpha"}
+                )
+            ],
+            ["a", "z", "missing"],
+        )
+
     def test_scope_progress_and_sorting(self):
         aug = [
             snapshot(1, "old-public", "public", AUG_1, archived=True),
@@ -838,6 +880,8 @@ class TestParseArchivedQuery(unittest.TestCase):
                 filters=VisibilityFilters(ORG, "HMPPS", "case"),
                 page=3,
                 only_public=False,
+                sort="repository",
+                direction="asc",
             ),
         )
         self.assertEqual(
@@ -846,6 +890,8 @@ class TestParseArchivedQuery(unittest.TestCase):
                 "org": ORG,
                 "business_unit": "HMPPS",
                 "q": "case",
+                "sort": "repository",
+                "dir": "asc",
                 "page": "3",
                 "only_public": "0",
             },

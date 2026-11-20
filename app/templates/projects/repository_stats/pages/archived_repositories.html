@@ -51,6 +51,8 @@
     ]
   }) }}
 
+  {% include "projects/repository_stats/components/report_nav.html" %}
+
   <div class="govuk-!-margin-bottom-6">
     <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Archived public repositories</h1>
     <div id="archived-freshness" data-organisations='{{ page.organisation_freshness | tojson }}' aria-live="polite" aria-atomic="true">
@@ -72,7 +74,7 @@
 
   {# Filters: dates never apply to archived repositories, so there are no date fields. #}
   <form method="get" action="{{ archived_url }}#visibility-filters" class="app-visibility-filters app-visibility-filters--compact" id="visibility-filters" data-default-org="{{ page.default_organisation }}" novalidate>
-    <h2 class="govuk-heading-m">Find repositories</h2>
+    <h2 class="govuk-visually-hidden">Find repositories</h2>
     {{ hidden_inputs(["org", "business_unit", "q", "only_public", "page"]) }}
     <div class="govuk-grid-row">
       <div class="govuk-grid-column-one-third">
@@ -126,7 +128,7 @@
   <div class="govuk-!-margin-bottom-6" id="archived-progress" data-progress='{{ archived.progress_data() | tojson }}'>
     <div aria-live="polite" aria-atomic="true">
       <h2 class="govuk-heading-m">Progress: <span id="archived-progress-organisation">{{ progress_org_name }}</span></h2>
-      <div id="archived-progress-summary"{% if not archived.progress.total %} hidden{% endif %}>
+      <div class="app-visibility-progress-meter" id="archived-progress-summary"{% if not archived.progress.total %} hidden{% endif %}>
         <div class="app-visibility-progress-summary">
           <p class="govuk-body govuk-!-margin-bottom-1" id="archived-progress-text">{{ archived.progress.made_internal }} of {{ archived.progress.total }} archived public repositories have been made internal</p>
           <p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">{{ archived.progress.percent }}% complete</p>
@@ -135,7 +137,6 @@
       </div>
       <p class="govuk-body" id="archived-progress-empty"{% if archived.progress.total %} hidden{% endif %}>There are no archived public repositories.</p>
     </div>
-    <p class="govuk-body-s app-visibility-secondary-text govuk-!-margin-bottom-0">Business unit, repository name and ‘still public’ filters do not affect progress.</p>
   </div>
 
   {% set how_to_html %}
@@ -146,7 +147,7 @@
       <li>Select <strong>Archive this repository</strong>.</li>
     </ol>
   {% endset %}
-  {{ govukDetails({"summaryText": "How to change a repository's visibility", "html": how_to_html}) }}
+  {{ govukDetails({"summaryText": "How to change a repository's visibility", "html": how_to_html, "classes": "app-visibility-guide"}) }}
 
   {# Every tracked archived repository is rendered; rows that don't match the filters are
      hidden here so the page works without JavaScript. archived-filters.js then filters the
@@ -164,12 +165,12 @@
           <caption class="govuk-table__caption govuk-table__caption--m">Repositories (<span id="archived-count">{{ archived.repository_page.total_items }}</span>)</caption>
           <thead class="govuk-table__head">
             <tr class="govuk-table__row">
-              <th scope="col" class="govuk-table__header">Repository</th>
-              <th scope="col" class="govuk-table__header">Organisation</th>
-              <th scope="col" class="govuk-table__header">Business unit</th>
-              <th scope="col" class="govuk-table__header">Archived <span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">first seen archived</span></th>
-              <th scope="col" class="govuk-table__header">Last pushed</th>
-              <th scope="col" class="govuk-table__header">Visibility</th>
+              {% for key, label in [("repository", "Repository"), ("organisation", "Organisation"), ("business_unit", "Business unit"), ("archived", "Archived"), ("pushed", "Last pushed"), ("visibility", "Visibility")] %}
+                {% set next_direction = ("asc" if query.direction == "desc" else "desc") if query.sort == key else "asc" %}
+                <th scope="col" class="govuk-table__header" aria-sort="{{ query.aria_sort(key) }}">
+                  <a class="govuk-link app-visibility-sort" data-sort="{{ key }}" data-direction="{{ next_direction }}" href="{{ archived_url }}{{ query.sort_query_string(key) }}#archived-table">{{ label }}{% if query.sort == key %} <span aria-hidden="true">{{ "▲" if query.direction == "asc" else "▼" }}</span>{% endif %}</a>{% if key == "archived" %} <span class="app-archived-date-hint">first seen<br>archived</span>{% endif %}
+                </th>
+              {% endfor %}
             </tr>
           </thead>
           <tbody class="govuk-table__body">

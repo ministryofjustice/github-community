@@ -127,6 +127,22 @@
       });
     }
 
+    function syncSortHrefs() {
+      if (!table) return;
+      table.querySelectorAll("a[data-sort]").forEach(function (link) {
+        var params = new URLSearchParams(window.location.search);
+        FILTER_PARAMS.forEach(function (key) { params.delete(key); });
+        params.delete("page");
+        if (org.value) params.set("org", org.value);
+        if (businessUnit.value) params.set("business_unit", businessUnit.value);
+        if (name.value.trim()) params.set("q", name.value.trim());
+        if (!onlyPublic.checked) params.set("only_public", "0");
+        params.set("sort", link.getAttribute("data-sort"));
+        params.set("dir", link.getAttribute("data-direction"));
+        link.href = window.location.pathname + "?" + params.toString() + "#archived-table";
+      });
+    }
+
     function addPageLink(parent, page, label, options) {
       var wrapper = document.createElement(options.wrapperTag || "li");
       wrapper.className = options.wrapperClass;
@@ -287,6 +303,7 @@
         if (historyMode !== false) updateUrl(!!historyMode);
       }
       renderPagination(shownRows.length);
+      syncSortHrefs();
     }
 
     var timer = null;
@@ -294,6 +311,7 @@
       window.clearTimeout(timer);
       currentPage = 1;
       syncPaginationHrefs();
+      syncSortHrefs();
       timer = window.setTimeout(function () { apply(true); }, DEBOUNCE_MS);
     }
 

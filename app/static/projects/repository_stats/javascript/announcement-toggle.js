@@ -23,8 +23,8 @@
     var hiddenLabel = document.createElement("span");
     hiddenLabel.className = "govuk-visually-hidden";
     hiddenLabel.textContent = " announcement";
-    button.appendChild(chevron);
     button.appendChild(label);
+    button.appendChild(chevron);
     button.appendChild(hiddenLabel);
 
     function render(hidden) {

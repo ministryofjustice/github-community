@@ -46,6 +46,13 @@ The **github-community repository** serves as the primary hub and a single pane 
 - **Shared Authentication:** Quickly secure projects with a common authentication layer.
 - **Modular Code Structure:** Projects are self-contained within the monolith.
 
+#### Sign-in and owner URL handling
+
+Shared Microsoft/Auth0 sign-in shows a retry link for invalid OAuth state (400)
+or denied access (403). State validation stays enabled; unexpected errors remain
+reportable. Repository Standards team and business unit URLs require owner IDs
+between 1 and 2,147,483,647; invalid IDs return 404 before a database lookup.
+
 ### 📂 Folder Structure
 
 ```

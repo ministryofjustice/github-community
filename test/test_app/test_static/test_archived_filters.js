@@ -99,6 +99,8 @@ function fixture() {
   );
   const table = element("table");
   table.tBodies = [{ rows }];
+  const sortLink = element("a", { "data-sort": "archived", "data-direction": "asc" });
+  table.querySelectorAll = (selector) => selector === "a[data-sort]" ? [sortLink] : [];
   const pagination = element("div", { "data-page": "1" });
   const tableRegion = element("div");
   const showing = element("p");
@@ -172,9 +174,22 @@ function fixture() {
   }
 
   return {
-    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, tableRegion
+    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, sortLink, tableRegion
   };
 }
+
+test("sort links retain live filters even during the search debounce", () => {
+  const page = fixture();
+  page.name.value = "new search";
+  page.onlyPublic.checked = false;
+  page.name.listeners.input();
+  const url = new URL(page.sortLink.href, "http://example.test");
+  assert.equal(url.searchParams.get("q"), "new search");
+  assert.equal(url.searchParams.get("only_public"), "0");
+  assert.equal(url.searchParams.get("sort"), "archived");
+  assert.equal(url.searchParams.get("dir"), "asc");
+  assert.equal(url.searchParams.has("page"), false);
+});
 
 test("an ordinary pagination click updates the page and keeps the filters", () => {
   const page = fixture();

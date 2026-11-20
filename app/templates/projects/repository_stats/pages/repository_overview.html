@@ -36,6 +36,8 @@
     ]
   }) }}
 
+  {% include "projects/repository_stats/components/report_nav.html" %}
+
   <div class="govuk-!-margin-bottom-6">
     <h1 class="govuk-heading-xl govuk-!-margin-bottom-4">Repository overview</h1>
     <p class="govuk-body">View repository totals by organisation, business unit and team.</p>
@@ -45,7 +47,6 @@
   {% if not overview.organisations %}
     <p class="govuk-body">There is no repository data yet.</p>
   {% else %}
-    <p class="govuk-body-s">Select an organisation to see its business units, then select a business unit to see its teams.</p>
     <div class="app-table-scroll app-table-scroll--overview" role="region" aria-label="Repository overview table" tabindex="0">
       <table class="govuk-table app-overview-table" id="repository-overview">
         <caption class="govuk-table__caption govuk-visually-hidden">Repository totals by organisation, business unit and team</caption>

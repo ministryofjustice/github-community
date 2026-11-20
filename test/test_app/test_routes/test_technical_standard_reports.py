@@ -191,8 +191,8 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         )
         self.owner_service = SimpleNamespace(
             find_by_id=lambda owner_id: {
-                "1": self.business_unit,
-                "2": self.team,
+                1: self.business_unit,
+                2: self.team,
             }.get(owner_id)
         )
         self.patches = [
@@ -597,3 +597,22 @@ class TestTechnicalStandardReportRoutes(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 404)
+
+    def test_invalid_owner_ids_do_not_reach_the_owner_lookup(self):
+        with patch.object(self.owner_service, "find_by_id") as lookup:
+            for owner_type in ("teams", "business-units"):
+                for owner_id in (
+                    "not-an-id",
+                    "12.5",
+                    "-1",
+                    "0",
+                    "2147483648",
+                    "9" * 40,
+                    "9" * 5000,
+                ):
+                    with self.subTest(owner_type=owner_type, owner_id=owner_id):
+                        response = self.client.get(
+                            f"/repository-standards/technical-standard/{owner_type}/{owner_id}"
+                        )
+                        self.assertEqual(response.status_code, 404)
+            lookup.assert_not_called()

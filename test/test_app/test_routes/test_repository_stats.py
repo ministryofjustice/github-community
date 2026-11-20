@@ -12,6 +12,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import requests
+from authlib.integrations.base_client.errors import OAuthError
 from flask import Flask
 
 from app.projects.flow_metrics.routes.main import flow_metrics_main
@@ -337,6 +338,8 @@ SIGN_IN = "app.projects.repository_stats.services.github_sign_in"
 GITHUB_LOGIN_URL = "/repository-stats/github/login"
 CALLBACK_URL = "/repository-stats/github/callback"
 SWITCH_URL = "/repository-stats/github/switch"
+PUBLIC_HOST = "github-community.service.justice.gov.uk"
+ALIAS_HOST = "github-community.cloud-platform.service.justice.gov.uk"
 NO_ACCESS_HEADING = (
     '<h1 class="govuk-heading-l">You don\'t have access to Repository Stats yet</h1>'
 )
@@ -534,6 +537,89 @@ class TestStatsAccess(StatsAccessTestCase):
                     query["redirect_uri"],
                     [f"https://{host}/repository-stats/github/callback"],
                 )
+
+    def with_public_host_aliases(self):
+        patcher = patch(
+            "app.projects.repository_stats.routes.main.app_config",
+            SimpleNamespace(
+                public_base_url=f"https://{PUBLIC_HOST}",
+                public_host_aliases=frozenset({ALIAS_HOST}),
+            ),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_alias_host_goes_to_public_host_before_any_sign_in(self):
+        self.with_public_host_aliases()
+        self.sign_in_on_host(f"https://{ALIAS_HOST}")
+        for url in (
+            "/repository-stats/",
+            f"{OVERVIEW_URL}?open=ministryofjustice",
+            f"{GITHUB_LOGIN_URL}?next=%2Frepository-stats%2Foverview",
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url, base_url=f"http://{ALIAS_HOST}")
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response.location, f"https://{PUBLIC_HOST}{url}")
+        with self.client.session_transaction(
+            base_url=f"https://{ALIAS_HOST}"
+        ) as flask_session:
+            self.assertNotIn("stats_github_oauth_state", flask_session)
+            self.assertNotIn("post_auth_redirect_path", flask_session)
+
+    def test_alias_journey_finishes_on_public_host(self):
+        self.with_public_host_aliases()
+        response = self.client.get(OVERVIEW_URL, base_url=f"https://{ALIAS_HOST}")
+        public = f"https://{PUBLIC_HOST}"
+        self.assertEqual(response.location, f"{public}{OVERVIEW_URL}")
+        # Not signed in on the public host yet: Microsoft sign-in, remembering the page.
+        response = self.client.get(OVERVIEW_URL, base_url=public)
+        self.assertEqual(response.location, "/auth/login")
+        self.sign_in_on_host(public)
+        to_github = self.client.get(
+            self.client.get(OVERVIEW_URL, base_url=public).location, base_url=public
+        )
+        query = parse_qs(urlsplit(to_github.location).query)
+        self.assertEqual(
+            query["redirect_uri"],
+            [f"{public}/repository-stats/github/callback"],
+        )
+        token = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"access_token": "gho_x"}
+        )
+        user = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"login": "octocat"}
+        )
+        with (
+            patch(f"{SIGN_IN}.requests.post", return_value=token) as post,
+            patch(f"{SIGN_IN}.requests.get", return_value=user),
+            patch(MEMBERSHIP, return_value=True),
+        ):
+            response = self.client.get(
+                f"{CALLBACK_URL}?{urlencode({'code': 'abc', 'state': query['state'][0]})}",
+                base_url=public,
+            )
+        self.assertEqual(response.location, OVERVIEW_URL)
+        self.assertEqual(
+            post.call_args.kwargs["data"]["redirect_uri"],
+            f"{public}/repository-stats/github/callback",
+        )
+
+    def test_public_and_other_hosts_are_not_redirected(self):
+        self.with_public_host_aliases()
+        for base_url in (
+            f"https://{PUBLIC_HOST}",
+            "https://github-community-dev.cloud-platform.service.justice.gov.uk",
+            "http://localhost",
+        ):
+            with self.subTest(base_url=base_url):
+                self.sign_in_on_host(base_url)
+                response = self.client.get(GITHUB_LOGIN_URL, base_url=base_url)
+                self.assertEqual(urlsplit(response.location).netloc, "github.com")
+        # Only GET/HEAD are redirected; a form post on the alias is handled as before.
+        self.sign_in_on_host(f"https://{ALIAS_HOST}")
+        response = self.client.post(SWITCH_URL, base_url=f"https://{ALIAS_HOST}")
+        self.assertEqual(response.location, GITHUB_LOGIN_URL)
 
     def test_github_login_not_configured(self):
         with patch(
@@ -811,13 +897,17 @@ class TestStatsAccess(StatsAccessTestCase):
         with patch(MEMBERSHIP) as membership:
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_hourly_recheck_keeps_a_member_in(self):
         self.sign_in_to_github(checked_at=time.time() - 3601)
         with patch(MEMBERSHIP, return_value=True) as membership:
-            self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+            self.assertEqual(
+                self.client.get(ROUTES[0], follow_redirects=True).status_code, 200
+            )
             self.assertEqual(self.client.get(ROUTES[1]).status_code, 200)
         membership.assert_called_once()
         self.assertGreater(
@@ -841,7 +931,9 @@ class TestStatsAccess(StatsAccessTestCase):
                 with self.client.session_transaction() as flask_session:
                     flask_session["user"] = microsoft_user()
                 self.sign_in_to_github()
-                self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+                self.assertEqual(
+                    self.client.get(ROUTES[0], follow_redirects=True).status_code, 200
+                )
         self.assertEqual(membership.call_count, 2)
 
     def test_github_login_for_another_microsoft_user_is_not_used(self):
@@ -888,7 +980,9 @@ class TestStatsAccess(StatsAccessTestCase):
         ):
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_auth_disabled_allows_everyone_without_calling_github(self):
@@ -900,7 +994,9 @@ class TestStatsAccess(StatsAccessTestCase):
         ):
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_homepage_card_still_shown(self):
@@ -949,46 +1045,139 @@ class TestSharedAuthRoutes(unittest.TestCase):
             self.assertNotIn(SESSION_KEY, flask_session)
             self.assertEqual(flask_session[GITHUB_SESSION_KEY]["login"], "octocat")
 
+    def start_auth0_sign_in(self):
+        with self.client.application.app_context():
+            remote = self.auth.auth0_service.oauth.auth0
+        with patch.object(
+            remote,
+            "load_server_metadata",
+            return_value={
+                "authorization_endpoint": "https://identity.example/authorize"
+            },
+        ):
+            response = self.client.get("/auth/login")
+        self.assertEqual(response.status_code, 302)
+        state = parse_qs(urlsplit(response.location).query)["state"][0]
+        return remote, state
+
+    def test_invalid_state_never_exchanges_a_code_or_signs_in(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
+        remote, state = self.start_auth0_sign_in()
+        with patch.object(remote, "fetch_access_token") as exchange:
+            for method in ("GET", "POST"):
+                for query in (
+                    {"code": "stub-code"},
+                    {"code": "stub-code", "state": f"{state}-wrong"},
+                ):
+                    with self.subTest(method=method, query=query):
+                        kwargs = {"query_string" if method == "GET" else "data": query}
+                        response = self.client.open(
+                            "/auth/callback", method=method, **kwargs
+                        )
+                        self.assertEqual(response.status_code, 400)
+                        self.assertIsNone(response.location)
+                        self.assertIn(
+                            'href="/auth/login"', response.get_data(as_text=True)
+                        )
+            exchange.assert_not_called()
+        with self.client.session_transaction() as flask_session:
+            self.assertNotIn("user", flask_session)
+
+    def test_valid_state_succeeds_once_and_replay_cannot_replace_the_user(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.pop("user")
+            flask_session["post_auth_redirect_path"] = "/flow-metrics/"
+        remote, state = self.start_auth0_sign_in()
+        token = microsoft_user()
+        with patch.object(remote, "fetch_access_token", return_value=token) as exchange:
+            response = self.client.get(
+                "/auth/callback", query_string={"code": "stub-code", "state": state}
+            )
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.location, "/flow-metrics/")
+            with self.client.session_transaction() as flask_session:
+                self.assertEqual(flask_session["user"], token)
+                self.assertNotIn(SESSION_KEY, flask_session)
+                self.assertNotIn("post_auth_redirect_path", flask_session)
+                signed_in_session = dict(flask_session)
+            response = self.client.get(
+                "/auth/callback", query_string={"code": "stub-code", "state": state}
+            )
+            self.assertEqual(response.status_code, 400)
+            exchange.assert_called_once()
+        with self.client.session_transaction() as flask_session:
+            self.assertEqual(dict(flask_session), signed_in_session)
+
+    def test_access_denied_is_not_a_server_error_or_a_new_sign_in(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
+            flask_session["post_auth_redirect_path"] = "/repository-stats/"
+        with self.assertLogs(self.auth.logger, level="INFO") as logs:
+            response = self.client.get(
+                "/auth/callback",
+                query_string={
+                    "error": "access_denied",
+                    "error_description": "provider-private-detail",
+                },
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(response.location)
+        body = response.get_data(as_text=True)
+        self.assertIn('href="/auth/login"', body)
+        self.assertNotIn("provider-private-detail", body)
+        self.assertNotIn("provider-private-detail", "\n".join(logs.output))
+        with self.client.session_transaction() as flask_session:
+            self.assertNotIn("user", flask_session)
+            self.assertEqual(
+                flask_session["post_auth_redirect_path"], "/repository-stats/"
+            )
+
+    def test_unexpected_failures_remain_observable_and_leave_session_unchanged(self):
+        self.client.application.testing = True
+        with self.client.session_transaction() as flask_session:
+            original_session = dict(flask_session)
+        for error in (
+            OAuthError(error="server_error"),
+            RuntimeError("Token exchange failed"),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(
+                    self.auth.auth0_service, "get_access_token", side_effect=error
+                ),
+                self.assertRaises(type(error)),
+            ):
+                self.client.get("/auth/callback")
+            with self.client.session_transaction() as flask_session:
+                self.assertEqual(dict(flask_session), original_session)
+
 
 class TestLandingPages(RepositoryStatsTestCase):
     def test_project_home(self):
-        response, body = self.get("/repository-stats/")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('<h1 class="govuk-heading-xl">GitHub Repository Stats</h1>', body)
+        response = self.client.get("/repository-stats/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, CHANGES_URL)
         self.assertIn(
-            '<p class="govuk-body-l">View estate-wide statistics and reports across GitHub Enterprise organisations.</p>',
-            body,
+            "Repository visibility changes",
+            self.client.get(response.location).get_data(as_text=True),
         )
-        reports = re.findall(
-            r'<a class="govuk-link" href="([^"]+)">([^<]+)</a>\s*</h3>\s*<p class="govuk-body-s">([^<]+)</p>',
-            body,
-        )
-        self.assertEqual(
-            reports,
-            [
-                (
-                    OVERVIEW_URL,
-                    "Repository overview",
-                    "View repository totals by organisation, business unit and team.",
-                ),
-                (
-                    CHANGES_URL,
-                    "Repository visibility changes",
-                    "Track visibility changes, new repositories and deleted repositories over time.",
-                ),
-                (
-                    ARCHIVED_URL,
-                    "Archived repositories",
-                    "Find archived public repositories and track progress towards making them internal.",
-                ),
-            ],
-        )
-        self.assertEqual(
-            body.count('<h3 class="govuk-heading-s govuk-!-margin-bottom-1">'), 3
-        )
-        self.assertEqual(body.count('<p class="govuk-body-s">'), 3)
-        self.assertNotIn("govuk-tabs", body)
-        self.assertIn("govuk-breadcrumbs", body)
+
+    def test_report_navigation_precedes_heading(self):
+        for url in (OVERVIEW_URL, CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(url=url):
+                _, body = self.get(url)
+                nav = body.split('<nav class="app-report-nav"', 1)[1].split(
+                    "</nav>", 1
+                )[0]
+                self.assertEqual(
+                    re.findall(r'href="([^"]+)"', nav),
+                    [OVERVIEW_URL, CHANGES_URL, ARCHIVED_URL],
+                )
+                self.assertIn(f'href="{url}" aria-current="page"', nav)
+                self.assertLess(
+                    body.index('<nav class="app-report-nav"'), body.index("<h1")
+                )
 
     def test_community_home_has_four_project_cards(self):
         with patch.dict(os.environ, {"FLOW_METRICS_ENABLED": "true"}):
@@ -1022,6 +1211,7 @@ class TestLandingPages(RepositoryStatsTestCase):
             "Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice.",
             body,
         )
+
     def test_community_home_has_three_project_cards_when_flow_metrics_unset(self):
         with patch.dict(os.environ):
             os.environ.pop("FLOW_METRICS_ENABLED", None)
@@ -1072,10 +1262,8 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn(estate_line(33, 2, 31, 0), body)
         for label in ("Visibility changes", "New repositories", "Deleted repositories"):
             self.assertIn(f'<dt class="app-visibility-stats__label">{label}</dt>', body)
-        self.assertIn(
-            '<caption class="govuk-table__caption govuk-visually-hidden">Changes by transition</caption>',
-            body,
-        )
+        self.assertIn("Visibility changes by transition", body)
+        self.assertEqual(body.count('class="app-transition-row"'), 6)
         self.assertIn("All activity (33)", body)
         self.assertIn("Showing 1 to 25 of 33", body)
         self.assertEqual(len(self.activity_rows(body)), 25)
@@ -1128,6 +1316,35 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             f'<a class="govuk-link" id="clear-filters" href="{CHANGES_URL}">Clear filters</a>',
             filters,
         )
+
+    def test_date_disclosure_preserves_filters_and_opens_for_dates_and_errors(self):
+        _, body = self.get(CHANGES_URL)
+        self.assertIn('<details class="app-visibility-date-control">', body)
+        _, body = self.get(
+            f"{CHANGES_URL}?org=all&q=asset&from=2026-08-10&to=2026-09-10"
+        )
+        self.assertIn('<details class="app-visibility-date-control" open>', body)
+        link = re.search(r'id="clear-dates" href="([^"]+)"', body).group(1)
+        self.assertEqual(
+            parse_qs(urlsplit(link.replace("&amp;", "&")).query),
+            {"org": ["all"], "q": ["asset"]},
+        )
+        _, body = self.get(f"{CHANGES_URL}?from=invalid")
+        self.assertIn('<details class="app-visibility-date-control" open>', body)
+
+    def test_transition_bars_follow_counts_and_handle_zero(self):
+        _, body = self.get(CHANGES_URL)
+        widths = re.findall(
+            r'class="app-transition-bar" style="width: ([0-9.]+)%"', body
+        )
+        self.assertEqual(len(widths), 6)
+        self.assertEqual(max(map(float, widths)), 100)
+        self.assertIn(0, list(map(float, widths)))
+        _, body = self.get(f"{CHANGES_URL}?q=no-such-repository")
+        widths = re.findall(
+            r'class="app-transition-bar" style="width: ([0-9.]+)%"', body
+        )
+        self.assertEqual(list(map(float, widths)), [0] * 6)
 
     def test_organisations_from_the_data(self):
         _, body = self.get(CHANGES_URL)
@@ -2415,7 +2632,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertIn('id="archived-announcement-content"', body)
         self.assertIn("javascript/announcement-toggle.js", body)
         self.assertNotIn(" Slack channel", body)
-        self.assertIn('<details class="govuk-details">', body)
+        self.assertIn('<details class="govuk-details app-visibility-guide">', body)
         self.assertNotIn('<details class="govuk-details" open', body)
         self.assertIn("How to change a repository&#39;s visibility", body)
         self.assertIn("<strong>Unarchive this repository</strong>", body)
@@ -2444,17 +2661,16 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                     for text in (
                         LAST_UPDATED_LINE,
                         "govuk-notification-banner",
-                        '<h2 class="govuk-heading-m">Find repositories</h2>',
+                        '<h2 class="govuk-visually-hidden">Find repositories</h2>',
                         "Only show repositories that are still public",
                         "Apply filters",
                         PROGRESS_HEADING,
-                        PROGRESS_NOTE,
-                        '<details class="govuk-details">',
-                        "first seen archived",
+                        '<details class="govuk-details app-visibility-guide">',
+                        'class="app-archived-date-hint">first seen<br>archived',
                     )
                 ]
                 self.assertEqual(order, sorted(order))
-                self.assertEqual(body.count(PROGRESS_NOTE), 1)
+                self.assertNotIn(PROGRESS_NOTE, body)
 
     def test_is_a_standalone_page_without_dates(self):
         _, body = self.get(
@@ -2465,7 +2681,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertNotIn('name="to"', body)
         self.assertNotIn('name="tab"', body)
         self.assertNotIn('name="activity"', body)
-        self.assertNotIn('name="sort"', body)
+        self.assertIn('name="sort" value="repository"', body)
         self.assertNotIn(
             "2026-",
             body.split("<main", 1)[1]
@@ -2697,7 +2913,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.repository.find_first_archived_dates = dict
         _, body = self.get(ARCHIVED_URL)
         self.assertIn("There are no archived public repositories.", body)
-        self.assertIn(PROGRESS_NOTE, body)
+        self.assertNotIn(PROGRESS_NOTE, body)
 
     def test_show_all_archived(self):
         _, body = self.get(f"{ARCHIVED_URL}?only_public=0")
@@ -2708,30 +2924,51 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             table.index("asset-alpha"), table.index("sample-archived-moved")
         )
 
-    def test_table_unchanged(self):
+    def test_table_has_sortable_headings(self):
         _, body = self.get(f"{ARCHIVED_URL}?only_public=0")
         head = body.split('<thead class="govuk-table__head">', 1)[1].split(
             "</thead>", 1
         )[0]
-        headers = re.findall(
-            r'<th scope="col" class="govuk-table__header">(.*?)</th>', head
-        )
+        headers = re.findall(r'data-sort="([^"]+)"', head)
         self.assertEqual(
-            [re.sub(r"<[^>]+>.*", "", h).strip() for h in headers],
+            headers,
             [
-                "Repository",
-                "Organisation",
-                "Business unit",
-                "Archived",
-                "Last pushed",
-                "Visibility",
+                "repository",
+                "organisation",
+                "business_unit",
+                "archived",
+                "pushed",
+                "visibility",
             ],
         )
         self.assertIn(
-            'Archived <span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">first seen archived</span>',
+            '<span class="app-archived-date-hint">first seen<br>archived</span>',
             head,
         )
         self.assertIn('Repositories (<span id="archived-count">2</span>)', body)
+
+    def test_archived_sort_links_order_rows_and_keep_filters(self):
+        _, body = self.get(
+            f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=desc&q=sample"
+        )
+        self.assertEqual(self.visible_archived(body), ["sample-archived-moved"])
+        self.assertIn('aria-sort="descending"', body)
+        link = re.search(
+            r'data-sort="repository" data-direction="asc" href="([^"]+)"', body
+        ).group(1)
+        params = parse_qs(urlsplit(link.replace("&amp;", "&")).query)
+        self.assertEqual(params["q"], ["sample"])
+        self.assertEqual(params["only_public"], ["0"])
+        self.assertEqual(params["sort"], ["repository"])
+        self.assertEqual(params["dir"], ["asc"])
+        _, body = self.get(f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=desc")
+        self.assertEqual(
+            self.visible_archived(body), ["sample-archived-moved", "asset-alpha"]
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=asc")
+        self.assertEqual(
+            self.visible_archived(body), ["asset-alpha", "sample-archived-moved"]
+        )
 
     def test_rows_carry_filter_data(self):
         _, body = self.get(ARCHIVED_URL)
@@ -2862,9 +3099,10 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             '<p class="govuk-body-s">Select an organisation to see its business units, '
             "then select a business unit to see its teams.</p>"
         )
-        self.assertIn(hint, body)
-        self.assertLess(body.index(LAST_UPDATED_LINE), body.index(hint))
-        self.assertLess(body.index(hint), body.index('id="repository-overview"'))
+        self.assertNotIn(hint, body)
+        self.assertLess(
+            body.index(LAST_UPDATED_LINE), body.index('id="repository-overview"')
+        )
 
     def test_notes_under_table_removed(self):
         _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/HMPPS")
