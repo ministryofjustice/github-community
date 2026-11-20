@@ -426,7 +426,7 @@ def parse_visibility_query(
 def parse_archived_query(
     args: Mapping[str, str], only_public_values: Sequence[str] = ()
 ) -> VisibilityQuery:
-    """Parse archived filters and sorting; date ranges and activity do not apply."""
+    """Parse archived filters and sorting, excluding dates and activity."""
     query = parse_visibility_query(args, only_public_values)
     sort = args.get("sort", "")
     if sort not in ARCHIVED_SORT_KEYS:
@@ -853,7 +853,7 @@ def sort_archived(
     direction: str = "desc",
     organisation_names: Mapping[str, str] | None = None,
 ) -> list[ArchivedRepository]:
-    """Keep the original order by default; unknown dates sort last in either direction."""
+    """Preserve default ordering; unknown dates always sort last."""
     ordered = sorted(
         repositories,
         key=lambda r: (

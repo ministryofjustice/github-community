@@ -45,13 +45,8 @@ Configure organisations per environment with `REPOSITORY_STATS_ORGS`, a comma-se
 list of `organisation:installation_id` entries. The GitHub App needs appropriate access
 to each organisation.
 
-## GitHub sign-in hostname
+## Sign-in configuration
 
-GitHub sign-in builds its callback (`/repository-stats/github/callback`) from the
-request hostname, and GitHub only accepts the hostname registered on the OAuth App.
-In production, `GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES` (comma-separated, set in
-`helm/github-community/values-prod.yaml`) lists other ingress hostnames; Repository
-Stats requests on these are redirected to `GITHUB_COMMUNITY_PUBLIC_URL` (default
-`https://github-community.service.justice.gov.uk`) before any sign-in starts, so
-sessions and the callback stay on one hostname. Development and local runs leave it
-unset.
+Optional: set `GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES` to comma-separated hostnames.
+Repository Stats GET/HEAD requests on these hosts redirect to
+`GITHUB_COMMUNITY_PUBLIC_URL`. Leave unset locally.

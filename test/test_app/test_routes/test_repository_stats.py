@@ -572,7 +572,7 @@ class TestStatsAccess(StatsAccessTestCase):
         response = self.client.get(OVERVIEW_URL, base_url=f"https://{ALIAS_HOST}")
         public = f"https://{PUBLIC_HOST}"
         self.assertEqual(response.location, f"{public}{OVERVIEW_URL}")
-        # Not signed in on the public host yet: Microsoft sign-in, remembering the page.
+        # Sign in on the public host, preserving the destination.
         response = self.client.get(OVERVIEW_URL, base_url=public)
         self.assertEqual(response.location, "/auth/login")
         self.sign_in_on_host(public)
@@ -616,7 +616,7 @@ class TestStatsAccess(StatsAccessTestCase):
                 self.sign_in_on_host(base_url)
                 response = self.client.get(GITHUB_LOGIN_URL, base_url=base_url)
                 self.assertEqual(urlsplit(response.location).netloc, "github.com")
-        # Only GET/HEAD are redirected; a form post on the alias is handled as before.
+        # POST requests stay on the alias.
         self.sign_in_on_host(f"https://{ALIAS_HOST}")
         response = self.client.post(SWITCH_URL, base_url=f"https://{ALIAS_HOST}")
         self.assertEqual(response.location, GITHUB_LOGIN_URL)

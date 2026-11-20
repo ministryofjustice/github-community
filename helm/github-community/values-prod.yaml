@@ -18,8 +18,6 @@ app:
       PHASE_BANNER_TEXT: "ALPHA"
       AUTH_ENABLED: true
       GITHUB_STATS_ACCESS_TEAM: "ministryofjustice/repository-stats-viewers"
-      # Repository Stats sends these ingress hosts to github-community.service.justice.gov.uk
-      # so GitHub sign-in uses the one registered callback hostname.
       GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES: "github-community.cloud-platform.service.justice.gov.uk,operations-engineering-reports.cloud-platform.service.justice.gov.uk,operations-engineering-reports-prod.cloud-platform.service.justice.gov.uk"
 
   jobs:

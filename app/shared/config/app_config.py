@@ -48,8 +48,6 @@ app_config = SimpleNamespace(
         __get_env_var("GITHUB_COMMUNITY_PUBLIC_URL")
         or "https://github-community.service.justice.gov.uk"
     ).rstrip("/"),
-    # Other hostnames for this deployment (comma separated) that should send people
-    # to public_base_url, e.g. the Cloud Platform ingress hostname.
     public_host_aliases=frozenset(
         host.strip().lower()
         for host in (__get_env_var("GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES") or "").split(

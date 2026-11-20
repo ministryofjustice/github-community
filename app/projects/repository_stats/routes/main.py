@@ -230,12 +230,7 @@ def render_github_problem(problem: str, status: int, retry_href: str | None = No
 
 @repository_stats_main.before_request
 def use_public_host():
-    """Send requests on an alias hostname to the public URL before any sign-in starts.
-
-    The GitHub callback is built from the request host and the session cookie is per
-    host, so doing this first keeps the Microsoft sign-in, GitHub state and callback
-    on the one hostname registered with GitHub.
-    """
+    """Normalize configured aliases before sign-in."""
     if request.method not in ("GET", "HEAD"):
         return None
     host = (request.host or "").split(":", 1)[0].lower()
@@ -247,9 +242,7 @@ def use_public_host():
 
 
 def github_callback_url() -> str:
-    # Built from the request host so dev and the public production hostname work
-    # (production aliases are sent to the public hostname first; see above). Always
-    # https, like the Auth0 callback: TLS ends at the ingress in front of the app.
+    # HTTPS is required even when TLS terminates upstream.
     return url_for(
         "repository_stats_main.github_callback", _external=True, _scheme="https"
     )
