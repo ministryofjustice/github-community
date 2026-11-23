@@ -18,6 +18,10 @@ const visibilityScript = fs.readFileSync(
   ),
   "utf8"
 );
+const announcementScript = fs.readFileSync(
+  path.join(__dirname, "../../../app/static/projects/repository_stats/javascript/announcement-toggle.js"),
+  "utf8"
+);
 
 function element(tagName, attributes = {}) {
   const node = {
@@ -322,4 +326,42 @@ test("visibility calendar enhancement requires the native picker API", () => {
     button.listeners.click?.();
     assert.equal(opened, supported);
   }
+});
+
+test("announcement starts collapsed and toggles accessibly", () => {
+  const classes = new Set();
+  const html = { classList: {
+    add: (value) => classes.add(value),
+    remove: (value) => classes.delete(value)
+  } };
+  const header = element("div");
+  const banner = element("div");
+  banner.classList.toggle = () => {};
+  banner.querySelector = () => header;
+  const content = element("div");
+  content.id = "archived-announcement-content";
+  let ready;
+  const document = {
+    readyState: "loading",
+    documentElement: html,
+    addEventListener(_type, callback) { ready = callback; },
+    getElementById: (id) => id === "archived-announcement" ? banner : content,
+    createElement: (tag) => element(tag)
+  };
+  vm.runInNewContext(announcementScript, { document });
+  assert.equal(classes.has("app-announcement-pending"), true);
+  ready();
+  assert.equal(classes.has("app-announcement-pending"), false);
+  const button = header.children[0];
+  assert.equal(content.hidden, true);
+  assert.equal(button.getAttribute("aria-controls"), content.id);
+  assert.equal(button.getAttribute("aria-expanded"), "false");
+  assert.equal(button.children[0].textContent, "Show");
+  button.listeners.click();
+  assert.equal(content.hidden, false);
+  assert.equal(button.getAttribute("aria-expanded"), "true");
+  assert.equal(button.children[0].textContent, "Hide");
+  button.listeners.click();
+  assert.equal(content.hidden, true);
+  assert.equal(button.getAttribute("aria-expanded"), "false");
 });

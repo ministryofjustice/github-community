@@ -221,6 +221,10 @@
 }
 
 /* Archived page announcement: Hide/Show sits at the right of the "Important" title. */
+.app-announcement-pending #archived-announcement-content {
+  display: none;
+}
+
 .app-announcement__header {
   display: flex;
   align-items: center;

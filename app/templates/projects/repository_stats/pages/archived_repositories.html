@@ -36,6 +36,7 @@
 {% block head %}
   {{ super() }}
   <link rel="stylesheet" href="{{ url_for('static', filename='projects/repository_stats/stylesheets/visibility.css') }}">
+  <script src="{{ url_for('static', filename='projects/repository_stats/javascript/announcement-toggle.js') }}"></script>
 {% endblock %}
 
 {% block pageTitle %}
@@ -218,5 +219,4 @@
   </div>
 
   <script src="{{ url_for('static', filename='projects/repository_stats/javascript/archived-filters.js') }}"></script>
-  <script src="{{ url_for('static', filename='projects/repository_stats/javascript/announcement-toggle.js') }}"></script>
 {% endblock %}

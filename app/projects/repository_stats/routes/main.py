@@ -94,7 +94,7 @@ def get_visibility_service() -> VisibilityService:
 @requires_auth
 @requires_stats_access
 def index():
-    return redirect(url_for("repository_stats_main.visibility_changes"))
+    return redirect(url_for("repository_stats_main.repository_overview"))
 
 
 @repository_stats_main.route("/overview", methods=["GET"])

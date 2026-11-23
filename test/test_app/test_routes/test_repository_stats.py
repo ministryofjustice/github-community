@@ -1167,11 +1167,13 @@ class TestLandingPages(RepositoryStatsTestCase):
     def test_project_home(self):
         response = self.client.get("/repository-stats/")
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.location, CHANGES_URL)
+        self.assertEqual(response.location, OVERVIEW_URL)
         self.assertIn(
-            "Repository visibility changes",
+            "Repository overview",
             self.client.get(response.location).get_data(as_text=True),
         )
+        response = self.client.get("/repository-stats/", follow_redirects=True)
+        self.assertEqual(response.request.path, OVERVIEW_URL)
 
     def test_report_navigation_precedes_heading(self):
         for url in (OVERVIEW_URL, CHANGES_URL, ARCHIVED_URL):
@@ -2641,8 +2643,14 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             'C0AJBK3P5A8" target="_blank" rel="noopener noreferrer">#ask-developer-experience<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.',
             body,
         )
-        self.assertIn('id="archived-announcement-content"', body)
-        self.assertIn("javascript/announcement-toggle.js", body)
+        self.assertIn(
+            '<div class="govuk-notification-banner__content" id="archived-announcement-content">',
+            body,
+        )
+        self.assertLess(
+            body.index("javascript/announcement-toggle.js"),
+            body.index('id="archived-announcement-content"'),
+        )
         self.assertNotIn(" Slack channel", body)
         self.assertIn('<details class="govuk-details app-visibility-guide">', body)
         self.assertNotIn('<details class="govuk-details" open', body)
