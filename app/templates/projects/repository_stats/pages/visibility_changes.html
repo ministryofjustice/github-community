@@ -156,7 +156,8 @@
     <details class="app-visibility-date-control"{% if query.from_value or query.to_value or errors %} open{% endif %}>
       <summary>Choose dates</summary>
     <form method="get" action="{{ visibility_url }}" id="visibility-date-filters" novalidate>
-    {{ hidden_inputs(["from", "to", "page"]) }}
+    {{ hidden_inputs(["from", "to", "q", "page"]) }}
+    <input type="hidden" name="q" value="{{ query.filters.q }}">
     <div class="app-visibility-filter-row">
       <div class="app-visibility-dates" id="visibility-dates">
       {% set date_limits = {} %}
@@ -174,6 +175,9 @@
     </details>
   </div>
 
+  <p class="govuk-body" id="visibility-search-error" role="alert" hidden>Search could not update. Press Enter to retry.</p>
+  <p class="govuk-visually-hidden" id="visibility-search-status" role="status"></p>
+  <div id="visibility-results">
   <div class="app-visibility-summary-head">
   {% set changes_heading = page.changes_heading %}
   {% if changes_heading %}
@@ -280,5 +284,6 @@
   {% else %}
     {{ govukInsetText({"text": "Enter a valid date range to see visibility changes."}) }}
   {% endif %}
+  </div>
   <script src="{{ url_for('static', filename='projects/repository_stats/javascript/visibility-filters.js') }}"></script>
 {% endblock %}

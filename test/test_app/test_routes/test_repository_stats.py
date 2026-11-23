@@ -1334,6 +1334,8 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             f"{CHANGES_URL}?org=all&q=asset&from=2026-08-10&to=2026-09-10"
         )
         self.assertIn('<details class="app-visibility-date-control" open>', body)
+        dates = body.split('id="visibility-date-filters"', 1)[1].split("</form>", 1)[0]
+        self.assertIn('<input type="hidden" name="q" value="asset">', dates)
         link = re.search(r'id="clear-dates" href="([^"]+)"', body).group(1)
         self.assertEqual(
             parse_qs(urlsplit(link.replace("&amp;", "&")).query),

@@ -303,6 +303,78 @@ test("visibility select changes submit their own form without applying dates", (
   assert.equal(forms[ids[2]].listeners.change, undefined);
 });
 
+test("visibility search updates results without applying draft dates and ignores stale responses", async () => {
+  const name = element("input");
+  name.value = "first";
+  const form = element("form");
+  form.action = "https://example.test/repository-stats/visibility";
+  form.querySelector = () => name;
+  const dateQuery = { value: "" };
+  const dateForm = { querySelector: () => dateQuery };
+  const clearDates = { href: "" };
+  const results = { innerHTML: "initial" };
+  const error = { hidden: true };
+  const status = { textContent: "" };
+  const nodes = {
+    "visibility-filters": form, "visibility-date-filters": dateForm,
+    "visibility-results": results, "visibility-search-error": error,
+    "visibility-search-status": status,
+    "clear-dates": clearDates
+  };
+  const requests = [];
+  let timer;
+  let historyUrl;
+  const document = {
+    getElementById: (id) => nodes[id],
+    querySelectorAll: () => []
+  };
+  const window = {
+    location: { href: form.action },
+    history: { replaceState(_state, _title, url) { historyUrl = url.toString(); } },
+    clearTimeout() {},
+    setTimeout(callback) { timer = callback; }
+  };
+  class FormData {
+    constructor() { return [["q", name.value], ["from", "2026-08-05"]]; }
+  }
+  class DOMParser {
+    parseFromString(html) {
+      return { getElementById: (id) => id === "visibility-results"
+        ? { innerHTML: html } : { href: "/clear?q=" + html } };
+    }
+  }
+  vm.runInNewContext(visibilityScript, {
+    document, window, URL, URLSearchParams, FormData, DOMParser, AbortController,
+    fetch(url, options) {
+      return new Promise((resolve, reject) => requests.push({ url, options, resolve, reject }));
+    }
+  });
+  name.listeners.input();
+  timer();
+  name.value = "second";
+  name.listeners.input();
+  assert.equal(requests[0].options.signal.aborted, true);
+  timer();
+  assert.equal(requests[1].url.searchParams.get("from"), "2026-08-05");
+  assert.equal(requests[1].url.searchParams.get("q"), "second");
+  requests[1].resolve({ ok: true, text: () => Promise.resolve("second") });
+  await new Promise(setImmediate);
+  requests[0].resolve({ ok: true, text: () => Promise.resolve("first") });
+  await new Promise(setImmediate);
+  assert.equal(results.innerHTML, "second");
+  assert.equal(dateQuery.value, "second");
+  assert.equal(clearDates.href, "/clear?q=second");
+  assert.equal(status.textContent, "Results updated");
+  assert.match(historyUrl, /q=second/);
+  name.value = "third";
+  name.listeners.input();
+  timer();
+  requests[2].reject(new Error("network"));
+  await new Promise(setImmediate);
+  assert.equal(error.hidden, false);
+  assert.equal(results.innerHTML, "second");
+});
+
 test("visibility calendar enhancement requires the native picker API", () => {
   for (const supported of [true, false]) {
     let opened = false;
