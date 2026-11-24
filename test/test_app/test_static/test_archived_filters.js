@@ -311,12 +311,19 @@ test("visibility search updates results without applying draft dates and ignores
   form.querySelector = () => name;
   const dateQuery = { value: "" };
   const dateForm = { querySelector: () => dateQuery };
-  const clearDates = { href: "" };
-  const results = { innerHTML: "initial" };
+  const activityQuery = { value: "" };
+  const activityForm = element("form");
+  activityForm.querySelector = () => activityQuery;
+  const clearDates = { href: "https://example.test/visibility?q=old" };
+  const sort = { href: "https://example.test/visibility?q=old&from=2026-08-05&sort=date#activity-table" };
+  const pagination = { href: "https://example.test/visibility?q=old&from=2026-08-05&page=2#activity-table" };
+  const csv = { href: "https://example.test/visibility/changes.csv?q=old&from=2026-08-05" };
+  const results = { innerHTML: "initial", querySelectorAll: () => [sort, pagination, csv] };
   const error = { hidden: true };
   const status = { textContent: "" };
   const nodes = {
     "visibility-filters": form, "visibility-date-filters": dateForm,
+    "visibility-activity-filters": activityForm,
     "visibility-results": results, "visibility-search-error": error,
     "visibility-search-status": status,
     "clear-dates": clearDates
@@ -350,10 +357,22 @@ test("visibility search updates results without applying draft dates and ignores
     }
   });
   name.listeners.input();
+  function assertQuery(expected) {
+    assert.equal(dateQuery.value, expected);
+    assert.equal(activityQuery.value, expected);
+    for (const link of [clearDates, sort, pagination, csv]) {
+      assert.equal(new URL(link.href).searchParams.get("q"), expected || null);
+    }
+    for (const link of [sort, pagination, csv]) {
+      assert.equal(new URL(link.href).searchParams.get("from"), "2026-08-05");
+    }
+  }
+  assertQuery("first");
   timer();
   name.value = "second";
   name.listeners.input();
   assert.equal(requests[0].options.signal.aborted, true);
+  assertQuery("second");
   timer();
   assert.equal(requests[1].url.searchParams.get("from"), "2026-08-05");
   assert.equal(requests[1].url.searchParams.get("q"), "second");
@@ -362,8 +381,7 @@ test("visibility search updates results without applying draft dates and ignores
   requests[0].resolve({ ok: true, text: () => Promise.resolve("first") });
   await new Promise(setImmediate);
   assert.equal(results.innerHTML, "second");
-  assert.equal(dateQuery.value, "second");
-  assert.equal(clearDates.href, "/clear?q=second");
+  assertQuery("second");
   assert.equal(status.textContent, "Results updated");
   assert.match(historyUrl, /q=second/);
   name.value = "third";
@@ -373,6 +391,10 @@ test("visibility search updates results without applying draft dates and ignores
   await new Promise(setImmediate);
   assert.equal(error.hidden, false);
   assert.equal(results.innerHTML, "second");
+  assertQuery("third");
+  name.value = "";
+  name.listeners.input();
+  assertQuery("");
 });
 
 test("visibility calendar enhancement requires the native picker API", () => {

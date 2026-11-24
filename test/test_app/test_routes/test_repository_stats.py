@@ -1325,6 +1325,10 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         for text in ("Apply filters", "Clear filters", "Show activity", "date-picker.js"):
             self.assertNotIn(text, body)
         self.assertIn('id="visibility-activity-filters"', body)
+        activity = body.split('id="visibility-activity-filters"', 1)[1].split(
+            "</form>", 1
+        )[0]
+        self.assertIn('<input type="hidden" name="q" value="">', activity)
         self.assertIn("javascript/visibility-filters.js", body)
 
     def test_date_disclosure_preserves_filters_and_opens_for_dates_and_errors(self):
@@ -1336,6 +1340,11 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn('<details class="app-visibility-date-control" open>', body)
         dates = body.split('id="visibility-date-filters"', 1)[1].split("</form>", 1)[0]
         self.assertIn('<input type="hidden" name="q" value="asset">', dates)
+        activity = body.split('id="visibility-activity-filters"', 1)[1].split(
+            "</form>", 1
+        )[0]
+        self.assertEqual(activity.count('name="q"'), 1)
+        self.assertIn('<input type="hidden" name="q" value="asset">', activity)
         link = re.search(r'id="clear-dates" href="([^"]+)"', body).group(1)
         self.assertEqual(
             parse_qs(urlsplit(link.replace("&amp;", "&")).query),

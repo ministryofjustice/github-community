@@ -22,12 +22,32 @@
     var timer;
     var pending;
     var version = 0;
+    function syncQuery() {
+      dateForm.querySelector('input[name="q"]').value = name.value;
+      var activityForm = document.getElementById("visibility-activity-filters");
+      if (activityForm) activityForm.querySelector('input[name="q"]').value = name.value;
+      var links = results.querySelectorAll(
+        ".app-visibility-sort, .govuk-pagination a, [data-visibility-query-link]"
+      );
+      Array.prototype.forEach.call(links, updateLink);
+      updateLink(clearDates);
+    }
+
+    function updateLink(link) {
+      var url = new URL(link.href, window.location.href);
+      if (name.value) url.searchParams.set("q", name.value);
+      else url.searchParams.delete("q");
+      link.href = url.toString();
+    }
+
+    syncQuery();
     name.addEventListener("input", function () {
       window.clearTimeout(timer);
       if (pending) pending.abort();
       var current = ++version;
       error.hidden = true;
       status.textContent = "";
+      syncQuery();
       timer = window.setTimeout(function () {
         var url = new URL(form.action, window.location.href);
         url.search = new URLSearchParams(new FormData(form)).toString();
@@ -44,11 +64,9 @@
           if (html === null || current !== version) return;
           var page = new DOMParser().parseFromString(html, "text/html");
           var updated = page.getElementById("visibility-results");
-          var updatedClear = page.getElementById("clear-dates");
-          if (!updated || !updatedClear) throw new Error("Search response is incomplete");
+          if (!updated) throw new Error("Search response is incomplete");
           results.innerHTML = updated.innerHTML;
-          dateForm.querySelector('input[name="q"]').value = name.value;
-          clearDates.href = updatedClear.href;
+          syncQuery();
           bindSelects(document.getElementById("visibility-activity-filters"));
           window.history.replaceState(window.history.state, "", url);
           status.textContent = "Results updated";

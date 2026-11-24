@@ -211,7 +211,8 @@
     {% set activity_page = changes.activity_page %}
     <h2 class="govuk-heading-m" id="activity-table">{{ changes.activity_label }} ({{ activity_page.total_items }})</h2>
     <form method="get" action="{{ visibility_url }}#activity-table" id="visibility-activity-filters" novalidate>
-      {{ hidden_inputs(["activity", "page"]) }}
+      {{ hidden_inputs(["activity", "q", "page"]) }}
+      <input type="hidden" name="q" value="{{ query.filters.q }}">
       {% set activity_items = [] %}
       {% for value, text in page.activity_options %}
         {% set _ = activity_items.append({"value": value, "text": text, "selected": value == query.activity}) %}
@@ -220,7 +221,7 @@
         {{ govukSelect({"id": "activity", "name": "activity", "label": {"text": "Activity type"}, "items": activity_items}) }}
         <noscript>{{ govukButton({"text": "Filter"}) }}</noscript>
         {% if activity_page.total_items %}
-          <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 app-visibility-controls__end" role="button" draggable="false" data-module="govuk-button" href="{{ csv_url }}{{ query.csv_query_string(query.from_value, query.to_value) }}">Download CSV</a>
+          <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 app-visibility-controls__end" role="button" draggable="false" data-module="govuk-button" data-visibility-query-link href="{{ csv_url }}{{ query.csv_query_string(query.from_value, query.to_value) }}">Download CSV</a>
         {% endif %}
       </div>
     </form>
