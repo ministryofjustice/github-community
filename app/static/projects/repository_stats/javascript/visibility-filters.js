@@ -3,6 +3,8 @@
 
   function bindSelects(form) {
     if (!form) return;
+    var activity = form.querySelector("#activity");
+    if (activity) activity.setAttribute("form", form.id);
     form.addEventListener("change", function (event) {
       if (event.target.matches("select")) form.requestSubmit();
     });
@@ -19,6 +21,14 @@
   var dateForm = document.getElementById("visibility-date-filters");
   var clearDates = document.getElementById("clear-dates");
   if (name && results && error && status && dateForm && clearDates) {
+    ["org", "business_unit", "q"].forEach(function (key) {
+      var field = document.getElementById(key);
+      var hidden = dateForm.querySelector('input[name="' + key + '"]');
+      field.setAttribute("form", form.id);
+      hidden.disabled = false;
+      hidden.value = field.value;
+    });
+    dateForm.querySelector('input[name="activity"]').disabled = false;
     var timer;
     var pending;
     var version = 0;
@@ -27,7 +37,7 @@
       var activityForm = document.getElementById("visibility-activity-filters");
       if (activityForm) activityForm.querySelector('input[name="q"]').value = name.value;
       var links = results.querySelectorAll(
-        ".app-visibility-sort, .govuk-pagination a, [data-visibility-query-link]"
+        ".app-visibility-sort, .govuk-pagination a"
       );
       Array.prototype.forEach.call(links, updateLink);
       updateLink(clearDates);

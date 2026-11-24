@@ -285,8 +285,12 @@ test("a click already prevented by another handler does not change the page", ()
 test("visibility select changes submit their own form without applying dates", () => {
   const submitted = [];
   const ids = ["visibility-filters", "visibility-activity-filters", "visibility-date-filters"];
+  const activity = element("select");
   const forms = Object.fromEntries(ids.map((id) => {
     const form = element("form");
+    form.id = id;
+    form.querySelector = (selector) =>
+      id === "visibility-activity-filters" && selector === "#activity" ? activity : null;
     form.requestSubmit = () => submitted.push(id);
     return [id, form];
   }));
@@ -300,6 +304,7 @@ test("visibility select changes submit their own form without applying dates", (
   forms[ids[0]].listeners.change(event("input"));
 
   assert.deepEqual(submitted, ids.slice(0, 2));
+  assert.equal(activity.getAttribute("form"), "visibility-activity-filters");
   assert.equal(forms[ids[2]].listeners.change, undefined);
 });
 
@@ -307,18 +312,35 @@ test("visibility search updates results without applying draft dates and ignores
   const name = element("input");
   name.value = "first";
   const form = element("form");
+  form.id = "visibility-filters";
   form.action = "https://example.test/repository-stats/visibility";
   form.querySelector = () => name;
-  const dateQuery = { value: "" };
-  const dateForm = { querySelector: () => dateQuery };
+  const org = element("select");
+  org.value = "ministryofjustice";
+  const businessUnit = element("select");
+  businessUnit.value = "Unit A";
+  const dateInputs = {
+    org: { value: "" }, business_unit: { value: "" },
+    q: { value: "" }, activity: { value: "all" }
+  };
+  const dateQuery = dateInputs.q;
+  const dateForm = { querySelector: (selector) => dateInputs[selector.match(/name="(.*)"/)[1]] };
   const activityQuery = { value: "" };
   const activityForm = element("form");
-  activityForm.querySelector = () => activityQuery;
+  activityForm.querySelector = (selector) => selector === "#activity" ? null : activityQuery;
   const clearDates = { href: "https://example.test/visibility?q=old" };
   const sort = { href: "https://example.test/visibility?q=old&from=2026-08-05&sort=date#activity-table" };
   const pagination = { href: "https://example.test/visibility?q=old&from=2026-08-05&page=2#activity-table" };
   const csv = { href: "https://example.test/visibility/changes.csv?q=old&from=2026-08-05" };
-  const results = { innerHTML: "initial", querySelectorAll: () => [sort, pagination, csv] };
+  const results = {
+    querySelectorAll: () => [sort, pagination],
+    set innerHTML(html) {
+      this.rendered = html;
+      csv.href = "https://example.test/visibility/changes.csv?q=" + html + "&from=2026-08-05";
+    },
+    get innerHTML() { return this.rendered; }
+  };
+  results.rendered = "initial";
   const error = { hidden: true };
   const status = { textContent: "" };
   const nodes = {
@@ -326,7 +348,7 @@ test("visibility search updates results without applying draft dates and ignores
     "visibility-activity-filters": activityForm,
     "visibility-results": results, "visibility-search-error": error,
     "visibility-search-status": status,
-    "clear-dates": clearDates
+    "clear-dates": clearDates, org, business_unit: businessUnit, q: name
   };
   const requests = [];
   let timer;
@@ -360,7 +382,7 @@ test("visibility search updates results without applying draft dates and ignores
   function assertQuery(expected) {
     assert.equal(dateQuery.value, expected);
     assert.equal(activityQuery.value, expected);
-    for (const link of [clearDates, sort, pagination, csv]) {
+    for (const link of [clearDates, sort, pagination]) {
       assert.equal(new URL(link.href).searchParams.get("q"), expected || null);
     }
     for (const link of [sort, pagination, csv]) {
@@ -368,11 +390,18 @@ test("visibility search updates results without applying draft dates and ignores
     }
   }
   assertQuery("first");
+  assert.equal(name.getAttribute("form"), "visibility-filters");
+  assert.equal(org.getAttribute("form"), "visibility-filters");
+  assert.equal(dateInputs.org.value, "ministryofjustice");
+  assert.equal(dateInputs.business_unit.value, "Unit A");
+  assert.equal(dateInputs.activity.disabled, false);
+  assert.equal(new URL(csv.href).searchParams.get("q"), "old");
   timer();
   name.value = "second";
   name.listeners.input();
   assert.equal(requests[0].options.signal.aborted, true);
   assertQuery("second");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "old");
   timer();
   assert.equal(requests[1].url.searchParams.get("from"), "2026-08-05");
   assert.equal(requests[1].url.searchParams.get("q"), "second");
@@ -382,6 +411,7 @@ test("visibility search updates results without applying draft dates and ignores
   await new Promise(setImmediate);
   assert.equal(results.innerHTML, "second");
   assertQuery("second");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
   assert.equal(status.textContent, "Results updated");
   assert.match(historyUrl, /q=second/);
   name.value = "third";
@@ -392,9 +422,11 @@ test("visibility search updates results without applying draft dates and ignores
   assert.equal(error.hidden, false);
   assert.equal(results.innerHTML, "second");
   assertQuery("third");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
   name.value = "";
   name.listeners.input();
   assertQuery("");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
 });
 
 test("visibility calendar enhancement requires the native picker API", () => {

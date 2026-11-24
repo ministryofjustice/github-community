@@ -1313,6 +1313,12 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         filters = self.filters(body)
         for field in ('id="org"', 'id="business_unit"', 'id="q"'):
             self.assertIn(field, filters)
+        for field in ("org", "business_unit", "q"):
+            self.assertRegex(
+                filters,
+                rf'<(?:input|select)\b(?=[^>]*\bid="{field}")'
+                r'(?=[^>]*\bform="visibility-date-filters")[^>]*>',
+            )
         self.assertIn('<input type="hidden" name="from" value="2026-08-02">', filters)
         self.assertIn('<input type="hidden" name="activity" value="new">', filters)
         self.assertIn('<input type="hidden" name="sort" value="repository">', filters)
@@ -1329,6 +1335,11 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             "</form>", 1
         )[0]
         self.assertIn('<input type="hidden" name="q" value="">', activity)
+        self.assertRegex(
+            activity,
+            r'<select\b(?=[^>]*\bid="activity")'
+            r'(?=[^>]*\bform="visibility-date-filters")[^>]*>',
+        )
         self.assertIn("javascript/visibility-filters.js", body)
 
     def test_date_disclosure_preserves_filters_and_opens_for_dates_and_errors(self):
@@ -1339,7 +1350,8 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         )
         self.assertIn('<details class="app-visibility-date-control" open>', body)
         dates = body.split('id="visibility-date-filters"', 1)[1].split("</form>", 1)[0]
-        self.assertIn('<input type="hidden" name="q" value="asset">', dates)
+        self.assertIn('<input type="hidden" name="q" value="asset" disabled>', dates)
+        self.assertEqual(self.filters(body).count('form="visibility-date-filters"'), 4)
         activity = body.split('id="visibility-activity-filters"', 1)[1].split(
             "</form>", 1
         )[0]

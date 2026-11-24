@@ -130,14 +130,14 @@
         {% for org in page.organisations %}
           {% set _ = org_items.append({"value": org, "text": page.organisation_name(org), "selected": org == query.filters.org}) %}
         {% endfor %}
-        {{ govukSelect({"id": "org", "name": "org", "label": {"text": "Organisation"}, "items": org_items}) }}
+        {{ govukSelect({"id": "org", "name": "org", "label": {"text": "Organisation"}, "items": org_items, "attributes": {"form": "visibility-date-filters"}}) }}
       </div>
       <div class="govuk-grid-column-one-third">
         {% set bu_items = [{"value": "", "text": "All business units", "selected": not query.filters.business_unit}] %}
         {% for business_unit in page.business_units %}
           {% set _ = bu_items.append({"value": business_unit, "text": business_unit, "selected": business_unit == query.filters.business_unit}) %}
         {% endfor %}
-        {{ govukSelect({"id": "business_unit", "name": "business_unit", "label": {"text": "Business unit"}, "items": bu_items}) }}
+        {{ govukSelect({"id": "business_unit", "name": "business_unit", "label": {"text": "Business unit"}, "items": bu_items, "attributes": {"form": "visibility-date-filters"}}) }}
       </div>
       <div class="govuk-grid-column-one-third">
         {{ govukInput({
@@ -146,18 +146,22 @@
           "type": "search",
           "label": {"text": "Repository name"},
           "value": query.filters.q,
+          "attributes": {"form": "visibility-date-filters"},
           "spellcheck": false,
           "autocomplete": "off"
         }) }}
       </div>
     </div>
-    <noscript>{{ govukButton({"text": "Filter"}) }}</noscript>
+    <noscript>{{ govukButton({"text": "Filter", "attributes": {"form": "visibility-date-filters"}}) }}</noscript>
   </form>
     <details class="app-visibility-date-control"{% if query.from_value or query.to_value or errors %} open{% endif %}>
       <summary>Choose dates</summary>
     <form method="get" action="{{ visibility_url }}" id="visibility-date-filters" novalidate>
-    {{ hidden_inputs(["from", "to", "q", "page"]) }}
-    <input type="hidden" name="q" value="{{ query.filters.q }}">
+    {{ hidden_inputs(["from", "to", "org", "business_unit", "q", "activity", "page"]) }}
+    <input type="hidden" name="org" value="{{ query.org_param }}" disabled>
+    <input type="hidden" name="business_unit" value="{{ query.filters.business_unit }}" disabled>
+    <input type="hidden" name="q" value="{{ query.filters.q }}" disabled>
+    <input type="hidden" name="activity" value="{{ query.activity }}"{% if changes %} disabled{% endif %}>
     <div class="app-visibility-filter-row">
       <div class="app-visibility-dates" id="visibility-dates">
       {% set date_limits = {} %}
@@ -218,8 +222,8 @@
         {% set _ = activity_items.append({"value": value, "text": text, "selected": value == query.activity}) %}
       {% endfor %}
       <div class="app-visibility-controls">
-        {{ govukSelect({"id": "activity", "name": "activity", "label": {"text": "Activity type"}, "items": activity_items}) }}
-        <noscript>{{ govukButton({"text": "Filter"}) }}</noscript>
+        {{ govukSelect({"id": "activity", "name": "activity", "label": {"text": "Activity type"}, "items": activity_items, "attributes": {"form": "visibility-date-filters"}}) }}
+        <noscript>{{ govukButton({"text": "Filter", "attributes": {"form": "visibility-date-filters"}}) }}</noscript>
         {% if activity_page.total_items %}
           <a class="govuk-button govuk-button--secondary govuk-!-margin-bottom-0 app-visibility-controls__end" role="button" draggable="false" data-module="govuk-button" data-visibility-query-link href="{{ csv_url }}{{ query.csv_query_string(query.from_value, query.to_value) }}">Download CSV</a>
         {% endif %}
