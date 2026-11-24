@@ -29,12 +29,8 @@ def get_repository_badge(repository_name: str, organisation: str):
     repository = get_technical_standard_service().get_repository_by_name(
         repository_name, organisation
     )
-    is_public_repository = (
-        repository is not None
-        and (repository.visibility or "").lower() == "public"
-    )
     shields_url = get_technical_standard_badge_shield_url(
-        repository.compliant if is_public_repository else None,
+        repository.compliant if repository is not None else None,
         style,
     )
     shields_response = requests.get(shields_url, stream=True)
