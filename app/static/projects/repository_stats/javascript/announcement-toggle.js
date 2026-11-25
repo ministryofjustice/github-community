@@ -23,8 +23,8 @@
     var hiddenLabel = document.createElement("span");
     hiddenLabel.className = "govuk-visually-hidden";
     hiddenLabel.textContent = " announcement";
-    button.appendChild(chevron);
     button.appendChild(label);
+    button.appendChild(chevron);
     button.appendChild(hiddenLabel);
 
     function render(hidden) {
@@ -43,7 +43,14 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", function () {
+      try {
+        init();
+      } finally {
+        document.documentElement.classList.remove("app-announcement-pending");
+      }
+    });
+    document.documentElement.classList.add("app-announcement-pending");
   } else {
     init();
   }

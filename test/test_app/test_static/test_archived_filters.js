@@ -11,6 +11,17 @@ const script = fs.readFileSync(
   ),
   "utf8"
 );
+const visibilityScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    "../../../app/static/projects/repository_stats/javascript/visibility-filters.js"
+  ),
+  "utf8"
+);
+const announcementScript = fs.readFileSync(
+  path.join(__dirname, "../../../app/static/projects/repository_stats/javascript/announcement-toggle.js"),
+  "utf8"
+);
 
 function element(tagName, attributes = {}) {
   const node = {
@@ -99,6 +110,8 @@ function fixture() {
   );
   const table = element("table");
   table.tBodies = [{ rows }];
+  const sortLink = element("a", { "data-sort": "archived", "data-direction": "asc" });
+  table.querySelectorAll = (selector) => selector === "a[data-sort]" ? [sortLink] : [];
   const pagination = element("div", { "data-page": "1" });
   const tableRegion = element("div");
   const showing = element("p");
@@ -172,9 +185,22 @@ function fixture() {
   }
 
   return {
-    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, tableRegion
+    click, findPage, historyCalls, name, onlyPublic, pagination, rows, showing, sortLink, tableRegion
   };
 }
+
+test("sort links retain live filters even during the search debounce", () => {
+  const page = fixture();
+  page.name.value = "new search";
+  page.onlyPublic.checked = false;
+  page.name.listeners.input();
+  const url = new URL(page.sortLink.href, "http://example.test");
+  assert.equal(url.searchParams.get("q"), "new search");
+  assert.equal(url.searchParams.get("only_public"), "0");
+  assert.equal(url.searchParams.get("sort"), "archived");
+  assert.equal(url.searchParams.get("dir"), "asc");
+  assert.equal(url.searchParams.has("page"), false);
+});
 
 test("an ordinary pagination click updates the page and keeps the filters", () => {
   const page = fixture();
@@ -254,4 +280,214 @@ test("a click already prevented by another handler does not change the page", ()
   page.click({ defaultPrevented: true });
   assert.equal(page.pagination.getAttribute("data-page"), "1");
   assert.equal(page.historyCalls.length, 0);
+});
+
+test("visibility select changes submit their own form without applying dates", () => {
+  const submitted = [];
+  const ids = ["visibility-filters", "visibility-activity-filters", "visibility-date-filters"];
+  const activity = element("select");
+  const forms = Object.fromEntries(ids.map((id) => {
+    const form = element("form");
+    form.id = id;
+    form.querySelector = (selector) =>
+      id === "visibility-activity-filters" && selector === "#activity" ? activity : null;
+    form.requestSubmit = () => submitted.push(id);
+    return [id, form];
+  }));
+  vm.runInNewContext(visibilityScript, {
+    document: { getElementById: (id) => forms[id], querySelectorAll: () => [] }
+  });
+
+  const event = (tagName) => ({ target: { matches: (selector) => selector === tagName } });
+  forms[ids[0]].listeners.change(event("select"));
+  forms[ids[1]].listeners.change(event("select"));
+  forms[ids[0]].listeners.change(event("input"));
+
+  assert.deepEqual(submitted, ids.slice(0, 2));
+  assert.equal(activity.getAttribute("form"), "visibility-activity-filters");
+  assert.equal(forms[ids[2]].listeners.change, undefined);
+});
+
+test("visibility search updates results without applying draft dates and ignores stale responses", async () => {
+  const name = element("input");
+  name.value = "first";
+  const form = element("form");
+  form.id = "visibility-filters";
+  form.action = "https://example.test/repository-stats/visibility";
+  form.querySelector = () => name;
+  const org = element("select");
+  org.value = "ministryofjustice";
+  const businessUnit = element("select");
+  businessUnit.value = "Unit A";
+  const dateInputs = {
+    org: { value: "" }, business_unit: { value: "" },
+    q: { value: "" }, activity: { value: "all" }
+  };
+  const dateQuery = dateInputs.q;
+  const dateForm = { querySelector: (selector) => dateInputs[selector.match(/name="(.*)"/)[1]] };
+  const activityQuery = { value: "" };
+  const activityForm = element("form");
+  activityForm.querySelector = (selector) => selector === "#activity" ? null : activityQuery;
+  const clearDates = { href: "https://example.test/visibility?q=old" };
+  const sort = { href: "https://example.test/visibility?q=old&from=2026-08-05&sort=date#activity-table" };
+  const pagination = { href: "https://example.test/visibility?q=old&from=2026-08-05&page=2#activity-table" };
+  const csv = { href: "https://example.test/visibility/changes.csv?q=old&from=2026-08-05" };
+  const results = {
+    querySelectorAll: () => [sort, pagination],
+    set innerHTML(html) {
+      this.rendered = html;
+      csv.href = "https://example.test/visibility/changes.csv?q=" + html + "&from=2026-08-05";
+    },
+    get innerHTML() { return this.rendered; }
+  };
+  results.rendered = "initial";
+  const error = { hidden: true };
+  const status = { textContent: "" };
+  const nodes = {
+    "visibility-filters": form, "visibility-date-filters": dateForm,
+    "visibility-activity-filters": activityForm,
+    "visibility-results": results, "visibility-search-error": error,
+    "visibility-search-status": status,
+    "clear-dates": clearDates, org, business_unit: businessUnit, q: name
+  };
+  const requests = [];
+  let timer;
+  let historyUrl;
+  const document = {
+    getElementById: (id) => nodes[id],
+    querySelectorAll: () => []
+  };
+  const window = {
+    location: { href: form.action },
+    history: { replaceState(_state, _title, url) { historyUrl = url.toString(); } },
+    clearTimeout() {},
+    setTimeout(callback) { timer = callback; }
+  };
+  class FormData {
+    constructor() { return [["q", name.value], ["from", "2026-08-05"]]; }
+  }
+  class DOMParser {
+    parseFromString(html) {
+      return { getElementById: (id) => id === "visibility-results"
+        ? { innerHTML: html } : { href: "/clear?q=" + html } };
+    }
+  }
+  vm.runInNewContext(visibilityScript, {
+    document, window, URL, URLSearchParams, FormData, DOMParser, AbortController,
+    fetch(url, options) {
+      return new Promise((resolve, reject) => requests.push({ url, options, resolve, reject }));
+    }
+  });
+  name.listeners.input();
+  function assertQuery(expected) {
+    assert.equal(dateQuery.value, expected);
+    assert.equal(activityQuery.value, expected);
+    for (const link of [clearDates, sort, pagination]) {
+      assert.equal(new URL(link.href).searchParams.get("q"), expected || null);
+    }
+    for (const link of [sort, pagination, csv]) {
+      assert.equal(new URL(link.href).searchParams.get("from"), "2026-08-05");
+    }
+  }
+  assertQuery("first");
+  assert.equal(name.getAttribute("form"), "visibility-filters");
+  assert.equal(org.getAttribute("form"), "visibility-filters");
+  assert.equal(dateInputs.org.value, "ministryofjustice");
+  assert.equal(dateInputs.business_unit.value, "Unit A");
+  assert.equal(dateInputs.activity.disabled, false);
+  assert.equal(new URL(csv.href).searchParams.get("q"), "old");
+  timer();
+  name.value = "second";
+  name.listeners.input();
+  assert.equal(requests[0].options.signal.aborted, true);
+  assertQuery("second");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "old");
+  timer();
+  assert.equal(requests[1].url.searchParams.get("from"), "2026-08-05");
+  assert.equal(requests[1].url.searchParams.get("q"), "second");
+  requests[1].resolve({ ok: true, text: () => Promise.resolve("second") });
+  await new Promise(setImmediate);
+  requests[0].resolve({ ok: true, text: () => Promise.resolve("first") });
+  await new Promise(setImmediate);
+  assert.equal(results.innerHTML, "second");
+  assertQuery("second");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
+  assert.equal(status.textContent, "Results updated");
+  assert.match(historyUrl, /q=second/);
+  name.value = "third";
+  name.listeners.input();
+  timer();
+  requests[2].reject(new Error("network"));
+  await new Promise(setImmediate);
+  assert.equal(error.hidden, false);
+  assert.equal(results.innerHTML, "second");
+  assertQuery("third");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
+  name.value = "";
+  name.listeners.input();
+  assertQuery("");
+  assert.equal(new URL(csv.href).searchParams.get("q"), "second");
+});
+
+test("visibility calendar enhancement requires the native picker API", () => {
+  for (const supported of [true, false]) {
+    let opened = false;
+    const input = {
+      before() {},
+      focus() {},
+      showPicker: supported ? () => { opened = true; } : undefined
+    };
+    const button = element("button");
+    button.hidden = true;
+    const picker = { querySelector: (selector) => selector.startsWith("input") ? input : button };
+    vm.runInNewContext(visibilityScript, {
+      document: {
+        getElementById: () => null,
+        querySelectorAll: () => [picker],
+        createElement: () => ({ append() {} })
+      }
+    });
+
+    assert.equal(button.hidden, !supported);
+    button.listeners.click?.();
+    assert.equal(opened, supported);
+  }
+});
+
+test("announcement starts collapsed and toggles accessibly", () => {
+  const classes = new Set();
+  const html = { classList: {
+    add: (value) => classes.add(value),
+    remove: (value) => classes.delete(value)
+  } };
+  const header = element("div");
+  const banner = element("div");
+  banner.classList.toggle = () => {};
+  banner.querySelector = () => header;
+  const content = element("div");
+  content.id = "archived-announcement-content";
+  let ready;
+  const document = {
+    readyState: "loading",
+    documentElement: html,
+    addEventListener(_type, callback) { ready = callback; },
+    getElementById: (id) => id === "archived-announcement" ? banner : content,
+    createElement: (tag) => element(tag)
+  };
+  vm.runInNewContext(announcementScript, { document });
+  assert.equal(classes.has("app-announcement-pending"), true);
+  ready();
+  assert.equal(classes.has("app-announcement-pending"), false);
+  const button = header.children[0];
+  assert.equal(content.hidden, true);
+  assert.equal(button.getAttribute("aria-controls"), content.id);
+  assert.equal(button.getAttribute("aria-expanded"), "false");
+  assert.equal(button.children[0].textContent, "Show");
+  button.listeners.click();
+  assert.equal(content.hidden, false);
+  assert.equal(button.getAttribute("aria-expanded"), "true");
+  assert.equal(button.children[0].textContent, "Hide");
+  button.listeners.click();
+  assert.equal(content.hidden, true);
+  assert.equal(button.getAttribute("aria-expanded"), "false");
 });

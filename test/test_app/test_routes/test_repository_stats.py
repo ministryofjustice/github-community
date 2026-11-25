@@ -12,6 +12,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
 
 import requests
+from authlib.integrations.base_client.errors import OAuthError
 from flask import Flask
 
 from app.projects.flow_metrics.routes.main import flow_metrics_main
@@ -288,8 +289,8 @@ class RepositoryStatsTestCase(unittest.TestCase):
         return [name for name, hidden in self.archived_rows(body) if not hidden]
 
     @staticmethod
-    def filters(body):
-        return body.split('id="visibility-filters"', 1)[1].split("</form>", 1)[0]
+    def filters(body, form_id="visibility-filters"):
+        return body.split(f'id="{form_id}"', 1)[1].split("</form>", 1)[0]
 
 
 def estate_line(total, public, internal, private):
@@ -337,6 +338,8 @@ SIGN_IN = "app.projects.repository_stats.services.github_sign_in"
 GITHUB_LOGIN_URL = "/repository-stats/github/login"
 CALLBACK_URL = "/repository-stats/github/callback"
 SWITCH_URL = "/repository-stats/github/switch"
+PUBLIC_HOST = "github-community.service.justice.gov.uk"
+ALIAS_HOST = "github-community.cloud-platform.service.justice.gov.uk"
 NO_ACCESS_HEADING = (
     '<h1 class="govuk-heading-l">You don\'t have access to Repository Stats yet</h1>'
 )
@@ -534,6 +537,99 @@ class TestStatsAccess(StatsAccessTestCase):
                     query["redirect_uri"],
                     [f"https://{host}/repository-stats/github/callback"],
                 )
+
+    def with_public_host_aliases(self):
+        patcher = patch(
+            "app.projects.repository_stats.routes.main.app_config",
+            SimpleNamespace(
+                public_base_url=f"https://{PUBLIC_HOST}",
+                public_host_aliases=frozenset({ALIAS_HOST}),
+            ),
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_alias_host_goes_to_public_host_before_any_sign_in(self):
+        self.with_public_host_aliases()
+        self.sign_in_on_host(f"https://{ALIAS_HOST}")
+        for url in (
+            "/repository-stats/",
+            f"{OVERVIEW_URL}?open=ministryofjustice",
+            f"{GITHUB_LOGIN_URL}?next=%2Frepository-stats%2Foverview",
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url, base_url=f"http://{ALIAS_HOST}")
+                self.assertEqual(response.status_code, 302)
+                self.assertEqual(response.location, f"https://{PUBLIC_HOST}{url}")
+        with self.client.session_transaction(
+            base_url=f"https://{ALIAS_HOST}"
+        ) as flask_session:
+            self.assertNotIn("stats_github_oauth_state", flask_session)
+            self.assertNotIn("post_auth_redirect_path", flask_session)
+
+    def test_alias_journey_finishes_on_public_host(self):
+        self.with_public_host_aliases()
+        response = self.client.get(OVERVIEW_URL, base_url=f"https://{ALIAS_HOST}")
+        public = f"https://{PUBLIC_HOST}"
+        self.assertEqual(response.location, f"{public}{OVERVIEW_URL}")
+        # Sign in on the public host, preserving the destination.
+        response = self.client.get(OVERVIEW_URL, base_url=public)
+        self.assertEqual(response.location, "/auth/login")
+        self.sign_in_on_host(public)
+        to_github = self.client.get(
+            self.client.get(OVERVIEW_URL, base_url=public).location, base_url=public
+        )
+        query = parse_qs(urlsplit(to_github.location).query)
+        self.assertEqual(
+            query["redirect_uri"],
+            [f"{public}/repository-stats/github/callback"],
+        )
+        token = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"access_token": "gho_x"}
+        )
+        user = SimpleNamespace(
+            status_code=200, ok=True, json=lambda: {"login": "octocat"}
+        )
+        with (
+            patch(f"{SIGN_IN}.requests.post", return_value=token) as post,
+            patch(f"{SIGN_IN}.requests.get", return_value=user),
+            patch(MEMBERSHIP, return_value=True),
+        ):
+            response = self.client.get(
+                f"{CALLBACK_URL}?{urlencode({'code': 'abc', 'state': query['state'][0]})}",
+                base_url=public,
+            )
+        self.assertEqual(response.location, OVERVIEW_URL)
+        self.assertEqual(
+            post.call_args.kwargs["data"]["redirect_uri"],
+            f"{public}/repository-stats/github/callback",
+        )
+
+    def test_public_and_other_hosts_are_not_redirected(self):
+        self.with_public_host_aliases()
+        for base_url in (
+            f"https://{PUBLIC_HOST}",
+            "https://github-community-dev.cloud-platform.service.justice.gov.uk",
+            "http://localhost",
+        ):
+            with self.subTest(base_url=base_url):
+                self.sign_in_on_host(base_url)
+                response = self.client.get(GITHUB_LOGIN_URL, base_url=base_url)
+                self.assertEqual(urlsplit(response.location).netloc, "github.com")
+        # POST requests stay on the alias.
+        self.sign_in_on_host(f"https://{ALIAS_HOST}")
+        response = self.client.post(SWITCH_URL, base_url=f"https://{ALIAS_HOST}")
+        self.assertEqual(response.location, GITHUB_LOGIN_URL)
+        with self.client.session_transaction(
+            base_url=f"https://{ALIAS_HOST}"
+        ) as flask_session:
+            flask_session["stats_github_oauth_state"] = "existing-state"
+        response = self.client.get(
+            f"{CALLBACK_URL}?state=existing-state&error=access_denied",
+            base_url=f"https://{ALIAS_HOST}",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.location)
 
     def test_github_login_not_configured(self):
         with patch(
@@ -811,13 +907,17 @@ class TestStatsAccess(StatsAccessTestCase):
         with patch(MEMBERSHIP) as membership:
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_hourly_recheck_keeps_a_member_in(self):
         self.sign_in_to_github(checked_at=time.time() - 3601)
         with patch(MEMBERSHIP, return_value=True) as membership:
-            self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+            self.assertEqual(
+                self.client.get(ROUTES[0], follow_redirects=True).status_code, 200
+            )
             self.assertEqual(self.client.get(ROUTES[1]).status_code, 200)
         membership.assert_called_once()
         self.assertGreater(
@@ -841,7 +941,9 @@ class TestStatsAccess(StatsAccessTestCase):
                 with self.client.session_transaction() as flask_session:
                     flask_session["user"] = microsoft_user()
                 self.sign_in_to_github()
-                self.assertEqual(self.client.get(ROUTES[0]).status_code, 200)
+                self.assertEqual(
+                    self.client.get(ROUTES[0], follow_redirects=True).status_code, 200
+                )
         self.assertEqual(membership.call_count, 2)
 
     def test_github_login_for_another_microsoft_user_is_not_used(self):
@@ -888,7 +990,9 @@ class TestStatsAccess(StatsAccessTestCase):
         ):
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_auth_disabled_allows_everyone_without_calling_github(self):
@@ -900,7 +1004,9 @@ class TestStatsAccess(StatsAccessTestCase):
         ):
             for url in ROUTES:
                 with self.subTest(url=url):
-                    self.assertEqual(self.client.get(url).status_code, 200)
+                    self.assertEqual(
+                        self.client.get(url, follow_redirects=True).status_code, 200
+                    )
         membership.assert_not_called()
 
     def test_homepage_card_still_shown(self):
@@ -949,46 +1055,141 @@ class TestSharedAuthRoutes(unittest.TestCase):
             self.assertNotIn(SESSION_KEY, flask_session)
             self.assertEqual(flask_session[GITHUB_SESSION_KEY]["login"], "octocat")
 
+    def start_auth0_sign_in(self):
+        with self.client.application.app_context():
+            remote = self.auth.auth0_service.oauth.auth0
+        with patch.object(
+            remote,
+            "load_server_metadata",
+            return_value={
+                "authorization_endpoint": "https://identity.example/authorize"
+            },
+        ):
+            response = self.client.get("/auth/login")
+        self.assertEqual(response.status_code, 302)
+        state = parse_qs(urlsplit(response.location).query)["state"][0]
+        return remote, state
+
+    def test_invalid_state_never_exchanges_a_code_or_signs_in(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
+        remote, state = self.start_auth0_sign_in()
+        with patch.object(remote, "fetch_access_token") as exchange:
+            for method in ("GET", "POST"):
+                for query in (
+                    {"code": "stub-code"},
+                    {"code": "stub-code", "state": f"{state}-wrong"},
+                ):
+                    with self.subTest(method=method, query=query):
+                        kwargs = {"query_string" if method == "GET" else "data": query}
+                        response = self.client.open(
+                            "/auth/callback", method=method, **kwargs
+                        )
+                        self.assertEqual(response.status_code, 400)
+                        self.assertIsNone(response.location)
+                        self.assertIn(
+                            'href="/auth/login"', response.get_data(as_text=True)
+                        )
+            exchange.assert_not_called()
+        with self.client.session_transaction() as flask_session:
+            self.assertNotIn("user", flask_session)
+
+    def test_valid_state_succeeds_once_and_replay_cannot_replace_the_user(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.pop("user")
+            flask_session["post_auth_redirect_path"] = "/flow-metrics/"
+        remote, state = self.start_auth0_sign_in()
+        token = microsoft_user()
+        with patch.object(remote, "fetch_access_token", return_value=token) as exchange:
+            response = self.client.get(
+                "/auth/callback", query_string={"code": "stub-code", "state": state}
+            )
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.location, "/flow-metrics/")
+            with self.client.session_transaction() as flask_session:
+                self.assertEqual(flask_session["user"], token)
+                self.assertNotIn(SESSION_KEY, flask_session)
+                self.assertNotIn("post_auth_redirect_path", flask_session)
+                signed_in_session = dict(flask_session)
+            response = self.client.get(
+                "/auth/callback", query_string={"code": "stub-code", "state": state}
+            )
+            self.assertEqual(response.status_code, 400)
+            exchange.assert_called_once()
+        with self.client.session_transaction() as flask_session:
+            self.assertEqual(dict(flask_session), signed_in_session)
+
+    def test_access_denied_is_not_a_server_error_or_a_new_sign_in(self):
+        with self.client.session_transaction() as flask_session:
+            flask_session.clear()
+            flask_session["post_auth_redirect_path"] = "/repository-stats/"
+        with self.assertLogs(self.auth.logger, level="INFO") as logs:
+            response = self.client.get(
+                "/auth/callback",
+                query_string={
+                    "error": "access_denied",
+                    "error_description": "provider-private-detail",
+                },
+            )
+        self.assertEqual(response.status_code, 403)
+        self.assertIsNone(response.location)
+        body = response.get_data(as_text=True)
+        self.assertIn('href="/auth/login"', body)
+        self.assertNotIn("provider-private-detail", body)
+        self.assertNotIn("provider-private-detail", "\n".join(logs.output))
+        with self.client.session_transaction() as flask_session:
+            self.assertNotIn("user", flask_session)
+            self.assertEqual(
+                flask_session["post_auth_redirect_path"], "/repository-stats/"
+            )
+
+    def test_unexpected_failures_remain_observable_and_leave_session_unchanged(self):
+        self.client.application.testing = True
+        with self.client.session_transaction() as flask_session:
+            original_session = dict(flask_session)
+        for error in (
+            OAuthError(error="server_error"),
+            RuntimeError("Token exchange failed"),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(
+                    self.auth.auth0_service, "get_access_token", side_effect=error
+                ),
+                self.assertRaises(type(error)),
+            ):
+                self.client.get("/auth/callback")
+            with self.client.session_transaction() as flask_session:
+                self.assertEqual(dict(flask_session), original_session)
+
 
 class TestLandingPages(RepositoryStatsTestCase):
     def test_project_home(self):
-        response, body = self.get("/repository-stats/")
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('<h1 class="govuk-heading-xl">GitHub Repository Stats</h1>', body)
+        response = self.client.get("/repository-stats/")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.location, OVERVIEW_URL)
         self.assertIn(
-            '<p class="govuk-body-l">View estate-wide statistics and reports across GitHub Enterprise organisations.</p>',
-            body,
+            "Repository overview",
+            self.client.get(response.location).get_data(as_text=True),
         )
-        reports = re.findall(
-            r'<a class="govuk-link" href="([^"]+)">([^<]+)</a>\s*</h3>\s*<p class="govuk-body-s">([^<]+)</p>',
-            body,
-        )
-        self.assertEqual(
-            reports,
-            [
-                (
-                    OVERVIEW_URL,
-                    "Repository overview",
-                    "View repository totals by organisation, business unit and team.",
-                ),
-                (
-                    CHANGES_URL,
-                    "Repository visibility changes",
-                    "Track visibility changes, new repositories and deleted repositories over time.",
-                ),
-                (
-                    ARCHIVED_URL,
-                    "Archived repositories",
-                    "Find archived public repositories and track progress towards making them internal.",
-                ),
-            ],
-        )
-        self.assertEqual(
-            body.count('<h3 class="govuk-heading-s govuk-!-margin-bottom-1">'), 3
-        )
-        self.assertEqual(body.count('<p class="govuk-body-s">'), 3)
-        self.assertNotIn("govuk-tabs", body)
-        self.assertIn("govuk-breadcrumbs", body)
+        response = self.client.get("/repository-stats/", follow_redirects=True)
+        self.assertEqual(response.request.path, OVERVIEW_URL)
+
+    def test_report_navigation_precedes_heading(self):
+        for url in (OVERVIEW_URL, CHANGES_URL, ARCHIVED_URL):
+            with self.subTest(url=url):
+                _, body = self.get(url)
+                nav = body.split('<nav class="app-report-nav"', 1)[1].split(
+                    "</nav>", 1
+                )[0]
+                self.assertEqual(
+                    re.findall(r'href="([^"]+)"', nav),
+                    [OVERVIEW_URL, CHANGES_URL, ARCHIVED_URL],
+                )
+                self.assertIn(f'href="{url}" aria-current="page"', nav)
+                self.assertLess(
+                    body.index('<nav class="app-report-nav"'), body.index("<h1")
+                )
 
     def test_community_home_has_four_project_cards(self):
         with patch.dict(os.environ, {"FLOW_METRICS_ENABLED": "true"}):
@@ -1022,6 +1223,7 @@ class TestLandingPages(RepositoryStatsTestCase):
             "Reduce duplicate efforts by reusing pre-built GitHub Actions maintained by the Ministry of Justice.",
             body,
         )
+
     def test_community_home_has_three_project_cards_when_flow_metrics_unset(self):
         with patch.dict(os.environ):
             os.environ.pop("FLOW_METRICS_ENABLED", None)
@@ -1072,10 +1274,8 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn(estate_line(33, 2, 31, 0), body)
         for label in ("Visibility changes", "New repositories", "Deleted repositories"):
             self.assertIn(f'<dt class="app-visibility-stats__label">{label}</dt>', body)
-        self.assertIn(
-            '<caption class="govuk-table__caption govuk-visually-hidden">Changes by transition</caption>',
-            body,
-        )
+        self.assertIn("Visibility changes by transition", body)
+        self.assertEqual(body.count('class="app-transition-row"'), 6)
         self.assertIn("All activity (33)", body)
         self.assertIn("Showing 1 to 25 of 33", body)
         self.assertEqual(len(self.activity_rows(body)), 25)
@@ -1107,27 +1307,77 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn("Repository visibility changes", crumbs)
 
     def test_filter_form(self):
-        _, body = self.get(f"{CHANGES_URL}?activity=new&sort=repository&dir=asc&page=2")
+        _, body = self.get(
+            f"{CHANGES_URL}?activity=new&sort=repository&dir=asc&page=2&from=2026-08-02"
+        )
         filters = self.filters(body)
-        self.assertIn(f'action="{CHANGES_URL}" class="app-visibility-filters"', body)
-        for field in (
-            'id="org"',
-            'id="business_unit"',
-            'id="q"',
-            'id="from"',
-            'id="to"',
-        ):
+        for field in ('id="org"', 'id="business_unit"', 'id="q"'):
             self.assertIn(field, filters)
+        for field in ("org", "business_unit", "q"):
+            self.assertRegex(
+                filters,
+                rf'<(?:input|select)\b(?=[^>]*\bid="{field}")'
+                r'(?=[^>]*\bform="visibility-date-filters")[^>]*>',
+            )
+        self.assertIn('<input type="hidden" name="from" value="2026-08-02">', filters)
         self.assertIn('<input type="hidden" name="activity" value="new">', filters)
         self.assertIn('<input type="hidden" name="sort" value="repository">', filters)
         self.assertNotIn('type="hidden" name="page"', filters)
-        row = filters.split('<div class="app-visibility-filter-row">', 1)[1]
-        self.assertLess(row.index('id="to"'), row.index("Apply filters"))
-        self.assertLess(row.index("Apply filters"), row.index("Clear filters"))
-        self.assertIn(
-            f'<a class="govuk-link" id="clear-filters" href="{CHANGES_URL}">Clear filters</a>',
-            filters,
+        dates = body.split("<details", 1)[1].split("</details>", 1)[0]
+        self.assertEqual(dates.count('type="date"'), 2)
+        self.assertLess(dates.index('id="from"'), dates.index('id="to"'))
+        self.assertLess(dates.index('id="to"'), dates.index("Filter\n"))
+        self.assertLess(dates.index("Filter\n"), dates.index("Clear dates"))
+        for text in ("Apply filters", "Clear filters", "Show activity", "date-picker.js"):
+            self.assertNotIn(text, body)
+        self.assertIn('id="visibility-activity-filters"', body)
+        activity = body.split('id="visibility-activity-filters"', 1)[1].split(
+            "</form>", 1
+        )[0]
+        self.assertIn('<input type="hidden" name="q" value="">', activity)
+        self.assertRegex(
+            activity,
+            r'<select\b(?=[^>]*\bid="activity")'
+            r'(?=[^>]*\bform="visibility-date-filters")[^>]*>',
         )
+        self.assertIn("javascript/visibility-filters.js", body)
+
+    def test_date_disclosure_preserves_filters_and_opens_for_dates_and_errors(self):
+        _, body = self.get(CHANGES_URL)
+        self.assertIn('<details class="app-visibility-date-control">', body)
+        _, body = self.get(
+            f"{CHANGES_URL}?org=all&q=asset&from=2026-08-10&to=2026-09-10"
+        )
+        self.assertIn('<details class="app-visibility-date-control" open>', body)
+        dates = body.split('id="visibility-date-filters"', 1)[1].split("</form>", 1)[0]
+        self.assertIn('<input type="hidden" name="q" value="asset" disabled>', dates)
+        self.assertEqual(self.filters(body).count('form="visibility-date-filters"'), 4)
+        activity = body.split('id="visibility-activity-filters"', 1)[1].split(
+            "</form>", 1
+        )[0]
+        self.assertEqual(activity.count('name="q"'), 1)
+        self.assertIn('<input type="hidden" name="q" value="asset">', activity)
+        link = re.search(r'id="clear-dates" href="([^"]+)"', body).group(1)
+        self.assertEqual(
+            parse_qs(urlsplit(link.replace("&amp;", "&")).query),
+            {"org": ["all"], "q": ["asset"]},
+        )
+        _, body = self.get(f"{CHANGES_URL}?from=invalid")
+        self.assertIn('<details class="app-visibility-date-control" open>', body)
+
+    def test_transition_bars_follow_counts_and_handle_zero(self):
+        _, body = self.get(CHANGES_URL)
+        widths = re.findall(
+            r'class="app-transition-bar" style="width: ([0-9.]+)%"', body
+        )
+        self.assertEqual(len(widths), 6)
+        self.assertEqual(max(map(float, widths)), 100)
+        self.assertIn(0, list(map(float, widths)))
+        _, body = self.get(f"{CHANGES_URL}?q=no-such-repository")
+        widths = re.findall(
+            r'class="app-transition-bar" style="width: ([0-9.]+)%"', body
+        )
+        self.assertEqual(list(map(float, widths)), [0] * 6)
 
     def test_organisations_from_the_data(self):
         _, body = self.get(CHANGES_URL)
@@ -1279,8 +1529,9 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
         self.assertIn("There is a problem", body)
         escaped = message.replace("'", "&#39;")
         self.assertIn(f'<a href="#{field}">{escaped}</a>', body)
-        self.assertIn(f'id="{field}-error"', self.filters(body))
-        self.assertIn(escaped, self.filters(body))
+        date_filters = self.filters(body, "visibility-date-filters")
+        self.assertIn(f'id="{field}-error"', date_filters)
+        self.assertIn(escaped, date_filters)
         self.assertIn('<h2 class="govuk-heading-m">Summary</h2>', body)
         self.assertIn("Enter a valid date range to see visibility changes.", body)
 
@@ -1408,7 +1659,7 @@ class TestVisibilityChangesPage(RepositoryStatsTestCase):
             body,
         )
         self.assertIn('<h2 class="govuk-heading-m">Summary</h2>', body)
-        self.assertIn('id="from-error"', self.filters(body))
+        self.assertIn('id="from-error"', self.filters(body, "visibility-date-filters"))
         self.assertIn("Enter a valid date range to see visibility changes.", body)
         self.assertIn(
             "Error: Repository visibility changes",
@@ -1545,7 +1796,7 @@ class TestDefaultOrganisation(RepositoryStatsTestCase):
         self.assertIn('<div id="archived-no-match" hidden>', body)
         self.assertNotIn('id="archived-table" hidden', body)
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal</p>", body
+            "1 of 2</strong> archived public repositories have been made internal</p>", body
         )
 
 
@@ -2040,10 +2291,10 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                             )
                             if total:
                                 self.assertIn(
-                                    "1 of 1 archived public repositories have been made internal",
+                                    "1 of 1</strong> archived public repositories have been made internal",
                                     body,
                                 )
-                                self.assertIn("100% complete", body)
+                                self.assertIn("100%</strong> complete", body)
                                 self.assertIn(
                                     f'href="https://github.com/{ORG}/transferred-internal"',
                                     body,
@@ -2106,7 +2357,7 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                     self.assertNotIn("transferred", archived)
                     if visible:
                         self.assertIn(
-                            "0 of 1 archived public repositories have been made internal",
+                            "0 of 1</strong> archived public repositories have been made internal",
                             archived,
                         )
                     else:
@@ -2162,7 +2413,10 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(f"Showing changes since: {label}</p>", body)
                 self.assertEqual(
-                    self.filters(body).count(f'min="{baseline}" max="{OCT_30}"'), 2
+                    self.filters(body, "visibility-date-filters").count(
+                        f'min="{baseline}" max="{OCT_30}"'
+                    ),
+                    2,
                 )
                 self.assertIn(f"All activity ({activity_count})", body)
 
@@ -2238,18 +2492,18 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
         self.assertEqual(self.visible_archived(body), ["mas-archived"])
         self.assertIn(
-            "0 of 1 archived public repositories have been made internal", body
+            "0 of 1</strong> archived public repositories have been made internal", body
         )
         self.assertIn("29 October 2026", body)
         _, body = self.get(f"{ARCHIVED_URL}?org={ORG}&only_public=0")
         self.assertEqual(self.visible_archived(body), ["asset-alpha"])
         self.assertIn("17 August 2026", body)
         self.assertIn(
-            "1 of 1 archived public repositories have been made internal", body
+            "1 of 1</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org=all")
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal", body
+            "1 of 2</strong> archived public repositories have been made internal", body
         )
 
     def test_archived_later_events_and_filters_use_each_org_baseline(self):
@@ -2293,11 +2547,11 @@ class TestOrganisationHistory(RepositoryStatsTestCase):
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}")
         self.assertEqual(self.visible_archived(body), ["sample-repo-00"])
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal", body
+            "1 of 2</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org=all")
         self.assertIn(
-            "2 of 3 archived public repositories have been made internal", body
+            "2 of 3</strong> archived public repositories have been made internal", body
         )
         _, body = self.get(f"{ARCHIVED_URL}?org={OTHER_ORG}&q=mas&only_public=0")
         self.assertEqual(self.visible_archived(body), ["mas-archived"])
@@ -2412,18 +2666,25 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             'C0AJBK3P5A8" target="_blank" rel="noopener noreferrer">#ask-developer-experience<span class="govuk-visually-hidden"> (opens in new tab)</span></a>.',
             body,
         )
-        self.assertIn('id="archived-announcement-content"', body)
-        self.assertIn("javascript/announcement-toggle.js", body)
+        self.assertIn(
+            '<div class="govuk-notification-banner__content" id="archived-announcement-content">',
+            body,
+        )
+        self.assertLess(
+            body.index("javascript/announcement-toggle.js"),
+            body.index('id="archived-announcement-content"'),
+        )
         self.assertNotIn(" Slack channel", body)
-        self.assertIn('<details class="govuk-details">', body)
+        self.assertIn('<details class="govuk-details app-visibility-guide">', body)
         self.assertNotIn('<details class="govuk-details" open', body)
         self.assertIn("How to change a repository&#39;s visibility", body)
         self.assertIn("<strong>Unarchive this repository</strong>", body)
         self.assertIn(
-            "1 of 2 archived public repositories have been made internal</p>", body
+            '<strong id="archived-progress-count">1 of 2</strong> archived public repositories have been made internal</p>',
+            body,
         )
         self.assertIn(
-            '<p class="govuk-body govuk-!-margin-bottom-1 app-visibility-secondary-text" id="archived-progress-percent">50% complete</p>',
+            '<strong id="archived-progress-percent">50%</strong> complete</p>',
             body,
         )
         self.assertIn("width: 50%", body)
@@ -2444,17 +2705,16 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                     for text in (
                         LAST_UPDATED_LINE,
                         "govuk-notification-banner",
-                        '<h2 class="govuk-heading-m">Find repositories</h2>',
+                        '<h2 class="govuk-visually-hidden">Find repositories</h2>',
                         "Only show repositories that are still public",
                         "Apply filters",
                         PROGRESS_HEADING,
-                        PROGRESS_NOTE,
-                        '<details class="govuk-details">',
-                        "first seen archived",
+                        '<details class="govuk-details app-visibility-guide">',
+                        'class="app-archived-date-hint">first seen<br>archived',
                     )
                 ]
                 self.assertEqual(order, sorted(order))
-                self.assertEqual(body.count(PROGRESS_NOTE), 1)
+                self.assertNotIn(PROGRESS_NOTE, body)
 
     def test_is_a_standalone_page_without_dates(self):
         _, body = self.get(
@@ -2465,7 +2725,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.assertNotIn('name="to"', body)
         self.assertNotIn('name="tab"', body)
         self.assertNotIn('name="activity"', body)
-        self.assertNotIn('name="sort"', body)
+        self.assertIn('name="sort" value="repository"', body)
         self.assertNotIn(
             "2026-",
             body.split("<main", 1)[1]
@@ -2540,7 +2800,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
                 _, body = self.get(f"{ARCHIVED_URL}?{params}")
                 self.assertIn(f"{PROGRESS_HEADING}{heading}</span></h2>", body)
                 self.assertIn(
-                    f"{line} archived public repositories have been made internal",
+                    f"{line}</strong> archived public repositories have been made internal",
                     body,
                 )
                 self.assertIn('id="archived-progress-empty" hidden', body)
@@ -2562,7 +2822,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         )
 
     def test_filters_narrow_the_list_but_not_progress(self):
-        all_orgs = "1 of 2 archived public repositories have been made internal</p>"
+        all_orgs = "1 of 2</strong> archived public repositories have been made internal</p>"
         no_match = '<div id="archived-no-match">'
         for params, shown in (
             ("business_unit=HMPPS", []),
@@ -2697,7 +2957,7 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
         self.repository.find_first_archived_dates = dict
         _, body = self.get(ARCHIVED_URL)
         self.assertIn("There are no archived public repositories.", body)
-        self.assertIn(PROGRESS_NOTE, body)
+        self.assertNotIn(PROGRESS_NOTE, body)
 
     def test_show_all_archived(self):
         _, body = self.get(f"{ARCHIVED_URL}?only_public=0")
@@ -2708,30 +2968,56 @@ class TestArchivedRepositoriesPage(RepositoryStatsTestCase):
             table.index("asset-alpha"), table.index("sample-archived-moved")
         )
 
-    def test_table_unchanged(self):
+    def test_table_has_sortable_headings(self):
         _, body = self.get(f"{ARCHIVED_URL}?only_public=0")
         head = body.split('<thead class="govuk-table__head">', 1)[1].split(
             "</thead>", 1
         )[0]
-        headers = re.findall(
-            r'<th scope="col" class="govuk-table__header">(.*?)</th>', head
-        )
+        headers = re.findall(r'data-sort="([^"]+)"', head)
         self.assertEqual(
-            [re.sub(r"<[^>]+>.*", "", h).strip() for h in headers],
+            headers,
             [
-                "Repository",
-                "Organisation",
-                "Business unit",
-                "Archived",
-                "Last pushed",
-                "Visibility",
+                "repository",
+                "organisation",
+                "business_unit",
+                "archived",
+                "pushed",
+                "visibility",
             ],
         )
         self.assertIn(
-            'Archived <span class="govuk-hint govuk-!-font-size-16 govuk-!-margin-bottom-0">first seen archived</span>',
+            '<span class="app-archived-date-hint">first seen<br>archived</span>',
             head,
         )
+        self.assertRegex(
+            head,
+            r'class="govuk-table__header app-visibility-nowrap"[^>]*>\s*'
+            r'<a[^>]*data-sort="archived"',
+        )
         self.assertIn('Repositories (<span id="archived-count">2</span>)', body)
+
+    def test_archived_sort_links_order_rows_and_keep_filters(self):
+        _, body = self.get(
+            f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=desc&q=sample"
+        )
+        self.assertEqual(self.visible_archived(body), ["sample-archived-moved"])
+        self.assertIn('aria-sort="descending"', body)
+        link = re.search(
+            r'data-sort="repository" data-direction="asc" href="([^"]+)"', body
+        ).group(1)
+        params = parse_qs(urlsplit(link.replace("&amp;", "&")).query)
+        self.assertEqual(params["q"], ["sample"])
+        self.assertEqual(params["only_public"], ["0"])
+        self.assertEqual(params["sort"], ["repository"])
+        self.assertEqual(params["dir"], ["asc"])
+        _, body = self.get(f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=desc")
+        self.assertEqual(
+            self.visible_archived(body), ["sample-archived-moved", "asset-alpha"]
+        )
+        _, body = self.get(f"{ARCHIVED_URL}?only_public=0&sort=repository&dir=asc")
+        self.assertEqual(
+            self.visible_archived(body), ["asset-alpha", "sample-archived-moved"]
+        )
 
     def test_rows_carry_filter_data(self):
         _, body = self.get(ARCHIVED_URL)
@@ -2862,9 +3148,10 @@ class TestRepositoryOverviewPage(RepositoryStatsTestCase):
             '<p class="govuk-body-s">Select an organisation to see its business units, '
             "then select a business unit to see its teams.</p>"
         )
-        self.assertIn(hint, body)
-        self.assertLess(body.index(LAST_UPDATED_LINE), body.index(hint))
-        self.assertLess(body.index(hint), body.index('id="repository-overview"'))
+        self.assertNotIn(hint, body)
+        self.assertLess(
+            body.index(LAST_UPDATED_LINE), body.index('id="repository-overview"')
+        )
 
     def test_notes_under_table_removed(self):
         _, body = self.get(f"{OVERVIEW_URL}?open={ORG}&open={ORG}/HMPPS")

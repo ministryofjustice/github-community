@@ -48,6 +48,13 @@ app_config = SimpleNamespace(
         __get_env_var("GITHUB_COMMUNITY_PUBLIC_URL")
         or "https://github-community.service.justice.gov.uk"
     ).rstrip("/"),
+    public_host_aliases=frozenset(
+        host.strip().lower()
+        for host in (__get_env_var("GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES") or "").split(
+            ","
+        )
+        if host.strip()
+    ),
     postgres=SimpleNamespace(
         user=__get_env_var("POSTGRES_USER"),
         password=__get_env_var("POSTGRES_PASSWORD"),

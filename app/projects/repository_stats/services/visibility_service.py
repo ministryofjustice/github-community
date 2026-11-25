@@ -384,12 +384,14 @@ class VisibilityService:
                 )
             )
         every_org = list(eligible.values())
-        matching = sort_archived(
-            r for r in every_org if context.include(r.github_id, r.org, r.name)
+        ordered = sort_archived(
+            every_org,
+            context.query.sort,
+            context.query.direction,
+            context.organisation_names,
         )
-        shown = sort_archived(
-            r for r in matching if r.still_public or not context.query.only_public
-        )
+        matching = [r for r in ordered if context.include(r.github_id, r.org, r.name)]
+        shown = [r for r in matching if r.still_public or not context.query.only_public]
         repository_page = paginate(shown, context.query.page, PAGE_SIZE)
         progress_by_organisation = {
             org: archived_progress(r for r in every_org if r.org == org)
@@ -404,13 +406,13 @@ class VisibilityService:
                 selected_org or ALL_ORGANISATIONS, archived_progress([])
             ),
             progress_by_organisation=progress_by_organisation,
-            repositories=sort_archived(shown),
+            repositories=shown,
             repository_page=repository_page,
             repository_page_numbers=page_numbers(repository_page),
             page_ids=frozenset(r.github_id for r in repository_page.items),
             deadline=self.archived_deadline,
             matching=len(matching),
-            tracked=sort_archived(every_org),
+            tracked=ordered,
         )
 
     def _default_organisation(self, query: VisibilityQuery) -> VisibilityQuery:
@@ -498,6 +500,8 @@ class VisibilityService:
             page=query.page,
             only_public=query.only_public,
             all_organisations=query.all_organisations,
+            sort=query.sort,
+            direction=query.direction,
         )
         query = self._default_organisation(query)
         context = self._context(query)

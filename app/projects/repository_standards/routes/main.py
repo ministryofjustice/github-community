@@ -5,21 +5,24 @@ from flask import Blueprint, redirect, render_template, request, url_for
 from app.projects.repository_standards.repositories.owner_repository import (
     get_owner_repository,
 )
+from app.projects.repository_standards.routes.owner_id import (
+    register_owner_id_converter,
+)
+from app.projects.repository_standards.services.owner_service import (
+    get_owner_service,
+)
 from app.projects.repository_standards.services.relationships_service import (
     get_relationships_service,
 )
 from app.projects.repository_standards.services.repository_compliance_service import (
     get_repository_compliance_service,
 )
-
-from app.projects.repository_standards.services.owner_service import (
-    get_owner_service,
-)
 from app.shared.middleware.auth import requires_auth
 
 logger = logging.getLogger(__name__)
 
 repository_standards_main = Blueprint("repository_standards_main", __name__)
+repository_standards_main.record_once(register_owner_id_converter)
 
 
 
@@ -71,9 +74,9 @@ def business_units():
     )
 
 
-@repository_standards_main.route("/business-units/<owner_id>", methods=["GET"])
+@repository_standards_main.route("/business-units/<owner_id:owner_id>", methods=["GET"])
 @requires_auth
-def business_units_owner(owner_id: str):
+def business_units_owner(owner_id: int):
     repository_compliance_service = get_repository_compliance_service()
     owner_service = get_owner_service()
 
@@ -122,9 +125,9 @@ def teams():
     )
 
 
-@repository_standards_main.route("/teams/<owner_id>", methods=["GET"])
+@repository_standards_main.route("/teams/<owner_id:owner_id>", methods=["GET"])
 @requires_auth
-def teams_owner(owner_id: str):
+def teams_owner(owner_id: int):
     repository_compliance_service = get_repository_compliance_service()
     owner_service = get_owner_service()
 
@@ -153,9 +156,9 @@ def teams_owner(owner_id: str):
         owner=owner,
     )
 
-@repository_standards_main.route("/teams/<owner_id>/edit", methods=["GET", "POST"])
+@repository_standards_main.route("/teams/<owner_id:owner_id>/edit", methods=["GET", "POST"])
 @requires_auth
-def edit_team(owner_id: str):
+def edit_team(owner_id: int):
     owner_service = get_owner_service()
     relationships_service = get_relationships_service()
 
@@ -193,9 +196,9 @@ def edit_team(owner_id: str):
     )
 
 
-@repository_standards_main.route("/teams/<owner_id>/delete", methods=["POST"])
+@repository_standards_main.route("/teams/<owner_id:owner_id>/delete", methods=["POST"])
 @requires_auth
-def delete_team(owner_id: str):
+def delete_team(owner_id: int):
     owner_service = get_owner_service()
 
     owner = owner_service.find_by_id(owner_id)

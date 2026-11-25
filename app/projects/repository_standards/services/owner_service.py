@@ -13,7 +13,7 @@ class OwnerService:
     def __init__(self, owner_repository: OwnerRepository):
         self.__owner_repository = owner_repository
 
-    def find_by_id(self, id: str) -> OwnerView | None:
+    def find_by_id(self, id: int) -> OwnerView | None:
         owner = self.__owner_repository.find_by_id(id)
 
         if owner:
@@ -24,7 +24,7 @@ class OwnerService:
         return [OwnerView.from_owner(owner) for owner in owners]
 
     def update_by_id(
-        self, id: str, name: str, owner_teams: List[str]
+        self, id: int, name: str, owner_teams: List[str]
     ) -> OwnerView | None:
         owner = self.__owner_repository.update_by_id(id, name, owner_teams)
 
@@ -37,7 +37,7 @@ class OwnerService:
         if owner:
             return OwnerView.from_owner(owner)
 
-    def delete_by_id(self, id: str) -> bool:
+    def delete_by_id(self, id: int) -> bool:
         return self.__owner_repository.delete_by_id(id)
 
     def find_all(self) -> List[OwnerView] | None:

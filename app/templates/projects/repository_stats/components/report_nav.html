@@ -1,0 +1,11 @@
+<nav class="app-report-nav" aria-label="Repository Stats reports">
+  <ul class="app-report-nav__list">
+    {% for endpoint, label in [
+      ("repository_stats_main.repository_overview", "Repository overview"),
+      ("repository_stats_main.visibility_changes", "Visibility changes"),
+      ("repository_stats_main.archived_repositories", "Archived repositories")
+    ] %}
+      <li><a href="{{ url_for(endpoint) }}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>{{ label }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>

@@ -44,3 +44,9 @@ always known.
 Configure organisations per environment with `REPOSITORY_STATS_ORGS`, a comma-separated
 list of `organisation:installation_id` entries. The GitHub App needs appropriate access
 to each organisation.
+
+## Sign-in configuration
+
+Optional: set `GITHUB_COMMUNITY_PUBLIC_HOST_ALIASES` to comma-separated hostnames.
+Repository Stats GET/HEAD requests on these hosts redirect to
+`GITHUB_COMMUNITY_PUBLIC_URL`. Leave unset locally.
