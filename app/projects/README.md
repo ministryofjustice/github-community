@@ -3,6 +3,20 @@
 **New Badge**
 [![Ministry of Justice Repository Compliance Badge](https://github-community.service.justice.gov.uk/repository-standards/api/github-community/badge)](https://github-community.service.justice.gov.uk/repository-standards/github-community)
 
+**Compliance status API**
+
+`GET /repository-standards/api/<repository_name>/status` returns the badge's
+technical-standard compliance and each rule's status as JSON without authentication.
+Use `/repository-standards/api/<organisation>/<repository_name>/status` for
+other organisations; the unqualified URL defaults to `ministryofjustice`.
+Missing and non-public repositories return HTTP 404.
+
+The `compliant` value is the string `"true"` or `"false"`. Rule values are
+`"true"` (pass), `"false"` (fail), or `"not_checked"` (not yet checked).
+Unchecked rules do not make the overall result non-compliant. Rule keys derive
+from the technical-standard guidance anchors: the number is removed, `must-have`
+becomes `has`, `has-an` becomes `has`, and hyphens become underscores.
+
 **API = `/api/v1/compliant_public_repositories/endpoint/<repo_name>` Link = `/public-report/<repo_name>`**
 [![Standards Icon /api/v1/compliant_public_repositories/endpoint/<repo_name> ]][Standards Link /public-report/<repo-name>]
 

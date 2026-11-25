@@ -4,8 +4,108 @@ from unittest.mock import Mock, patch
 
 from flask import Flask
 
+from app.projects.repository_standards.config.technical_standard_config import _check
+from app.projects.repository_standards.models.repository_info import (
+    BasicRepositoryInfo,
+    RepositoryAccess,
+    RepositoryInfo,
+)
 from app.projects.repository_standards.routes.api import repository_standards_api
 from app.projects.repository_standards.routes.deprecated import repository_standards_deprecated
+from app.projects.repository_standards.services.technical_standard_service import (
+    TechnicalStandardService,
+)
+
+
+class TestRepositoryStandardsStatusRoute(unittest.TestCase):
+    def setUp(self):
+        app = Flask(__name__)
+        app.register_blueprint(
+            repository_standards_api, url_prefix="/repository-standards/api"
+        )
+        self.client = app.test_client()
+        self.service = Mock()
+        self.service.get_repository_by_name.return_value = SimpleNamespace(
+            compliant=False,
+            visibility="PUBLIC",
+            checks=[
+                _check(1, "Owner", "1-must-have-an-authoritative-owner", "pass", ""),
+                _check(2, "Review", "2-must-have-pull-request-review-protection", "fail", ""),
+                _check(7, "Branch", "7-must-use-main-as-the-default-branch", "not_checked", ""),
+            ],
+        )
+        self.service_patch = patch(
+            "app.projects.repository_standards.routes.api.get_technical_standard_service",
+            return_value=self.service,
+        )
+        self.service_patch.start()
+        self.addCleanup(self.service_patch.stop)
+
+    def test_public_status_includes_all_rule_states_without_authentication(self):
+        response = self.client.get("/repository-standards/api/.github/status")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json, {
+            "compliant": "false",
+            "rules": {
+                "has_authoritative_owner": "true",
+                "has_pull_request_review_protection": "false",
+                "must_use_main_as_the_default_branch": "not_checked",
+            },
+        })
+        self.service.get_repository_by_name.assert_called_once_with(
+            ".github", "ministryofjustice"
+        )
+
+    def test_qualified_status_uses_requested_organisation(self):
+        self.service.get_repository_by_name.return_value.compliant = True
+        response = self.client.get(
+            "/repository-standards/api/moj-analytical-services/shared/status"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["compliant"], "true")
+        self.service.get_repository_by_name.assert_called_once_with(
+            "shared", "moj-analytical-services"
+        )
+
+    def test_status_uses_all_actual_technical_standard_checks(self):
+        repository = SimpleNamespace(
+            name="example",
+            organisation="ministryofjustice",
+            business_unit_owners_names=[],
+            team_owners_names=[],
+            data=RepositoryInfo(
+                basic=BasicRepositoryInfo("example", "public", True, "main"),
+                access=RepositoryAccess([], [], [], []),
+            ),
+        )
+        asset_service = Mock()
+        asset_service.get_repository_by_name.return_value = repository
+        service = TechnicalStandardService(asset_service)
+        with patch(
+            "app.projects.repository_standards.routes.api.get_technical_standard_service",
+            return_value=service,
+        ):
+            response = self.client.get("/repository-standards/api/example/status")
+
+        report = service.get_repository_by_name("example")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["compliant"], str(report.compliant).lower())
+        self.assertEqual(len(response.json["rules"]), len(report.checks))
+        self.assertIn("has_authoritative_owner", response.json["rules"])
+        self.assertIn("has_pull_request_review_protection", response.json["rules"])
+
+    def test_missing_and_nonpublic_repositories_return_not_found(self):
+        for repository in (
+            None,
+            SimpleNamespace(visibility="private"),
+            SimpleNamespace(visibility="internal"),
+            SimpleNamespace(visibility=None),
+        ):
+            with self.subTest(repository=repository):
+                self.service.get_repository_by_name.return_value = repository
+                response = self.client.get("/repository-standards/api/example/status")
+                self.assertEqual(response.status_code, 404)
 
 
 class TestRepositoryStandardsBadgeRoute(unittest.TestCase):

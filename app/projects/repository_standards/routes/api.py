@@ -1,5 +1,5 @@
 import requests
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, abort, request
 
 from app.projects.repository_standards.services.technical_standard_badge import (
     get_technical_standard_badge_shield_url,
@@ -9,6 +9,33 @@ from app.projects.repository_standards.services.technical_standard_service impor
 )
 
 repository_standards_api = Blueprint("repository_standards_api", __name__)
+
+
+@repository_standards_api.route(
+    "/<repository_name>/status",
+    defaults={"organisation": "ministryofjustice"},
+    methods=["GET"],
+)
+@repository_standards_api.route("/<organisation>/<repository_name>/status", methods=["GET"])
+def get_repository_status(repository_name: str, organisation: str):
+    repository = get_technical_standard_service().get_repository_by_name(
+        repository_name, organisation
+    )
+    if repository is None or (repository.visibility or "").lower() != "public":
+        abort(404)
+
+    rules = {}
+    for check in repository.checks:
+        anchor = check.link_to_guidance.rsplit("#", 1)[-1]
+        rule = anchor.split("-", 1)[-1].replace("must-have-", "has-", 1)
+        rule = rule.replace("has-an-", "has-", 1)
+        rules[rule.replace("-", "_")] = {
+            "pass": "true",
+            "fail": "false",
+            "not_checked": "not_checked",
+        }[check.status]
+
+    return {"compliant": str(repository.compliant).lower(), "rules": rules}
 
 
 @repository_standards_api.route(
