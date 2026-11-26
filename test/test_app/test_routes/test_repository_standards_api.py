@@ -93,7 +93,7 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("/badge/MOJ-NOT%20FOUND-b1b4b6", shields_get.call_args.args[0])
 
-    def test_nonpublic_and_unknown_visibility_get_the_neutral_badge(self):
+    def test_badges_show_compliance_for_any_known_visibility(self):
         app = Flask(__name__)
         app.register_blueprint(
             repository_standards_api, url_prefix="/repository-standards/api"
@@ -101,7 +101,7 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
         service = Mock()
         service.get_repository_by_name.side_effect = [
             SimpleNamespace(compliant=True, visibility="private"),
-            SimpleNamespace(compliant=True, visibility="internal"),
+            SimpleNamespace(compliant=False, visibility="internal"),
             SimpleNamespace(compliant=True, visibility=None),
         ]
         shields_response = SimpleNamespace(
@@ -118,14 +118,19 @@ class TestRepositoryStandardsBadgeRoute(unittest.TestCase):
             ) as shields_get,
         ):
             client = app.test_client()
-            for repository_name in ("private-repo", "internal-repo", "unknown-repo"):
+            badge_cases = (
+                ("private-repo", "MOJ-COMPLIANT-cce2d8"),
+                ("internal-repo", "MOJ-NON--COMPLIANT-f4cdc6"),
+                ("unknown-repo", "MOJ-COMPLIANT-cce2d8"),
+            )
+            for repository_name, expected_badge in badge_cases:
                 with self.subTest(repository_name=repository_name):
                     response = client.get(
                         f"/repository-standards/api/{repository_name}/badge"
                     )
                     self.assertEqual(response.status_code, 200)
                     self.assertIn(
-                        "/badge/MOJ-NOT%20FOUND-b1b4b6",
+                        f"/badge/{expected_badge}",
                         shields_get.call_args.args[0],
                     )
 
@@ -181,13 +186,13 @@ class TestLegacyBadgeCompatibility(unittest.TestCase):
         self.assertEqual(missing["message"], "NOT FOUND")
         self.assertEqual(missing["color"], "b1b4b6")
 
-    def test_legacy_badge_hides_nonpublic_and_unknown_visibility(self):
+    def test_legacy_badge_exposes_nonpublic_compliance_and_unknown_visibility(self):
         app = Flask(__name__)
         app.register_blueprint(repository_standards_deprecated)
         service = Mock()
         service.get_repository_by_name.side_effect = [
             SimpleNamespace(compliant=True, visibility="private"),
-            SimpleNamespace(compliant=True, visibility="internal"),
+            SimpleNamespace(compliant=False, visibility="internal"),
             SimpleNamespace(compliant=True, visibility=None),
         ]
         with patch(
@@ -201,5 +206,10 @@ class TestLegacyBadgeCompatibility(unittest.TestCase):
                         f"/api/v2/compliant-repository/{repository_name}"
                     )
                     self.assertEqual(response.status_code, 200)
-                    self.assertEqual(response.json["message"], "NOT FOUND")
-                    self.assertEqual(response.json["color"], "b1b4b6")
+                    expected = {
+                        "private-repo": ("COMPLIANT", "cce2d8"),
+                        "internal-repo": ("NON-COMPLIANT", "f4cdc6"),
+                        "unknown-repo": ("COMPLIANT", "cce2d8"),
+                    }[repository_name]
+                    self.assertEqual(response.json["message"], expected[0])
+                    self.assertEqual(response.json["color"], expected[1])

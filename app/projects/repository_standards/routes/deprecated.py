@@ -27,11 +27,7 @@ def deprecated_reports_badge_api(repository_name: str):
     repository = get_technical_standard_service().get_repository_by_name(
         repository_name, "ministryofjustice"
     )
-    is_public_repository = (
-        repository is not None
-        and (repository.visibility or "").lower() == "public"
-    )
-    if not is_public_repository:
+    if repository is None:
         message, color = "NOT FOUND", "b1b4b6"
     elif repository.compliant:
         message, color = "COMPLIANT", "cce2d8"
