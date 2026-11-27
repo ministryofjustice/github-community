@@ -40,8 +40,10 @@ class TechnicalStandardService:
         business_unit_owners = self.__get_authoritative_owners(
             repository, repository.business_unit_owners_names
         )
-        team_owners = self.__get_authoritative_owners(
-            repository, repository.team_owners_names
+        team_owners = list(
+            dict.fromkeys(
+                getattr(repository, "team_admin_owners_names", [])
+            )
         )
         checks = get_all_technical_standard_checks(repository)
 

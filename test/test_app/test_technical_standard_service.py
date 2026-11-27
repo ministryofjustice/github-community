@@ -26,6 +26,7 @@ def _repository():
         organisation="ministryofjustice",
         business_unit_owners_names=[],
         team_owners_names=[],
+        team_admin_owners_names=[],
         data=SimpleNamespace(basic=SimpleNamespace(description=None)),
     )
 
@@ -67,6 +68,26 @@ class TestTechnicalStandardService(unittest.TestCase):
             )
         )
         self.assertEqual(self.service.get_repository_by_name("repo").visibility, "internal")
+
+    @patch(f"{MODULE}.get_all_technical_standard_checks", return_value=[])
+    def test_team_report_only_includes_admin_teams(self, mock_checks):
+        repository = _repository()
+        repository.team_owners_names = [
+            "Admin Team",
+            "Write Team",
+            "Read Team",
+        ]
+        repository.team_admin_owners_names = ["Admin Team"]
+        self.service = TechnicalStandardService(
+            SimpleNamespace(
+                get_repository_by_name=lambda name, organisation: repository,
+                is_owner_authoritative_for_repository=lambda repo, owner: True,
+            )
+        )
+
+        report = self.service.get_repository_by_name("repo")
+
+        self.assertEqual(report.authoritative_team_owners, ["Admin Team"])
 
     @patch(f"{MODULE}.get_all_technical_standard_checks")
     def test_progress_handles_empty_failed_and_complete_reports(self, mock_checks):
